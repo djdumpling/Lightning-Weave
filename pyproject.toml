@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 119
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 119
+known_first_party = ["slime", "slime_plugins", "data_curation", "evaluation"]
+
+[tool.ruff]
+line-length = 119
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "gpu: requires GPU training dependencies",
+]

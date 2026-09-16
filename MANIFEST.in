@@ -1,0 +1,4 @@
+include LICENSE NOTICE THIRD_PARTY_NOTICES.md README.md
+include requirements*.txt
+recursive-include licenses *.txt
+recursive-include evaluation/math_tasks *.yaml

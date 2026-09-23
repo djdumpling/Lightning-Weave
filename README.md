@@ -244,6 +244,10 @@ Use `Kwai-Klear/KlearReasoner-CodeSub-15K` with `TASK=code`, in a separate
 Training still uses a 2,048-token rollout cap; it does not use the 40,960-token
 evaluation budget.
 
+For a Training Gym-managed online Qwen3-4B math GRPO baseline on eight Modal
+H100s (with no Lightning Weave anchors or cached targets), see
+[`docs/modal_math_grpo.md`](docs/modal_math_grpo.md).
+
 The code preparer removes benchmark overlaps and duplicate prompts before
 selection. Follow [the CodeSub-15K recipe](docs/data_pipeline.md#code-prompts)
 to download the pinned dataset and create its LiveCodeBench exclusion lock.

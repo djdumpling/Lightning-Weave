@@ -167,13 +167,13 @@ run (iterations 19/39/59/79 correspond to completed rollout steps
 MODAL_ENVIRONMENT=alex-dev-2 bash scripts/eval_math_aime25.sh
 ```
 
-Checkpoint export and vLLM serving still use Training Gym. Sampling, scoring,
-and aggregation run in a separate 4-CPU Modal function rather than on the
-launching laptop. That function has a 24-hour timeout, retries transient HTTP
-requests, commits every completed problem to the
-`lightning-weave-aime25-results` Modal Volume, and stops its H100 serving app
-when it exits. Checkpoint export artifacts remain cached on the checkpoint
-volume.
+Training Gym still exports each Megatron checkpoint to its cached Hugging Face
+form. Each checkpoint is then evaluated by one detached H100 function that
+loads vLLM in-process, submits all 30 prompts with eight samples each as one
+offline batch, scores the responses, and commits the result to the
+`lightning-weave-aime25-results` Modal Volume. There is no web endpoint,
+separate CPU driver, or HTTP retry layer. The function has a 24-hour timeout;
+checkpoint exports and model downloads remain cached on Modal Volumes.
 
 For a durable parallel launch of the untrained base model plus all four trained
 checkpoints (five H100s total):
@@ -183,8 +183,9 @@ MODAL_ENVIRONMENT=alex-dev-2 bash scripts/eval_math_aime25.sh \
   --iterations 19,39,59,79 --detach
 ```
 
-Once launched, neither sampling nor progress depends on the laptop remaining
-online. Download current progress or completed results without allocating GPUs:
+Once launched, sampling does not depend on the laptop remaining online.
+Download completed results or the current durable status without allocating
+GPUs:
 
 ```bash
 MODAL_ENVIRONMENT=alex-dev-2 bash scripts/eval_math_aime25.sh \

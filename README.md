@@ -263,6 +263,14 @@ Do not obtain a single-anchor control by setting one coefficient
 to zero in a multi-anchor cache: that cache still intersects the supplied
 anchors' token-validity masks.
 
+For the agentic single-anchor control using LoopTool and the
+`Qwen3-4B-Base -> Qwen3-4B-Thinking-2507` anchor pair, see the staged
+[Modal Offline Direct-OPD recipe](docs/modal_looptool_opd.md). It uses the same
+sealed-cache loss without Training Gym, GRPO, SFT, or multi-anchor composition.
+Evaluate the exported student against its base on BFCL v3 with the
+[Modal BFCL recipe](docs/modal_bfcl_eval.md), and on tau-bench and tau2-bench
+with the [Modal tau-bench recipe](docs/modal_tau_eval.md).
+
 For more anchors, score each new post/pre pair on the existing rollout cache
 and provide additional `--anchor-manifest`, `--anchor-name`, and
 `--anchor-weight` arguments to `scripts/compose_targets.sh`.

@@ -42,7 +42,7 @@ def parse_args():
     parser.add_argument("--cudagraph-mode", default="FULL_DECODE_ONLY")
     parser.add_argument("--max-num-seqs", type=int, default=1024)
     parser.add_argument("--language-model-only", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--gdn-prefill-backend", default="triton")
+    parser.add_argument("--gdn-prefill-backend")
     parser.add_argument("--shard-size", type=int, default=1024)
     parser.add_argument("--rank", type=int, default=int(os.environ.get("RANK", 0)))
     parser.add_argument("--world-size", type=int, default=int(os.environ.get("WORLD_SIZE", 1)))
@@ -130,6 +130,7 @@ def main():
     import vllm
     from transformers import AutoTokenizer
     from vllm import LLM, SamplingParams
+    from vllm.config import CompilationConfig
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     prepared = prepare_prompts(tokenizer, args)
@@ -174,7 +175,8 @@ def main():
         "pre_teacher_revision": None,
         "tokenizer_hash": read_manifest(args.asset_lock)["tokenizer_hash"],
     }
-    llm = LLM(
+    compilation_field = "mode" if hasattr(CompilationConfig, "mode") else "level"
+    engine_options = dict(
         model=args.model,
         tensor_parallel_size=args.tensor_parallel_size,
         trust_remote_code=True,
@@ -184,11 +186,16 @@ def main():
         enable_chunked_prefill=True,
         max_num_batched_tokens=args.max_prompt_length + args.max_response_length,
         max_num_seqs=args.max_num_seqs,
-        language_model_only=args.language_model_only,
-        gdn_prefill_backend=args.gdn_prefill_backend,
-        compilation_config={"mode": args.compilation_mode, "cudagraph_mode": args.cudagraph_mode},
+        compilation_config={compilation_field: args.compilation_mode, "cudagraph_mode": args.cudagraph_mode},
         seed=args.seed,
     )
+    # These newer hybrid-model switches are absent from older/stable vLLM
+    # releases. Do not pass their false/None defaults to ordinary dense models.
+    if args.language_model_only:
+        engine_options["language_model_only"] = True
+    if args.gdn_prefill_backend is not None:
+        engine_options["gdn_prefill_backend"] = args.gdn_prefill_backend
+    llm = LLM(**engine_options)
     sampling = SamplingParams(
         n=args.responses_per_prompt,
         temperature=args.temperature,

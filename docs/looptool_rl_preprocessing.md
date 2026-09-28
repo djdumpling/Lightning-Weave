@@ -8,6 +8,11 @@ chat template, but no model weights, embeddings, LLM judgments, or
 quality/difficulty filters. Later filtering should come from actual rollout
 rewards and pass rates.
 
+The canonical output is also the source pool for the single-anchor Offline
+Direct-OPD recipe in [`modal_looptool_opd.md`](modal_looptool_opd.md). That
+recipe rerenders prompts with its behavior student's tokenizer and applies its
+own 8,192-token limit; reference targets do not enter its training cache.
+
 ## Run
 
 ```bash

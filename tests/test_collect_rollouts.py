@@ -140,6 +140,7 @@ def test_rollout_main_keeps_prompt_groups_and_rank_order(tmp_path, monkeypatch):
     monkeypatch.setitem(
         sys.modules, "vllm", SimpleNamespace(__version__="test", LLM=LLM, SamplingParams=SimpleNamespace)
     )
+    monkeypatch.setitem(sys.modules, "vllm.config", SimpleNamespace(CompilationConfig=SimpleNamespace(mode=None)))
     monkeypatch.setitem(
         sys.modules,
         "transformers",

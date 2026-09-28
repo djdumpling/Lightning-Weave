@@ -57,6 +57,9 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--ray-address", default=os.getenv("RAY_JOB_ADDRESS"),
                         help="Existing Ray dashboard address; otherwise start a local Ray head.")
     result.add_argument("--dashboard-port", type=int, default=8265)
+    result.add_argument("--wandb-project", default=os.getenv("WANDB_PROJECT"),
+                        help="Enable W&B logging to this project; the API key is read from WANDB_API_KEY.")
+    result.add_argument("--wandb-group", default=os.getenv("WANDB_GROUP"))
     result.add_argument("--dry-run", action="store_true", help="Print commands without starting Ray or loading models.")
     return result
 
@@ -132,6 +135,10 @@ def build_train_args(args: argparse.Namespace) -> list[str]:
         "--seed", str(args.seed), "--actor-num-nodes", "1", "--actor-num-gpus-per-node", str(args.num_gpus),
         "--rollout-num-gpus", "0", "--rollout-num-gpus-per-engine", "1",
     ]
+    if args.wandb_project:
+        options.extend(["--use-wandb", "--wandb-project", args.wandb_project, "--wandb-always-use-train-step"])
+        if args.wandb_group:
+            options.extend(["--wandb-group", args.wandb_group])
     if args.load:
         options.extend(["--load", str(Path(args.load).expanduser().resolve())])
     elif backend == "megatron":

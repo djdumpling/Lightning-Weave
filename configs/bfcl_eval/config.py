@@ -1,0 +1,284 @@
+"""Immutable protocol constants for BFCL evaluation on Modal.
+
+The benchmark code is consumed, not reimplemented: agentic-eval supplies the
+category list, generation budget, lane planner, and leaderboard aggregators;
+NeMo-Skills supplies the BFCL driver; gorilla supplies ``bfcl_eval``, the test
+data, and the official checker. Only serving and scheduling are Modal-specific.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+import hashlib
+import json
+
+
+AGENTIC_EVAL_REPO = "https://github.com/djdumpling/agentic-eval.git"
+AGENTIC_EVAL_COMMIT = "36a183a054a5dceb42123feaf3df76cf2abed940"
+# The repository is private, so its BFCL files are copied from a local checkout
+# (verified clean at the pin before every launch) instead of cloned in the image.
+AGENTIC_EVAL_BFCL_SUBDIR = "benchmarks/bfcl"
+NEMO_SKILLS_REPO = "https://github.com/NVIDIA-NeMo/Skills.git"
+NEMO_SKILLS_COMMIT = "8979a15fb460e804761bd3f71ebf831368efa9fe"
+# The gorilla commit baked into NeMo-Skills' Dockerfile.nemo-skills at the pin.
+GORILLA_REPO = "https://github.com/ShishirPatil/gorilla.git"
+GORILLA_COMMIT = "86d0374d0db52623c5092a73f82c22b87b7e9a25"
+# Unpinned Python dependencies resolve as of the day after the NeMo-Skills pin
+# (committed 2026-06-01), matching what that code was tested against; e.g. mcp
+# 2.0 (2026-07-28) removed an API the pinned driver imports.
+DEPENDENCY_CUTOFF = "2026-06-02T00:00:00Z"
+# Installed as in Dockerfile.nemo-skills. BFCL v3 has no web_search categories;
+# v4's two need a search backend that is not set up here (DuckDuckGo rate-limits
+# keyless ddgs to about one query per 15 s per IP), so they are never run.
+DDGS_VERSION = "9.16.0"
+LANE_PYTHON = "3.10"
+
+# Same digest-pinned official vLLM 0.11.0 image that generated the frozen
+# student's LoopTool rollouts, so eval renders the chat template identically.
+SERVING_IMAGE = "vllm/vllm-openai@sha256:d8d39b59e909d2378ac4feeb191f7e7b6f1342477dc66b7c47cec89e9985ad8a"
+
+MODAL_APP_NAME = "lightning-weave-bfcl-eval"
+MODAL_RESULTS_VOLUME = "lightning-weave-bfcl-eval"
+MODAL_MODEL_VOLUME = "lightning-weave-hf-models"
+MODAL_CHECKPOINT_VOLUME = "lightning-weave-checkpoints"
+MODAL_VLLM_CACHE_VOLUME = "vllm-cache"
+REMOTE_RESULTS_ROOT = "/results"
+REMOTE_MODEL_ROOT = "/models"
+REMOTE_CHECKPOINT_ROOT = "/checkpoints"
+
+BASE_MODEL = "Qwen/Qwen3-4B"
+BASE_REVISION = "1cfa9a7208912126459214e8b04321603b3df60c"
+
+# Every model is served under one name so NeMo-Skills requests are identical.
+MODELS = {
+    "base": f"{REMOTE_MODEL_ROOT}/models--Qwen--Qwen3-4B/snapshots/{BASE_REVISION}",
+    "opd": f"{REMOTE_CHECKPOINT_ROOT}/looptool-offline-dopd-qwen3-4b-v1/hf",
+}
+
+# bfcl_eval hardcodes its result/score trees here and NeMo-Skills scores as
+# this FC handler, so the directory name is fixed regardless of the model.
+GORILLA_ROOT = "/opt/gorilla"
+BFCL_PROJECT_ROOT = f"{GORILLA_ROOT}/berkeley-function-call-leaderboard"
+SCORE_MODEL_DIR = "o4-mini-2025-04-16-FC"
+MEMORY_PREFIX = "memory_"
+WEB_PREFIX = "web_search_"
+# agentic-eval's GEN_BUDGET, checked against lanes.py at plan time. Its v3 value
+# assumes a 131,072-token serving window.
+RECIPE_GEN_BUDGET = {"v3": 131_072, "v4": 8_192}
+# NeMo-Skills' is_context_window_exceeded_error() substrings at the pin that vLLM's
+# overflow errors can match; a match soft-fails the task as _ran_out_of_context_.
+CONTEXT_OVERFLOW_MARKERS = ("'max_completion_tokens' is too large", "reduce the length of the input messages")
+
+
+@dataclass(frozen=True)
+class Protocol:
+    """Score-affecting settings. Changing any of these starts a new results tree."""
+
+    bfcl_version: str = "v3"
+    # The Qwen3 report's BFCL setting (Section 4.6) and the mentor's runs: a
+    # 32,768-token response within a 65,536-token total. agentic-eval's v3
+    # recipe allows 131,072. A request whose prompt exceeds max_model_len -
+    # tokens_to_generate (32,768 tokens) is rejected by vLLM and scored as
+    # _ran_out_of_context_; lanes count these.
+    tokens_to_generate: int = 32_768
+    # The recipe's request-level sampling. top_k=20 is not sent: NeMo-Skills'
+    # OpenAI client rejects top_k, so vLLM applies it from generation_config.json.
+    temperature: float = 0.6
+    top_p: float = 0.95
+    expected_generation_defaults: dict[str, float] = field(
+        default_factory=lambda: {"temperature": 0.6, "top_k": 20, "top_p": 0.95}
+    )
+    # Static YaRN over Qwen3's original 32,768 positions: factor 2.0 gives the
+    # 65,536-token total, as the Qwen3-4B model card recommends for 64k. It is
+    # applied to every category, as in the mentor's runs; the Qwen3 report
+    # enabled it for the multi-turn categories.
+    max_model_len: int = 65_536
+    rope_scaling: dict[str, object] = field(
+        default_factory=lambda: {"rope_type": "yarn", "factor": 2.0, "original_max_position_embeddings": 32_768}
+    )
+    served_model_name: str = "model"
+    tool_call_parser: str = "hermes"
+    reasoning_parser: str = "qwen3"
+    dtype: str = "bfloat16"
+    seed: int = 0
+
+    def validate(self) -> None:
+        if self.bfcl_version not in RECIPE_GEN_BUDGET:
+            raise ValueError(f"bfcl_version must be one of {sorted(RECIPE_GEN_BUDGET)}")
+        if not 0 < self.tokens_to_generate < self.max_model_len:
+            raise ValueError("tokens_to_generate must fit inside max_model_len")
+        scaled = self.rope_scaling["factor"] * self.rope_scaling["original_max_position_embeddings"]
+        if scaled != self.max_model_len:
+            raise ValueError(f"YaRN covers {scaled:.0f} positions but max_model_len is {self.max_model_len}")
+        if self.expected_generation_defaults["temperature"] != self.temperature:
+            raise ValueError("request temperature must match the checkpoint generation config")
+        if self.expected_generation_defaults["top_p"] != self.top_p:
+            raise ValueError("request top_p must match the checkpoint generation config")
+
+    def resolved(self) -> dict[str, object]:
+        self.validate()
+        return {
+            **asdict(self),
+            "recipe_tokens_to_generate": RECIPE_GEN_BUDGET[self.bfcl_version],
+            "agentic_eval": AGENTIC_EVAL_COMMIT,
+            "nemo_skills": NEMO_SKILLS_COMMIT,
+            "gorilla": GORILLA_COMMIT,
+            "ddgs": DDGS_VERSION,
+            "serving_image": SERVING_IMAGE,
+        }
+
+    def digest(self) -> str:
+        return hashlib.sha256(json.dumps(self.resolved(), sort_keys=True).encode()).hexdigest()[:12]
+
+
+@dataclass(frozen=True)
+class Serving:
+    """Throughput settings. These do not change scores, so they are not hashed."""
+
+    # One vLLM server per model, data-parallel over 4 H100s (8 per run, a full
+    # node's worth). Multi-turn chains are latency-bound, so the extra GPUs buy
+    # room to run every task at once rather than a faster single sequence.
+    gpus: int = 4
+    data_parallel_size: int = 4
+    # Per data-parallel rank.
+    max_num_seqs: int = 256
+    # Chunked prefill (on by default in vLLM V1) keeps long multi-turn prompts
+    # from stalling decodes of the serial memory and multi-turn chains.
+    max_num_batched_tokens: int = 16_384
+    gpu_memory_utilization: float = 0.92
+    port: int = 8000
+    startup_timeout_s: int = 30 * 60
+    metrics_interval_s: int = 60
+    server_timeout_s: int = 24 * 60 * 60
+
+    # Modal tries these in order: H100s, else H200s (same Hopper kernels, more KV memory).
+    gpu_types: tuple[str, ...] = ("H100", "H200")
+
+    @property
+    def gpu(self) -> list[str]:
+        return [f"{gpu_type}:{self.gpus}" for gpu_type in self.gpu_types]
+
+    def validate(self) -> None:
+        if self.data_parallel_size != self.gpus:
+            raise ValueError("each data-parallel rank serves one GPU")
+
+    def vllm_command(self, model_path: str, api_key: str, protocol: Protocol) -> list[str]:
+        return [
+            "vllm", "serve", model_path,
+            "--served-model-name", protocol.served_model_name,
+            "--host", "0.0.0.0",
+            "--port", str(self.port),
+            "--api-key", api_key,
+            "--dtype", protocol.dtype,
+            "--seed", str(protocol.seed),
+            "--max-model-len", str(protocol.max_model_len),
+            "--hf-overrides", json.dumps({"rope_scaling": protocol.rope_scaling}),
+            "--data-parallel-size", str(self.data_parallel_size),
+            "--max-num-seqs", str(self.max_num_seqs),
+            "--max-num-batched-tokens", str(self.max_num_batched_tokens),
+            "--gpu-memory-utilization", str(self.gpu_memory_utilization),
+            "--enable-prefix-caching",
+            "--generation-config", "auto",
+            "--enable-auto-tool-choice",
+            "--tool-call-parser", protocol.tool_call_parser,
+            "--reasoning-parser", protocol.reasoning_parser,
+            "--uvicorn-log-level", "warning",
+        ]
+
+
+@dataclass(frozen=True)
+class Lanes:
+    """One CPU container per category; memory prereqs are serial inside each."""
+
+    # agentic-eval used 16 because its backends served one sequence each. Every
+    # multi-turn task runs at once: those serial chains set the run time.
+    default_concurrency: int = 64
+    concurrency: dict[str, int] = field(
+        default_factory=lambda: {
+            "multi_turn_base": 200,
+            "multi_turn_long_context": 200,
+            "multi_turn_miss_func": 200,
+            "multi_turn_miss_param": 200,
+            "live_multiple": 256,
+            "live_irrelevance": 256,
+            "simple_python": 256,
+        }
+    )
+    cpu: float = 2.0
+    memory_mb: int = 8_192
+    timeout_s: int = 8 * 60 * 60
+    commit_interval_s: int = 120
+    # NeMo-Skills waits 14,400 s per request by default; a response lost in the
+    # tunnel then idles the GPUs for hours. A 32,768-token generation takes
+    # about 5-20 minutes under load; on timeout the OpenAI client retries.
+    request_timeout_s: int = 3_600
+
+    def concurrency_for(self, category: str) -> int:
+        return self.concurrency.get(category, self.default_concurrency)
+
+
+PROTOCOL = Protocol()
+PROTOCOL.validate()
+SERVING = Serving()
+SERVING.validate()
+LANES = Lanes()
+
+
+def run_id(smoke_samples: int = 0) -> str:
+    prefix = f"smoke{smoke_samples}" if smoke_samples else "full"
+    return f"bfcl-{PROTOCOL.bfcl_version}-{PROTOCOL.digest()}-{prefix}"
+
+
+def driver_command(
+    *,
+    category: str,
+    input_file: str,
+    output_file: str,
+    base_url: str,
+    concurrency: int,
+    smoke_samples: int = 0,
+) -> list[str]:
+    """The agentic-eval lane driver's NeMo-Skills invocation, verbatim apart from scheduling."""
+
+    command = [
+        "python", "-m", "nemo_skills.inference.eval.bfcl",
+        "++eval_type=bfcl",
+        "++eval_config.split=test",
+        f"++server.base_url={base_url}",
+        f"++server.model={PROTOCOL.served_model_name}",
+        "++server.server_type=openai",
+        f"++inference.temperature={PROTOCOL.temperature}",
+        f"++inference.top_p={PROTOCOL.top_p}",
+        "++use_client_parsing=False",
+        "++skip_filled=True",
+        f"++input_file={input_file}",
+        f"++output_file={output_file}",
+        f"++max_concurrent_requests={concurrency}",
+        f"++inference.tokens_to_generate={PROTOCOL.tokens_to_generate}",
+        f"++inference.timeout={LANES.request_timeout_s}",
+    ]
+    if smoke_samples:
+        if category.startswith(MEMORY_PREFIX):
+            raise ValueError("smoke runs cannot truncate memory categories: max_samples keeps only prereqs")
+        command += [f"++max_samples={smoke_samples}", "++eval_config.partial_eval=True"]
+    return command
+
+
+def main() -> None:
+    print(
+        json.dumps(
+            {
+                "run_id": run_id(),
+                "protocol": PROTOCOL.resolved(),
+                "serving": asdict(SERVING),
+                "lanes": asdict(LANES),
+                "models": MODELS,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()

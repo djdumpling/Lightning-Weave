@@ -814,3 +814,26 @@ def check_row(row: Any) -> list[str]:
     if metadata.get("conversation_kind") != expected:
         problems.append("metadata_conversation_kind")
     return sorted(set(problems))
+
+
+def cached_prompt_rows(prompts, canonical):
+    """Join cached prompt ids to their canonical LoopTool rows, rejecting missing references."""
+    from pathlib import Path
+
+    import pyarrow.parquet as pq
+
+    wanted = {
+        row["source_index"]: row["prompt_id"]
+        for row in pq.read_table(prompts, columns=["prompt_id", "source_index"]).to_pylist()
+    }
+    found = {}
+    with Path(canonical).open(encoding="utf-8") as handle:
+        for line in handle:
+            row = json.loads(line)
+            prompt_id = wanted.get(row["metadata"]["source_index"])
+            if prompt_id is not None:
+                found[prompt_id] = row
+    missing = set(wanted.values()) - set(found)
+    if missing:
+        raise KeyError(f"{len(missing)} prompts have no canonical row")
+    return found

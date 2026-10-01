@@ -1,5 +1,3 @@
-import importlib.util
-import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -8,17 +6,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def load(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-CONFIG = load("bfcl_eval_config", ROOT / "configs/bfcl_eval/config.py")
-OPD = load("looptool_opd_config_for_bfcl", ROOT / "configs/looptool_opd/config.py")
+from configs.bfcl_eval import config as CONFIG
+from configs.looptool_opd import config as OPD
 
 
 def test_models_are_the_opd_student_and_its_exact_base():

@@ -78,5 +78,22 @@ def main():
     print(f"Wrote scoring metadata to {args.output}")
 
 
+def candidate_token_mapping(student_vocab, teacher_vocab, aliases=None):
+    """Exact token strings plus injective aliases for candidate actions (never context)."""
+    mapping = {int(i): int(teacher_vocab[s]) for s, i in student_vocab.items() if s in teacher_vocab}
+    used = set(mapping.values())
+    for source, target in (aliases or {}).items():
+        if source not in student_vocab or target not in teacher_vocab:
+            continue
+        student_id, teacher_id = int(student_vocab[source]), int(teacher_vocab[target])
+        if student_id in mapping:
+            continue
+        if teacher_id in used:
+            raise ValueError(f"alias {source!r} -> {target!r} targets an already mapped teacher token")
+        mapping[student_id] = teacher_id
+        used.add(teacher_id)
+    return mapping
+
+
 if __name__ == "__main__":
     main()

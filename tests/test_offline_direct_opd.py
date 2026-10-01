@@ -1036,7 +1036,7 @@ def test_cross_tokenizer_projection_expands_context_and_masks_non_atomic_candida
         StudentTokenizer(),
         TeacherTokenizer(),
     )
-    context, targets, indices, valid_mask = projection.prepare_row(
+    context, targets, indices, valid_mask, _ = projection.prepare_row(
         {
             "prompt_tokens": [2],
             "response_tokens": [0, 2],
@@ -1125,7 +1125,7 @@ def test_cross_tokenizer_projection_reencodes_unshared_added_tokens_for_context(
     )
 
     assert projection.context_ids(1) == [5, 6, 7]
-    context, targets, indices, valid_mask = projection.prepare_row(
+    context, targets, indices, valid_mask, _ = projection.prepare_row(
         {
             "prompt_tokens": [1],
             "response_tokens": [0],
@@ -1374,8 +1374,7 @@ def test_cross_tokenizer_projection_aliases_candidates_and_records_per_candidate
             return [4]
 
     plain = ExactTokenStringProjection(StudentTokenizer(), TeacherTokenizer())
-    aliased = ExactTokenStringProjection(StudentTokenizer(), TeacherTokenizer(), aliases={"<|im_end|>": "<eos>"})
-    aliased.record_candidates = True
+    aliased = ExactTokenStringProjection(StudentTokenizer(), TeacherTokenizer(), aliases={"<|im_end|>": "<eos>"}, record_candidates=True)
     row = {"prompt_tokens": [0], "response_tokens": [1, 2], "candidate_ids": [[1, 2], [3, 0]], "loss_mask": [True, True]}
     assert plain.prepare_row(dict(row))[1:4:2] == ([[5, 0], [0, 4]], [False, False])
     metadata = dict(row)

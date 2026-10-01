@@ -120,4 +120,4 @@ def test_dry_run_has_no_workspace_upload_and_binds_local_dashboard():
     runtime = json.loads(runtime_arg.split("=", 1)[1])
     assert set(runtime) == {"env_vars"}
     assert "--working-dir" not in ray_submit
-    assert "/tmp/student with spaces" in ray_submit
+    assert str(Path("/tmp/student with spaces").resolve()) in ray_submit

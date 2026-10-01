@@ -347,6 +347,71 @@ def driver_command(
     return command
 
 
+def _digest(value) -> str:
+    payload = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def message_text(message: dict) -> str:
+    content = message.get("content")
+    if isinstance(content, list):
+        return "".join(part.get("text", "") for part in content if isinstance(part, dict))
+    return "" if content is None else str(content)
+
+
+def request_identity(body: dict) -> dict:
+    """What joins a chat request to its BFCL entry (see ``evaluation/bfcl_efficiency.py``).
+
+    ``users`` (digests of every user message, in order) must be a prefix of the
+    entry's user messages; single-turn entries also match ``tools_digest``.
+    ``body_digest`` identifies retries of the same request.
+    """
+    messages, tools = body.get("messages") or [], body.get("tools") or []
+    return {
+        "users": [_digest(message_text(m)) for m in messages if m.get("role") == "user"],
+        "tools_digest": _digest(tools),
+        "messages": len(messages),
+        "body_digest": _digest(body),
+    }
+
+
+def history_reasoning(body: dict) -> dict:
+    """How much earlier reasoning the harness sends back in assistant messages (a field, or ``<think>`` text).
+
+    Whether that reasoning reaches the model depends on its tokenizer's chat template.
+    """
+    messages = chars = 0
+    for message in body.get("messages") or []:
+        if message.get("role") != "assistant":
+            continue
+        messages += 1
+        chars += len(message.get("reasoning_content") or message.get("reasoning") or "")
+        text = message_text(message)
+        end = text.find("</think>")
+        if end != -1:
+            start = text.find("<think>")
+            chars += end - (start + len("<think>") if -1 < start < end else 0)
+    return {"history_assistant_messages": messages, "history_reasoning_chars": chars}
+
+
+def rewrite_request(body: dict, spec: ModelSpec) -> dict:
+    """Apply an inference-time efficiency baseline (a lower cap, a system instruction) to a chat request."""
+    body = dict(body)
+    if spec.max_completion_tokens is not None:
+        for key in ("max_completion_tokens", "max_tokens"):
+            if key in body:
+                body[key] = min(int(body[key]), spec.max_completion_tokens)
+        body.setdefault("max_completion_tokens", spec.max_completion_tokens)
+    if spec.system_prompt is not None:
+        messages = [dict(message) for message in body.get("messages") or []]
+        if messages and messages[0].get("role") == "system":
+            messages[0]["content"] = f"{message_text(messages[0])}\n\n{spec.system_prompt}"
+        else:
+            messages.insert(0, {"role": "system", "content": spec.system_prompt})
+        body["messages"] = messages
+    return body
+
+
 def main() -> None:
     print(
         json.dumps(

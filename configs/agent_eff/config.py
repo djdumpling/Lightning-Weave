@@ -17,26 +17,12 @@ imports Modal.
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
 
 
-def _load_looptool_config():
-    """The LoopTool recipe module, loaded under its own name (both configs are called ``config.py``)."""
-    path = Path(__file__).resolve().parents[1] / "looptool_opd" / "config.py"
-    if "looptool_opd_config" in sys.modules:
-        return sys.modules["looptool_opd_config"]
-    spec = importlib.util.spec_from_file_location("looptool_opd_config", path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module  # dataclasses resolve their module through sys.modules
-    spec.loader.exec_module(module)
-    return module
+from configs.looptool_opd import config as looptool
 
-
-looptool = _load_looptool_config()
 MODAL_CHECKPOINT_VOLUME = looptool.MODAL_CHECKPOINT_VOLUME
 MODAL_DATA_VOLUME = looptool.MODAL_DATA_VOLUME
 MODAL_MODEL_VOLUME = looptool.MODAL_MODEL_VOLUME
@@ -63,8 +49,6 @@ DONOR_ROOT = f"{REMOTE_DATA_ROOT}/donors"
 ANALYSIS_ROOT = f"{REMOTE_DATA_ROOT}/analysis"
 PROBE_ROOT = f"{REMOTE_DATA_ROOT}/probes"
 SYNTHETIC_ROOT = f"{REMOTE_DATA_ROOT}/synthetic"
-# Per-prompt pass rates of the cache's own responses and the weight files derived from them.
-DIFFICULTY_ROOT = f"{ANALYSIS_ROOT}/difficulty"
 # Turn positions of the cached prompts and the weight files derived from them (data_curation/turn_positions.py).
 TURN_POSITION_ROOT = f"{ANALYSIS_ROOT}/turn_positions"
 CHECKPOINT_ROOT = "/checkpoints/agent-eff"
@@ -279,7 +263,6 @@ EFFICIENCY_DIRECTIONS = {
     "decs-deepscaler": {"decs": 1.0, "deepscaler": -1.0},  # quasi-control contrast (primary)
     "decs-klear": {"decs": 1.0, "klear": -1.0},  # the analogy as first stated (exploratory, confounded)
 }
-REASONING_STATES = ["think_body", "think_stop_fork", "think_reflection_fork", "think_close"]
 
 # The Fisher projection coefficient of the acc-legacy+decs target on the acc-legacy target over all
 # cached states (review of the composed primary targets). A target that keeps only this share tests
@@ -410,7 +393,6 @@ PRECISION_CHECK = {
 }
 # A composed target fails when its per-token KL at this quantile exceeds this multiple of the reference target's.
 TAIL_GATE = {"quantile": "99", "max_ratio": 4.0, "reference": "acc-legacy+decs"}
-CODE_ROUND_TAG = "code-round"
 
 
 def code_round_specs() -> dict[str, dict]:
@@ -531,17 +513,10 @@ def training_plan(variant: str) -> dict:
 
 
 def variant_sources(variant_spec: dict) -> set[str]:
-    """Every source a variant's terms read (directions, projections, and agreement gates)."""
     return {
         source["source"]
         for item in variant_spec["terms"]
-        for direction in (
-            item.get("direction"),
-            *item.get("project_out", []),
-            (item.get("gate") or {}).get("agree_with"),
-        )
-        if direction
-        for source in direction["terms"]
+        for source in item.get("direction", {}).get("terms", [])
     }
 
 
@@ -578,32 +553,13 @@ def tail_gate(calibration: dict, reference: dict) -> dict:
 
 
 def exploratory_specs() -> dict[str, dict]:
-    """Arms after the primary matrix on its better accuracy base: budgets, the Klear analogy, residualization, gates."""
-    specs = {}
-    accuracy = ACCURACY_TERMS["acc-legacy"]
-    for efficiency, sources in EFFICIENCY_DIRECTIONS.items():
-        for budget_name, budget in KL_BUDGETS.items():
-            if budget_name != PRIMARY_BUDGET or efficiency == "decs-klear":
-                specs[f"acc-legacy+{efficiency}@{budget_name}"] = spec(accuracy, term(sources, kl_budget=budget))
-            specs[f"acc-legacy+{efficiency}-resid@{budget_name}"] = spec(
-                accuracy, term(sources, transform="residualized", kl_budget=budget)
-            )
-            specs[f"acc-legacy+{efficiency}-gated@{budget_name}"] = spec(
-                accuracy,
-                term(
-                    sources,
-                    transform="residualized",
-                    kl_budget=budget,
-                    gate={
-                        "state_types": REASONING_STATES,
-                        "min_coverage": 0.9,
-                        "min_support_mass": 0.5,
-                        "agree_with": {"terms": [{"source": "l1max", "coef": 1.0}]},
-                        "min_cosine": 0.0,
-                    },
-                ),
-            )
-    return specs
+    """The two trained DECS budget-sweep arms."""
+    return {
+        f"acc-legacy+decs@{name}": spec(
+            ACCURACY_TERMS["acc-legacy"], term({"decs": 1.0}, kl_budget=KL_BUDGETS[name])
+        )
+        for name in ("low", "high")
+    }
 
 
 def variant_specs() -> dict[str, dict]:
@@ -639,29 +595,17 @@ GEOMETRY_DIRECTIONS = {
     "e1code": {"terms": [{"source": "e1code", "coef": 1.0}]},
     "e1math": {"terms": [{"source": "e1math", "coef": 1.0}]},
 }
-# Independently defined efficiency contrasts only: no accuracy anchors, and no direction that is a
-# linear combination of others in the list.
-EFFICIENCY_BASIS = (
-    "decs_minus_deepscaler",
-    "dler_minus_deepscaler",
-    "adaptthink_minus_deepscaler",
-    "l1max",
-    "nemotron_v1_to_v2",
-    "decs7b_minus_skywork7b",
-    "e1code",
-    "e1math",
-)
 
 
 def geometry_spec(donors: list[str]) -> dict:
-    """Directions (and the efficiency basis) whose every source is the agent anchor or a scored donor."""
+    """Directions whose every source is the agent anchor or a scored donor."""
     available = {AGENT_ACC.name, *donors}
     directions = {
         name: item
         for name, item in GEOMETRY_DIRECTIONS.items()
         if all(term_["source"] in available for term_ in item["terms"])
     }
-    return {"directions": directions, "basis": [name for name in EFFICIENCY_BASIS if name in directions]}
+    return {"directions": directions}
 
 
 def resolved() -> dict:

@@ -13,7 +13,13 @@ Every shift is evaluated at the frozen Qwen3-4B student's own LoopTool token
 states: every donor pair scores the existing sealed cache
 (`/opd/looptool-qwen3-4b-v1`). Variants train with the LoopTool recipe, and BFCL
 v3 is the external evaluation. The results tracker is
-[`results/agent_efficiency.md`](../results/agent_efficiency.md).
+`results/agent_eff/results.md` (local experiment artifacts).
+
+The pre-cleanup source is preserved in commit `543e6d0e`. The maintained registry
+keeps 27 arms, including the trained DECS low/high variants. Untrained exploratory
+arms, residualization/PCA, completed reflection/value probes, and one-off diagnostics
+were retired. The unrun Monte Carlo study remains available as the ground-truth test.
+Historical tools can be recovered with `git show 543e6d0e:path/to/file.py`.
 
 ## What a shift is, and is not
 
@@ -75,8 +81,6 @@ Centering followed by re-leveling is the identity on raw pair shifts. So only
 these operations change a composed target:
 
 - evidence masking;
-- residualization;
-- projection;
 - gating.
 
 **Stability.** If a synthesized shift has error `err` with `osc(err) ≤ 2ε` over
@@ -87,15 +91,6 @@ the support, then:
 
 This is a per-state statement: distillation error and state drift come on top of it.
 
-**Residualization** is a candidate-level analog of Lightning OPD 2.0, not its
-verbatim estimator. Each candidate's centered shift has two lookups subtracted,
-averaged with equal weight: one by token identity, and one by (normalized
-position × the candidate's surprisal under the student). Both are fitted on the
-other four prompt folds and shrunk toward the global mean (0 for centered
-shifts). A state-level offset needs no lookup, because centering removes it. The
-report shows the token-only, context-only and combined versions next to the raw
-geometry.
-
 **Uncertainty and slices.** Cosine intervals come from a prompt-level bootstrap.
 The placebo is 200 draws of independent per-prompt, per-direction sign flips.
 Probe intervals are prompt-clustered. Slices are:
@@ -105,13 +100,6 @@ Probe intervals are prompt-clustered. Slices are:
 - supported and unsupported states;
 - single-turn vs multi-turn conversations;
 - the target kind (single call, parallel calls, text).
-
-**Efficiency basis.** It is built only from the independently defined
-efficiency contrasts listed above: no accuracy anchors, and no direction that is
-a linear combination of the others. Each contrast is scaled to unit Fisher norm.
-The report gives the explained spectrum and each component's energy by slice,
-plus stability: prompt-bootstrap principal-angle cosines, and the PC1 cosine
-with each contrast left out.
 
 ## Token-state taxonomy
 
@@ -127,13 +115,9 @@ its prefix and the student's cached distribution, never from the sampled token.
 | `call_boundary` | after `</tool_call>`: end the message or call again |
 | `end_of_message` | `<|im_end|>` has mass outside a call |
 
-These rules are heuristics. Validate them before building claims on them:
-
-1. [`export_state_annotations.py`](../data_curation/export_state_annotations.py)
-   exports a balanced, prompt-stratified sample per type for manual annotation,
-   and scores precision and confusions.
-2. Rerun the geometry at `--fork-mass` 0.01, 0.02 and 0.05 to check threshold
-   sensitivity.
+These rules are heuristics. Inspect representative states before building claims
+on them, and rerun geometry at `--fork-mass` 0.01, 0.02 and 0.05 to check threshold
+sensitivity.
 
 ## Donors and their evidence
 
@@ -197,12 +181,11 @@ composes a JSON spec of terms.
 - `raw`: the legacy log-ratio, bit-identical to the reference composer, including
   untrained rows. It refuses unmapped placeholders.
 - `evidence`: δ = 0 without evidence.
-- `residualized`.
-- `projected`: the per-state-type Fisher regression residual.
+- `heuristic`: fixed pushes on token groups at the specified forks, used by the trained control.
 
-**Gates:** a state-type allowlist; coverage and support thresholds that apply to
-every source a term reads; and local Fisher agreement, counted only where both
-directions carry evidence.
+**Gates:** exclude named state types, preserve the first reflection fork, or apply
+per-prompt weights. The last two use `exclude_first_reflection` and `prompt_weights`;
+protocol protection uses `exclude_state_types`.
 
 **KL budget.** At most one term per spec may set a `kl_budget`. It is calibrated
 on a prompt-stratified 25% sample and capped by `max_multiplier`. An unreachable
@@ -241,13 +224,12 @@ Nothing later is launched until the earlier stage has been read.
    KL". These are reported together; none is selected on BFCL.
 4. **Building on it**, depending on what the matrix shows:
    - the inference-time baselines below;
-   - the Klear analogy, residualization, gates, other budgets and the census
-     donors (`exploratory_specs()`);
+   - the trained low/high DECS budgets, gated arms and census donors;
    - a second training seed and decoding seed for anything that looks like a
      result (BFCL `--seed` gives each decoding seed its own run tree).
 5. **Last: mechanism validation.**
    - the Monte Carlo probes;
-   - taxonomy annotation;
+   - manual validation of the state taxonomy;
    - the in-house GRPO donor pair.
 
 **Inference-time baselines**, which any learned efficiency must beat:
@@ -348,11 +330,12 @@ Inside a sum (`equalize: "auto"`), the two shifts keep raw 1:1 weights when thei
 - BFCL is the development benchmark. Only `acc-legacy+e1code` is a pre-registered test. Anything selected after
   seeing results needs a fresh seed and a second benchmark.
 
-Run with `bash scripts/run_agent_eff.sh code-round --workers 8`, then evaluate the five students on BFCL with
-`--wait-for-checkpoints`. Progress and every decision go to `analysis/code-round-program.json`.
+The round-specific orchestrator has been retired. The reusable `onboard`, `precision`,
+`compose`, `review`, and `build` stages remain; the pair/tail checks and seeds above
+remain in the config as the record of this protocol.
 
-**TODO after this round:** test Lightning Weave's literal 1:1 weights (no KL calibration) for the
-composition. Now set up as the paper arms (0.5 + 0.5 at α 2.0); see the next section.
+The subsequent paper arms test Lightning Weave's equal normalized weights
+(0.5 + 0.5 at α 2.0), without KL calibration; see below.
 
 **Follow-ups after the external review** (`followup_specs()`, seeds 1234 and 5678). Each changes one thing from
 `acc-legacy+e1math`.
@@ -363,7 +346,7 @@ composition. Now set up as the paper arms (0.5 + 0.5 at α 2.0); see the next se
 - `acc-legacy+e1math@low`: the low KL budget (0.005), expected near DECS mid's 14% savings. It compares
   accuracy with DECS at matched realized savings instead of by extrapolating DECS's curve.
 
-## Next: Lightning Weave's published recipe, and turn-start allocation (set up 2026-09-30, not run)
+## Lightning Weave's published recipe and turn-start allocation (registered 2026-09-30)
 
 Both ask why efficiency transfer is free on single-turn BFCL but costs about 2 points on multi-turn (results.md
 sections 5 and 12–14), while Lightning Weave's composition costs about nothing against its accuracy-only student in
@@ -537,6 +520,7 @@ bash scripts/run_agent_eff.sh download --donors klear,decs,deepscaler
 bash scripts/run_agent_eff.sh prepare  --donors agent_acc,klear,decs,deepscaler
 bash scripts/run_agent_eff.sh score    --donors decs,deepscaler --workers 8     # server-side: post -> pre -> verify
 bash scripts/run_agent_eff.sh verify   --donors klear,decs,deepscaler
+bash scripts/run_agent_eff.sh precision --donors decs                       # independent GPU re-score, then CPU comparison
 bash scripts/run_agent_eff.sh analyze  --donors klear,decs,deepscaler --tag core
 bash scripts/run_agent_eff.sh probe    --donors klear,decs,deepscaler --tag core --workers 4
 bash scripts/run_agent_eff.sh compose  --variant acc-clean+decs-deepscaler
@@ -548,9 +532,9 @@ AGENTIC_EVAL_DIR=~/agentic-eval-36a183a0 bash scripts/run_bfcl_eval.sh run --mod
 - **Scoring and probes** run as server-side chains that skip finished shards, so
   the laptop may disconnect.
 - **Training** changes only the target, the seed and the checkpoint cadence: it
-  saves only the final checkpoint (`iter_0000049`). A run counts as complete only
-  when that exact iteration exists, which writes `COMPLETE.json`. Export refuses
-  anything else.
+  saves only the final checkpoint: iteration 49 for one pass, 99 for the paper
+  arms' two passes. Completion and export require the exact final iteration and
+  matching target/training provenance.
 - **Artifacts:**
   - donor scores: `donors/<pair>/{post,pre}` plus `evidence.json`;
   - analyses: `analysis/`;

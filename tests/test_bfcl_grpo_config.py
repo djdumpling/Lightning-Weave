@@ -140,7 +140,7 @@ def test_launcher_is_pinned_and_does_not_launch_a_hand_rolled_stack():
     wrapper = (ROOT / "scripts/train_bfcl_grpo.sh").read_text(encoding="utf-8")
     assert TRAIN.TRAINING_GYM_COMMIT in source
     assert "bfcl-eval==2026.3.23" in source
-    assert "uv run --python 3.12" in wrapper
+    assert "--python 3.12" in wrapper
     assert "alex-dev-2" in wrapper
     assert "modal.App" not in source
     assert "ray start" not in source

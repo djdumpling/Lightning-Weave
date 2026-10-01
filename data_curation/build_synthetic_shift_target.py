@@ -14,10 +14,6 @@ coefficient, and an optional gate:
 - ``evidence``: δ = 0 wherever a source has no evidence (unmapped, or a token
   either anchor never trained), so such candidates keep their odds against the
   remaining vocabulary.
-- ``residualized``: evidence, minus the cross-fitted candidate-level LOPD-2.0
-  token/context bias of the same direction.
-- ``projected``: evidence, minus its per-state-type Fisher projection onto the
-  span of the ``project_out`` directions (a regression-adjusted analogy).
 - ``heuristic``: no source; fixed ``pushes`` add a shift to one candidate group
   (e.g. reflection markers) at one state type (e.g. reflection forks), a
   hand-coded control for what a donor does at those forks.
@@ -29,19 +25,9 @@ of donors weights each donor's direction equally rather than by its magnitude.
 the largest is within ``equalize_max_ratio`` (default 2) of the smallest, and
 equalizes otherwise; the sizes, their ratio, and the rule applied are recorded.
 
-Gates multiply a term per state: an allowlist of state types, or
-``exclude_state_types``, which removes the term at those states entirely (so the
-target there is exactly what the other terms make it: masking a candidate's
-shift does not preserve a decision, since the shifts of competing candidates
-still move its probability); minimum
-coverage (student behavior mass the source can score) and minimum support (each
-anchor's own mass on those candidates) for every source the term reads; a
-minimum local Fisher cosine with another direction, counted only where both
-directions carry evidence; ``exclude_first_reflection``, which removes the
-term at a response's first reflection fork (the first reflection after the new
-observation the response follows); and ``prompt_weights``, which scales the term
-by a per-prompt weight from a named ``--prompt-weights NAME=PATH`` file (every
-cached prompt must have a weight), so a push can depend on the problem.
+Gates remove a term at excluded state types or the first reflection fork, or
+scale it by named per-prompt weights. Removing a term at an entire state keeps
+that decision unchanged; masking one candidate still lets its competitors move.
 
 One term may set ``kl_budget``: its coefficient is scaled so the mean per-token
 KL(q_with ‖ q_without) over a prompt-stratified calibration sample equals the
@@ -86,10 +72,8 @@ from data_curation.composition import trainable_tokens
 from data_curation.shift_geometry import (
     CachedRow,
     Direction,
-    Residualizer,
     bucket_probs,
     bucket_shift,
-    center,
     direction_vectors,
     iter_joined_rows,
     load_untrained,
@@ -101,19 +85,9 @@ from data_curation.shift_geometry import (
 from data_curation.shift_states import STATE_CODE, STATE_TYPES, StateLabeler, TokenTable
 
 SCHEMA_VERSION = "offline_direct_opd_synthetic_shift_v2"
-TRANSFORMS = {"raw", "evidence", "residualized", "projected", "heuristic"}
+TRANSFORMS = {"raw", "evidence", "heuristic"}
 KL_QUANTILES = (50, 90, 95, 99, 100)
-GATE_KEYS = {
-    "state_types",
-    "exclude_state_types",
-    "min_coverage",
-    "min_support_mass",
-    "agree_with",
-    "min_cosine",
-    "min_norm",
-    "exclude_first_reflection",
-    "prompt_weights",
-}
+GATE_KEYS = {"exclude_state_types", "exclude_first_reflection", "prompt_weights"}
 
 
 class Term:
@@ -139,23 +113,12 @@ class Term:
             raise ValueError(f"term {index}: unknown gate keys {sorted(unknown_keys)}")
         self.kl_budget = spec.get("kl_budget")
         self.max_multiplier = float(spec.get("max_multiplier", 10.0))
-        self.project_out = [
-            Direction.from_spec(f"term{index}_basis{j}", item) for j, item in enumerate(spec.get("project_out", []))
-        ]
-        self.agreement = (
-            Direction.from_spec(f"term{index}_agree", self.gate["agree_with"]) if "agree_with" in self.gate else None
-        )
-        allowed = self.gate.get("state_types")
-        unknown = set(allowed or ()) - set(STATE_TYPES)
-        if unknown:
-            raise ValueError(f"term {index}: unknown state types {sorted(unknown)}")
-        self.allowed_codes = None if allowed is None else np.asarray([STATE_CODE[name] for name in allowed])
         excluded = self.gate.get("exclude_state_types")
         unknown = set(excluded or ()) - set(STATE_TYPES)
         if unknown:
             raise ValueError(f"term {index}: unknown excluded state types {sorted(unknown)}")
         self.excluded_codes = None if not excluded else np.asarray([STATE_CODE[name] for name in excluded])
-        if self.transform in {"raw", "heuristic"} and (self.gate or self.project_out):
+        if self.transform in {"raw", "heuristic"} and self.gate:
             raise ValueError(f"term {index}: {self.transform} terms are controls and take no gates")
         self.equalize = spec.get("equalize") or False  # a null equalize means off, as it did before "auto"
         if self.equalize not in (False, True, "auto"):
@@ -173,16 +136,14 @@ class Term:
 
     @property
     def sources(self) -> set[str]:
-        directions = [self.direction, *self.project_out, self.agreement]
-        return {source for direction in directions if direction is not None for source in direction.sources}
+        return set(self.direction.sources) if self.direction is not None else set()
 
     @property
     def needs_labels(self) -> bool:
         return (
-            self.allowed_codes is not None
-            or self.excluded_codes is not None
+            self.excluded_codes is not None
             or bool(self.gate.get("exclude_first_reflection"))
-            or self.transform in {"projected", "heuristic"}
+            or self.transform == "heuristic"
         )
 
 
@@ -210,7 +171,6 @@ class SyntheticComposer:
         spec: dict,
         *,
         labeler: StateLabeler | None,
-        vocab_size: int,
         prompt_weights: dict[str, dict[str, float]] | None = None,
     ):
         self.spec = spec
@@ -219,7 +179,7 @@ class SyntheticComposer:
         if sum(term.kl_budget is not None for term in self.terms) > 1:
             raise ValueError("at most one term may set kl_budget; joint calibration is order-dependent")
         if any(term.needs_labels for term in self.terms) and labeler is None:
-            raise ValueError("state-type gates, projections, and heuristics need --tokenizer-json")
+            raise ValueError("state-type gates and heuristics need --tokenizer-json")
         unknown = {group for term in self.terms for _, group, _ in term.pushes} - set(
             labeler.groups if labeler else ()
         )
@@ -235,9 +195,6 @@ class SyntheticComposer:
             if not (np.isfinite(values).all() and (values >= 0).all()):
                 raise ValueError(f"prompt weights {name!r} must be finite and non-negative")
         self.labeler = labeler
-        self.vocab_size = vocab_size
-        self.residualizers: dict[int, Residualizer] = {}
-        self.projections: dict[int, np.ndarray] = {}
         self.multipliers = [1.0 for _ in self.terms]
         self.equalization: dict[int, dict[str, float]] = {}
         self.equalization_rules: dict[int, dict] = {}
@@ -247,18 +204,11 @@ class SyntheticComposer:
     def sources(self) -> set[str]:
         return set().union(*(term.sources for term in self.terms))
 
-    # -- pass 1: fit cross-fitted tables and per-state-type projections ---------------------------
+    # Fit source scales before KL calibration.
     def needs_fit(self) -> bool:
-        return any(term.transform in {"residualized", "projected"} or term.equalize for term in self.terms)
+        return any(term.equalize for term in self.terms)
 
     def fit(self, rows) -> None:
-        grams: dict[int, np.ndarray] = {}
-        for term in self.terms:
-            if term.transform == "residualized":
-                self.residualizers[term.index] = Residualizer(vocab_size=self.vocab_size, directions=1)
-            if term.transform == "projected":
-                size = len(term.project_out) + 1
-                grams[term.index] = np.zeros((len(STATE_TYPES), size, size))
         components = {
             term.index: [
                 Direction(f"term{term.index}_{source}", ((source, 1.0),)) for source in term.direction.sources
@@ -270,22 +220,10 @@ class SyntheticComposer:
         positions = 0
         for row in rows:
             probs = bucket_probs(row.behavior_log_probs)
-            codes = self._codes(row) if any(term.transform == "projected" for term in self.terms) else None
             positions += int(row.loss_mask.sum())
             for index, directions in components.items():
                 stacked = direction_vectors(row, directions, probs)[row.loss_mask]
                 energy[index] += np.einsum("tk,tkj->j", probs[row.loss_mask], stacked**2)
-            for term in self.terms:
-                if term.transform == "residualized":
-                    self.residualizers[term.index].fit_row(row, direction_vectors(row, [term.direction], probs), probs)
-                elif term.transform == "projected":
-                    stacked = direction_vectors(row, term.project_out + [term.direction], probs)
-                    products = np.einsum("tk,tki,tkj->tij", probs, stacked, stacked)[row.loss_mask]
-                    np.add.at(grams[term.index], codes[row.loss_mask], products)
-        for index, gram in grams.items():
-            basis, cross = gram[:, :-1, :-1], gram[:, :-1, -1]
-            ridge = (1e-8 * np.trace(basis, axis1=1, axis2=2) + 1e-30)[:, None, None] * np.eye(basis.shape[-1])
-            self.projections[index] = np.linalg.solve(basis + ridge, cross[..., None])[..., 0]
         for index, total in energy.items():
             term = self.terms[index]
             rms = np.sqrt(total / max(positions, 1))
@@ -322,36 +260,16 @@ class SyntheticComposer:
         if term.transform == "heuristic":
             return heuristic_vector(row, term.pushes, self.labeler, codes)
         vector = direction_vectors(row, [term.direction], probs)[..., 0]
-        if term.transform == "residualized":
-            vector = center(vector - self.residualizers[term.index].predict(row, probs)[..., 0], probs)
-        elif term.transform == "projected":
-            basis = direction_vectors(row, term.project_out, probs)
-            vector = vector - np.einsum("tkj,tj->tk", basis, self.projections[term.index][codes])
         return vector * self.gate(term, row, probs, codes)[:, None]
 
     def gate(self, term: Term, row: CachedRow, probs: np.ndarray, codes) -> np.ndarray:
         gate = np.ones(len(probs), dtype=bool)
-        if term.allowed_codes is not None:
-            gate &= np.isin(codes, term.allowed_codes)
         if term.excluded_codes is not None:
             gate &= ~np.isin(codes, term.excluded_codes)
         if term.gate.get("exclude_first_reflection"):
             forks = np.nonzero(codes == STATE_CODE["think_reflection_fork"])[0]
             if forks.size:
                 gate[forks[0]] = False
-        for source in term.sources:
-            gate &= row.coverage(source) >= float(term.gate.get("min_coverage", 0.0))
-            gate &= row.support[source] >= float(term.gate.get("min_support_mass", 0.0))
-        if term.agreement is not None:
-            own = direction_vectors(row, [term.direction], probs)[..., 0]
-            other = direction_vectors(row, [term.agreement], probs)[..., 0]
-            own_norm, other_norm = (probs * own**2).sum(-1), (probs * other**2).sum(-1)
-            minimum = float(term.gate.get("min_norm", 1e-6))
-            evidence = (own_norm > minimum) & (other_norm > minimum)
-            local = np.divide(
-                (probs * own * other).sum(-1), np.sqrt(own_norm * other_norm), out=np.zeros(len(probs)), where=evidence
-            )
-            gate &= evidence & (local >= float(term.gate.get("min_cosine", 0.0)))
         weight = 1.0
         if "prompt_weights" in term.gate:
             weights = self.prompt_weights[term.gate["prompt_weights"]]
@@ -490,7 +408,6 @@ def main() -> None:
     composer = SyntheticComposer(
         spec,
         labeler=StateLabeler(table) if table else None,
-        vocab_size=(max(table.symbols) + 1) if table else 151_669,
         prompt_weights={name: json.loads(path.read_text(encoding="utf-8")) for name, path in weight_files.items()},
     )
     missing = composer.sources - {args.base_name} - set(donors)

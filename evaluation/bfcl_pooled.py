@@ -53,7 +53,7 @@ def accuracy_weights(counts: dict[str, int]) -> dict[str, dict[str, float]]:
 
 def run_arrays(path: Path) -> dict[str, tuple[list[str], np.ndarray, np.ndarray]]:
     """{category: (entry ids, correctness, generated tokens)} in entry-id order; every v3 category is required."""
-    run = load_run(path, require_usage=False)
+    run = load_run(path, include_usage=False)
     missing = [category for category in V3_CATEGORIES if not run.get(category)]
     if missing:
         raise ValueError(f"{path} is missing categories {missing}")

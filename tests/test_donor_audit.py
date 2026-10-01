@@ -1,5 +1,7 @@
 """Donor audits: untrained-row detection, scored-shard integrity, and evidence coverage."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -123,3 +125,20 @@ def test_row_diagnostics_flag_rows_one_rounding_step_apart(tmp_path):
     assert [diagnostics[i]["untrained"] for i in range(5)] == [True, True, False, False, False]
     assert diagnostics[0]["exact_duplicates"] == [] and diagnostics[0]["near_duplicates"] == [1]
     assert 0.8 < diagnostics[2]["max_cosine_to_other_special"] < audit.NEAR_DUPLICATE_COSINE
+
+
+@pytest.mark.parametrize("aliases", [{"</think>": "a"}, {"</think>": "<eos>", "<tool_call>": "<eos>"}])
+def test_audit_and_scorer_both_reject_alias_collisions(monkeypatch, aliases):
+    from transformers import AutoTokenizer
+    from data_curation.precompute_direct_opd_scores import ExactTokenStringProjection
+
+    student = SimpleNamespace(
+        get_vocab=lambda: {"a": 0, "</think>": 1, "<tool_call>": 2},
+        get_added_vocab=lambda: {"</think>": 1, "<tool_call>": 2},
+    )
+    teacher = SimpleNamespace(get_vocab=lambda: {"a": 4, "<eos>": 5})
+    monkeypatch.setattr(AutoTokenizer, "from_pretrained", lambda *args, **kwargs: teacher)
+    with pytest.raises(ValueError, match="already mapped"):
+        audit.pair_token_audit(student, {"pre": "unused"}, aliases)
+    with pytest.raises(ValueError, match="already mapped"):
+        ExactTokenStringProjection(student, teacher, aliases)

@@ -1,4 +1,4 @@
-"""Invariances of the K+1 bucket geometry, evidence handling, residualization, and the efficiency basis."""
+"""Invariances of the K+1 bucket geometry, evidence handling, and state labeling."""
 
 import json
 
@@ -170,58 +170,6 @@ def test_cosines_are_scale_free_and_signed_and_the_placebo_is_centered(tmp_path)
     low, high = np.asarray(section["placebo_cosine_ci95"])
     assert low[0, 1] < 0 < high[0, 1]
     assert {"supported", "unsupported", "position:0"} <= set(summary["slices"])
-
-
-def test_residualizer_never_uses_a_rows_own_fold(tmp_path):
-    base = write_cache(tmp_path / "base", 12)
-    direction = [geometry.Direction("acc", (("agent_acc", 1.0),))]
-    rows = list(geometry.iter_joined_rows(base, {}))
-    target = rows[0]
-    probs = geometry.bucket_probs(target.behavior_log_probs)
-    before = geometry.fit_residualizer(rows, direction, vocab_size=16).predict(target, probs)
-    for row in rows:
-        if row.fold == target.fold:
-            row.shifts["agent_acc"] = row.shifts["agent_acc"] * 10.0
-    after = geometry.fit_residualizer(rows, direction, vocab_size=16).predict(target, probs)
-    np.testing.assert_allclose(after, before, atol=1e-12)
-    np.testing.assert_allclose((probs[..., None] * before).sum(axis=1), 0.0, atol=1e-12)
-
-
-def test_fused_residualized_variants_match_their_separate_definitions(tmp_path):
-    base = write_cache(tmp_path / "base", 12)
-    directions = [geometry.Direction("acc", (("agent_acc", 1.0),))]
-    rows = list(geometry.iter_joined_rows(base, {}))
-    residualizer = geometry.fit_residualizer(rows, directions, vocab_size=16)
-    fused = geometry.analyze(rows, directions, tiny_labeler(), residualizer=residualizer)
-    assert set(fused) == {"raw", "residualized_token", "residualized_context", "residualized_both"}
-    expected = 0.0
-    for row in rows:
-        probs = geometry.bucket_probs(row.behavior_log_probs)
-        vectors = geometry.direction_vectors(row, directions, probs) - residualizer.predict(row, probs, parts="context")
-        expected += geometry.fisher_products(geometry.center_stack(vectors, probs), probs)[row.loss_mask].sum(0)
-    np.testing.assert_allclose(fused["residualized_context"].slice_gram("all"), expected)
-
-
-def test_efficiency_basis_is_invariant_to_contrast_scale(tmp_path):
-    base = write_cache(tmp_path / "base", 30)
-    donor = write_cache(tmp_path / "donor", 30, seed=9)
-    directions = [
-        geometry.Direction("a", (("agent_acc", 1.0),)),
-        geometry.Direction("b", (("donor", 1.0),)),
-        geometry.Direction("b_scaled", (("donor", 100.0), ("agent_acc", 1.0))),
-    ]
-    accumulator = geometry.analyze(geometry.iter_joined_rows(base, {"donor": donor}), directions, tiny_labeler())["raw"]
-    basis = geometry.efficiency_basis(accumulator, ["a", "b"], bootstrap=20)
-    np.testing.assert_allclose(sum(basis["explained"]), 1.0)
-    assert set(basis["leave_one_out_pc1_cosine"]) == {"a", "b"}
-    scaled = geometry.analyze(
-        geometry.iter_joined_rows(base, {"donor": donor}),
-        [geometry.Direction("a", (("agent_acc", 3.0),)), geometry.Direction("b", (("donor", 0.1),))],
-        tiny_labeler(),
-    )["raw"]
-    np.testing.assert_allclose(geometry.efficiency_basis(scaled, ["a", "b"], bootstrap=5)["explained"], basis["explained"])
-    with pytest.raises(ValueError, match="two"):
-        geometry.efficiency_basis(accumulator, ["a"])
 
 
 def test_state_labels_follow_think_and_tool_call_structure():

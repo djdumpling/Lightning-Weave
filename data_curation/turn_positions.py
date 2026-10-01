@@ -31,12 +31,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-import pyarrow.parquet as pq
-
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from data_curation.common import file_sha256
+from data_curation.looptool import cached_prompt_rows
 
 POSITIONS = ("first_turn", "turn_start", "after_tool")
 RULES = ("protect_turn_starts", "random_multi_turn_control")
@@ -57,22 +56,11 @@ def position(messages: list[dict]) -> str:
 
 def positions(prompts: Path, canonical: Path) -> tuple[dict[str, str], dict[str, str]]:
     """({prompt_id: position}, {prompt_id: conversation_kind}) for every prompt of ``prompts``."""
-    wanted = {
-        row["source_index"]: row["prompt_id"]
-        for row in pq.read_table(prompts, columns=["prompt_id", "source_index"]).to_pylist()
-    }
-    found, kinds = {}, {}
-    with canonical.open(encoding="utf-8") as handle:
-        for line in handle:
-            row = json.loads(line)
-            prompt_id = wanted.get(row["metadata"]["source_index"])
-            if prompt_id is not None:
-                found[prompt_id] = position(row["messages"])
-                kinds[prompt_id] = row["metadata"]["conversation_kind"]
-    missing = set(wanted.values()) - set(found)
-    if missing:
-        raise KeyError(f"{len(missing)} prompts have no canonical row")
-    return found, kinds
+    rows = cached_prompt_rows(prompts, canonical)
+    return (
+        {p: position(row["messages"]) for p, row in rows.items()},
+        {p: row["metadata"]["conversation_kind"] for p, row in rows.items()},
+    )
 
 
 def control_rank(prompt_id: str) -> str:
@@ -109,7 +97,11 @@ def summary(found: dict[str, str], kinds: dict[str, str], weights: dict[str, dic
 
 def provenance(prompts: Path, canonical: Path) -> dict:
     """Hashes of the inputs and of this code; a changed hash means the files are stale."""
-    return {"prompts": file_sha256(prompts), "canonical": file_sha256(canonical), "code": file_sha256(REPO / CODE)}
+    return {
+        "prompts": file_sha256(prompts),
+        "canonical": file_sha256(canonical),
+        "code": {source: file_sha256(REPO / source) for source in (CODE, "data_curation/looptool.py")},
+    }
 
 
 def parse_args() -> argparse.Namespace:

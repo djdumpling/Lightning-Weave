@@ -104,7 +104,7 @@ def test_cached_and_batched_scores_match_direct_formula(score_field, chunk_size,
 
 class SparseProjection:
     def prepare_row(self, metadata):
-        return [1, 2, 3, 4, 5, 6, 7, 8], [[1, 2], [0, 3], [4, 5]], [2, 3, 5], [True, False, True]
+        return [1, 2, 3, 4, 5, 6, 7, 8], [[1, 2], [0, 3], [4, 5]], [2, 3, 5], [True, False, True], None
 
 
 @pytest.mark.parametrize("chunk_size", [4, 6])
@@ -192,7 +192,7 @@ def test_projected_cached_and_padded_scores_preserve_sparse_positions_and_masks(
         token_projection=projection,
         normalization_vocab_size=vocab_size,
     )[0]
-    context, targets, indices, mask = projection.prepare_row(metadata)
+    context, targets, indices, mask, _ = projection.prepare_row(metadata)
     logits = PrefixModel()(torch.tensor([context])).logits[0, indices].float()[..., :vocab_size]
     expected = logits.log_softmax(-1).gather(-1, torch.tensor(targets)).tolist()
     assert cached == batched == expected

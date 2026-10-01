@@ -11,6 +11,7 @@ import pytest
 from data_curation import build_synthetic_shift_target as synthetic
 from data_curation.build_direct_opd_composed_target import compose_anchor_deltas
 from data_curation.common import file_sha256, write_json
+from data_curation.check_score_precision import compare
 from data_curation.composition import flatten_metadata
 from data_curation.shift_geometry import (
     CachedRow,
@@ -217,18 +218,6 @@ def test_donor_positions_without_evidence_keep_the_base_mask(tmp_path):
         assert np.abs(delta(metadata, row)[1]).max() > 0
 
 
-def test_agreement_gates_require_evidence_on_both_sides(tmp_path):
-    cache(tmp_path / "base", seed=0)
-    cache(tmp_path / "donor", seed=1, sealed=False)
-    cache(tmp_path / "silent", seed=2, sealed=False, loss_mask=[False] * LENGTH)
-    gate = {"agree_with": {"terms": [{"source": "silent", "coef": 1.0}]}, "min_cosine": 0.0}
-    _, _, metadata = run_main(
-        tmp_path, {"alpha": 2.0, "terms": [term(("donor", 1.0), gate=gate)]}, donors=["donor", "silent"]
-    )
-    for row in range(ROWS):
-        np.testing.assert_array_equal(delta(metadata, row), 0.0)
-
-
 def test_kl_budget_is_met_bounded_and_reported(tmp_path):
     cache(tmp_path / "base", seed=0)
     cache(tmp_path / "donor", seed=1, sealed=False)
@@ -244,7 +233,6 @@ def test_kl_budget_is_met_bounded_and_reported(tmp_path):
         synthetic.SyntheticComposer(
             {"alpha": 2.0, "terms": [term(("donor", 1.0), kl_budget=0.01), term(("agent_acc", 1.0), kl_budget=0.01)]},
             labeler=None,
-            vocab_size=10,
         )
 
 
@@ -260,9 +248,8 @@ def test_outputs_record_the_spec_and_are_never_overwritten(tmp_path):
 def test_state_gates_require_a_tokenizer():
     with pytest.raises(ValueError, match="tokenizer"):
         synthetic.SyntheticComposer(
-            {"alpha": 2.0, "terms": [term(("agent_acc", 1.0), gate={"state_types": ["think_body"]})]},
+            {"alpha": 2.0, "terms": [term(("agent_acc", 1.0), gate={"exclude_state_types": ["think_body"]})]},
             labeler=None,
-            vocab_size=10,
         )
 
 
@@ -282,7 +269,7 @@ def test_heuristic_pushes_move_only_their_groups_at_their_forks():
         {"state": "think_reflection_fork", "group": "conclusion", "shift": 2.0},
     ]
     composer = synthetic.SyntheticComposer(
-        {"alpha": 2.0, "terms": [{"transform": "heuristic", "pushes": pushes}]}, labeler=labeler, vocab_size=32
+        {"alpha": 2.0, "terms": [{"transform": "heuristic", "pushes": pushes}]}, labeler=labeler
     )
     assert composer.sources == set()
     bucket, (vector,) = composer.row_terms(row)
@@ -303,7 +290,7 @@ def test_heuristic_terms_are_validated():
     push = {"state": "think_stop_fork", "group": "single_newline", "shift": 1.0}
     with pytest.raises(ValueError, match="tokenizer"):
         synthetic.SyntheticComposer(
-            {"alpha": 2.0, "terms": [{"transform": "heuristic", "pushes": [push]}]}, labeler=None, vocab_size=10
+            {"alpha": 2.0, "terms": [{"transform": "heuristic", "pushes": [push]}]}, labeler=None
         )
     with pytest.raises(ValueError, match="no direction"):
         synthetic.Term(0, {"transform": "heuristic", "pushes": [push], "direction": {"terms": []}})
@@ -341,51 +328,37 @@ def test_equalize_weights_each_source_to_unit_fisher_rms(tmp_path):
         np.testing.assert_allclose(composed - (probs * composed).sum(-1, keepdims=True), target, atol=1e-4)
 
 
-def test_equalize_auto_keeps_raw_weights_for_comparable_sources(tmp_path):
-    cache(tmp_path / "base", seed=0)
-    cache(tmp_path / "one", seed=1, sealed=False)
-    cache(tmp_path / "two", seed=2, sealed=False)
-    auto = {"alpha": 2.0, "terms": [term(("one", 1.0), ("two", 1.0), equalize="auto")]}
-    raw = {"alpha": 2.0, "terms": [term(("one", 1.0), ("two", 1.0))]}
-    _, manifest, metadata = run_main(tmp_path, auto, donors=["one", "two"], name="auto")
-    _, plain, reference = run_main(tmp_path, raw, donors=["one", "two"], name="raw")
-    model = manifest["post_teacher_model"]
-    rule = model["equalization_rules"]["0"]
-    assert rule["rule"] == "raw" and 1.0 <= rule["ratio"] <= 2.0 and rule["max_ratio"] == 2.0
-    assert rule["ratio"] == pytest.approx(max(rule["rms"].values()) / min(rule["rms"].values()))
-    assert model["equalization"]["0"] == {"one": 1.0, "two": 1.0}
-    assert "equalization_rules" not in plain["post_teacher_model"]
-    for field in ("post_teacher_log_probs", "pre_teacher_log_probs", "loss_mask"):  # exactly the plain raw sum
-        assert metadata.field(field).to_pylist() == reference.field(field).to_pylist()
-    # the rule is inclusive: at exactly the measured ratio the weights stay raw
-    boundary = {
-        "alpha": 2.0,
-        "terms": [term(("one", 1.0), ("two", 1.0), equalize="auto", equalize_max_ratio=rule["ratio"])],
-    }
-    _, boundary_manifest, _ = run_main(tmp_path, boundary, donors=["one", "two"], name="boundary")
-    assert boundary_manifest["post_teacher_model"]["equalization_rules"]["0"]["rule"] == "raw"
+@pytest.mark.parametrize("scale,max_ratio,rule", [(1.0, 2.0, "raw"), (5.0, 2.0, "equalized"), (5.0, 100.0, "raw")])
+def test_auto_equalization_uses_the_rms_ratio_and_inclusive_threshold(scale, max_ratio, rule):
+    rng = np.random.default_rng(7)
+    valid = np.ones((LENGTH, K), dtype=bool)
+    row = CachedRow(
+        "s0", "p0", np.arange(LENGTH), np.tile([1, 2, 3], (LENGTH, 1)),
+        np.log(np.tile([0.4, 0.3, 0.2], (LENGTH, 1))), np.ones(LENGTH, dtype=bool),
+        shifts={"one": rng.normal(size=(LENGTH, K)), "two": scale * rng.normal(size=(LENGTH, K))},
+        mapped={"one": valid, "two": valid}, trained={"one": valid, "two": valid},
+    )
 
+    def fitted(**options):
+        spec = {"alpha": 2.0, "terms": [term(("one", 1.0), ("two", 1.0), **options)]}
+        composer = synthetic.SyntheticComposer(spec, labeler=None)
+        if composer.needs_fit():
+            composer.fit([row])
+        return composer
 
-def test_equalize_auto_equalizes_a_dominant_source_like_equalize_true(tmp_path):
-    cache(tmp_path / "base", seed=0)
-    cache(tmp_path / "small", seed=1, sealed=False)
-    cache(tmp_path / "large", seed=2, sealed=False, shift_scale=5.0)
-    sources = (("small", 1.0), ("large", 1.0))
-    auto = {"alpha": 2.0, "terms": [term(*sources, equalize="auto")]}
-    equal = {"alpha": 2.0, "terms": [term(*sources, equalize=True)]}
-    lenient = {"alpha": 2.0, "terms": [term(*sources, equalize="auto", equalize_max_ratio=100.0)]}
-    _, manifest, metadata = run_main(tmp_path, auto, donors=["small", "large"], name="auto")
-    _, reference_manifest, reference = run_main(tmp_path, equal, donors=["small", "large"], name="equal")
-    _, lenient_manifest, _ = run_main(tmp_path, lenient, donors=["small", "large"], name="lenient")
-    rule = manifest["post_teacher_model"]["equalization_rules"]["0"]
-    assert rule["rule"] == "equalized" and rule["ratio"] > 2.0
-    assert manifest["post_teacher_model"]["equalization"] == reference_manifest["post_teacher_model"]["equalization"]
-    for row in range(ROWS):
-        np.testing.assert_allclose(delta(metadata, row), delta(reference, row), atol=1e-6)
-    assert lenient_manifest["post_teacher_model"]["equalization_rules"]["0"]["rule"] == "raw"
-    # equalize: true targets predate "auto": they record no rule, so their revisions are unchanged
-    assert "equalization_rules" not in reference_manifest["post_teacher_model"]
-    assert lenient_manifest["post_teacher_model"]["equalization"]["0"] == {"small": 1.0, "large": 1.0}
+    auto = fitted(equalize="auto", equalize_max_ratio=max_ratio)
+    reference = fitted(equalize=(rule == "equalized"))
+    report = auto.equalization_rules[0]
+    assert report["rule"] == rule and report["max_ratio"] == max_ratio
+    assert report["ratio"] == pytest.approx(max(report["rms"].values()) / min(report["rms"].values()))
+    np.testing.assert_array_equal(auto.combine(auto.row_terms(row)[1]), reference.combine(reference.row_terms(row)[1]))
+    if rule == "raw":
+        assert auto.equalization[0] == {"one": 1.0, "two": 1.0}
+    else:
+        assert auto.equalization == reference.equalization
+    assert not reference.equalization_rules  # pre-auto targets retain their existing provenance
+    boundary = fitted(equalize="auto", equalize_max_ratio=report["ratio"])
+    assert boundary.equalization_rules[0]["rule"] == "raw"
 
 
 def test_equalize_options_are_validated():
@@ -430,14 +403,14 @@ def test_calibration_reports_where_the_kl_lands_by_state():
         support={"d": np.ones(len(tokens))},
     )
     spec = {"alpha": 2.0, "terms": [term(("d", 1.0), kl_budget=0.01, max_multiplier=100.0)]}
-    report = synthetic.SyntheticComposer(spec, labeler=labeler, vocab_size=32).calibrate([row])
+    report = synthetic.SyntheticComposer(spec, labeler=labeler).calibrate([row])
     fork = "think_reflection_fork"
     assert report["position_share_by_state"][fork] == pytest.approx(2 / 9)
     assert report["kl_share_by_state"][fork] == pytest.approx(1.0)
     assert sum(report["kl_share_by_state"].values()) == pytest.approx(1.0)
     assert report["mean_kl_by_state"][fork] == pytest.approx(0.01 * 9 / 2, rel=1e-3)
     assert report["kl_share_of_top_positions"]["10%"] == pytest.approx(0.5)  # one of the two forks
-    unlabeled = synthetic.SyntheticComposer(spec, labeler=None, vocab_size=32).calibrate([row])
+    unlabeled = synthetic.SyntheticComposer(spec, labeler=None).calibrate([row])
     assert "kl_share_by_state" not in unlabeled and unlabeled["effective_coef"] == report["effective_coef"]
 
 
@@ -470,7 +443,7 @@ def test_masking_a_call_does_not_preserve_the_decision_but_excluding_the_state_d
     assert codes[3] == STATE_CODE["act_vs_talk"]
 
     def call_probability(spec):
-        buckets, (vector,) = synthetic.SyntheticComposer(spec, labeler=labeler, vocab_size=32).row_terms(row)
+        buckets, (vector,) = synthetic.SyntheticComposer(spec, labeler=labeler).row_terms(row)
         return np.exp(log_tilted_target(buckets, vector, 2.0)), vector
 
     masked, masked_vector = call_probability({"alpha": 2.0, "terms": [term(("d", 1.0))]})
@@ -518,12 +491,12 @@ def test_exclude_first_reflection_removes_the_term_only_at_the_first_reflection_
         support={"d": np.ones(len(tokens))},
     )
     spec = {"alpha": 2.0, "terms": [term(("d", 1.0), gate={"exclude_first_reflection": True})]}
-    composer = synthetic.SyntheticComposer(spec, labeler=labeler, vocab_size=32)
+    composer = synthetic.SyntheticComposer(spec, labeler=labeler)
     codes = labeler.label(tokens, candidates, probs)
     assert list(np.nonzero(codes == STATE_CODE["think_reflection_fork"])[0]) == [3, 6]
     _, (gated,) = composer.row_terms(row)
     _, (ungated,) = synthetic.SyntheticComposer(
-        {"alpha": 2.0, "terms": [term(("d", 1.0))]}, labeler=labeler, vocab_size=32
+        {"alpha": 2.0, "terms": [term(("d", 1.0))]}, labeler=labeler
     ).row_terms(row)
     assert np.abs(ungated[3]).max() > 0 and np.abs(ungated[6]).max() > 0
     np.testing.assert_array_equal(gated[3], 0.0)
@@ -536,7 +509,7 @@ def test_gates_reject_unknown_keys_and_the_reflection_gate_needs_labels():
         synthetic.Term(0, term(("d", 1.0), gate={"exclude_first_reflections": True}))
     spec = {"alpha": 2.0, "terms": [term(("d", 1.0), gate={"exclude_first_reflection": True})]}
     with pytest.raises(ValueError, match="tokenizer"):
-        synthetic.SyntheticComposer(spec, labeler=None, vocab_size=8)
+        synthetic.SyntheticComposer(spec, labeler=None)
 
 
 def test_prompt_weights_scale_the_term_per_prompt_and_are_recorded(tmp_path):
@@ -557,12 +530,99 @@ def test_prompt_weights_scale_the_term_per_prompt_and_are_recorded(tmp_path):
 def test_prompt_weights_must_cover_every_prompt_and_be_named():
     spec = {"alpha": 2.0, "terms": [term(("d", 1.0), gate={"prompt_weights": "w"})]}
     with pytest.raises(ValueError, match="without --prompt-weights"):
-        synthetic.SyntheticComposer(spec, labeler=None, vocab_size=8)
+        synthetic.SyntheticComposer(spec, labeler=None)
     with pytest.raises(ValueError, match="non-negative"):
-        synthetic.SyntheticComposer(spec, labeler=None, vocab_size=8, prompt_weights={"w": {"p": -1.0}})
-    composer = synthetic.SyntheticComposer(spec, labeler=None, vocab_size=8, prompt_weights={"w": {"other": 1.0}})
+        synthetic.SyntheticComposer(spec, labeler=None, prompt_weights={"w": {"p": -1.0}})
+    composer = synthetic.SyntheticComposer(spec, labeler=None, prompt_weights={"w": {"other": 1.0}})
     row = CachedRow("s", "p", np.zeros(2), np.zeros((2, 3)), np.log(np.full((2, 3), 0.3)), np.ones(2, dtype=bool))
     row.shifts["d"], row.mapped["d"], row.trained["d"] = np.zeros((2, 3)), np.ones((2, 3), bool), np.ones((2, 3), bool)
     row.support["d"] = np.ones(2)
     with pytest.raises(KeyError, match="no entry for p"):
         composer.row_terms(row)
+
+
+def subset(full, directory, rows):
+    """The listed rows of ``full``'s first shard, as a one-shard re-scored chain."""
+    shard = min(full.glob("*.parquet"))
+    directory.mkdir()
+    pq.write_table(pq.read_table(shard).take(rows), directory / shard.name)
+    return directory
+
+
+def test_identical_rescores_agree_exactly_and_rows_join_by_sample_id(tmp_path):
+    cache(tmp_path / "base", seed=0)
+    main = cache(tmp_path / "main", seed=1, sealed=False)
+    same = subset(cache(tmp_path / "again", seed=1, sealed=False), tmp_path / "check", [2, 0])
+    report = compare(tmp_path / "base", main, same)
+    assert report["rows"] == 2 and report["fisher_correlation"] == pytest.approx(1.0)
+    assert report["relative_rms_error"] == pytest.approx(0.0, abs=1e-6)
+    assert report["log_prob_difference"]["post"]["max"] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_a_rescaled_shift_is_aligned_but_off_and_an_unrelated_one_disagrees(tmp_path):
+    cache(tmp_path / "base", seed=0)
+    main = cache(tmp_path / "main", seed=1, sealed=False)
+    doubled = subset(
+        cache(tmp_path / "doubled", seed=1, sealed=False, shift_scale=2.0), tmp_path / "check2", [0, 1, 3]
+    )
+    report = compare(tmp_path / "base", main, doubled)
+    assert report["fisher_correlation"] == pytest.approx(1.0, abs=1e-6)
+    assert report["relative_rms_error"] == pytest.approx(1.0, abs=1e-4)
+    assert report["shift_rms"]["check"] == pytest.approx(2 * report["shift_rms"]["main"], rel=1e-4)
+    assert report["log_prob_difference"]["pre"]["max"] == pytest.approx(0.0, abs=1e-6)
+    other = subset(cache(tmp_path / "other", seed=7, sealed=False), tmp_path / "check7", [0, 1, 2, 3])
+    assert abs(compare(tmp_path / "base", main, other)["fisher_correlation"]) < 0.9
+
+
+def test_the_check_must_be_one_shard_of_known_rows(tmp_path):
+    cache(tmp_path / "base", seed=0)
+    main = cache(tmp_path / "main", seed=1, sealed=False)
+    with pytest.raises(ValueError, match="exactly one"):
+        compare(tmp_path / "base", main, main)
+    stranger = tmp_path / "stranger"
+    cache(stranger, seed=1, sealed=False)
+    table = pq.read_table(min(stranger.glob("*.parquet")))
+    metadata = table.column("metadata").combine_chunks()
+    renamed = [f"x{i}" for i in range(table.num_rows)]
+    fields = [metadata.field(name) for name in metadata.type.names]
+    fields[metadata.type.names.index("sample_id")] = pa.array(renamed)
+    table = table.set_column(
+        table.schema.get_field_index("metadata"),
+        "metadata",
+        pa.StructArray.from_arrays(fields, names=metadata.type.names),
+    )
+    (tmp_path / "check").mkdir()
+    pq.write_table(table, tmp_path / "check" / min(stranger.glob("*.parquet")).name)
+    with pytest.raises(KeyError, match="lacks"):
+        compare(tmp_path / "base", main, tmp_path / "check")
+    assert np.isfinite(compare(tmp_path / "base", main, subset(main, tmp_path / "ok", [1]))["fisher_correlation"])
+
+
+def perturbed(path, field, change):
+    """Rewrite one score field of a shard with ``change`` applied to every row's [T][K] list."""
+    table = pq.read_table(path)
+    metadata = table.column("metadata").combine_chunks()
+    arrays = [metadata.field(name) for name in metadata.type.names]
+    index = metadata.type.names.index(field)
+    arrays[index] = pa.array([change(row) for row in arrays[index].to_pylist()], type=arrays[index].type)
+    rebuilt = pa.StructArray.from_arrays(arrays, names=metadata.type.names)
+    pq.write_table(table.set_column(table.schema.get_field_index("metadata"), "metadata", rebuilt), path)
+
+
+def test_scores_without_evidence_or_outside_the_loss_mask_are_ignored(tmp_path):
+    valid = [[True, False, True]] * LENGTH  # candidate 2 (token 2) is unmapped
+    cache(tmp_path / "base", seed=0, loss_mask=[True, True, False, True, True])
+    main = cache(tmp_path / "main", seed=1, sealed=False, candidate_valid=valid)
+    check = subset(cache(tmp_path / "again", seed=1, sealed=False, candidate_valid=valid), tmp_path / "check", [3, 1])
+    shard = min(check.glob("*.parquet"))
+    clean = compare(tmp_path / "base", main, check, untrained={3})
+    # placeholders on the unmapped candidate, a position outside the base loss mask, and the untrained token 3
+    perturbed(shard, "post_teacher_log_probs", lambda row: [[a, float("nan"), c] for a, _, c in row])
+    perturbed(shard, "pre_teacher_log_probs", lambda row: [[a, 55.0, c] for a, _, c in row])
+    perturbed(
+        shard, "post_teacher_log_probs", lambda row: [x if t != 2 else [v + 10 for v in x] for t, x in enumerate(row)]
+    )
+    perturbed(shard, "post_teacher_log_probs", lambda row: [[a, b, c + 7] for a, b, c in row])
+    assert compare(tmp_path / "base", main, check, untrained={3}) == clean
+    # without the untrained list, token 3's perturbation is visible
+    assert compare(tmp_path / "base", main, check)["fisher_correlation"] < 1 - 1e-6

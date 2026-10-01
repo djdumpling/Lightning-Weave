@@ -1,7 +1,5 @@
 """The agent-efficiency registry: pins, provenance, the primary matrix, and geometry directions."""
 
-import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
@@ -12,16 +10,8 @@ from data_curation.shift_states import StateLabeler, TokenTable
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def load(name, path):
-    spec = importlib.util.spec_from_file_location(name, ROOT / path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-config = load("agent_eff_config", "configs/agent_eff/config.py")
-bfcl = load("bfcl_eval_config_for_agent_eff", "configs/bfcl_eval/config.py")
+from configs.agent_eff import config
+from configs.bfcl_eval import config as bfcl
 
 
 def tiny_labeler():
@@ -77,7 +67,7 @@ def test_controls_and_follow_ups_sit_on_the_legacy_accuracy_base():
     assert scaled["transform"] == "raw" and scaled["coef"] == config.SCALED_ACCURACY_COEF
     accuracy, heuristic = controls["acc-legacy+heuristic"]["terms"]
     assert accuracy == config.ACCURACY_TERMS["acc-legacy"] and heuristic["transform"] == "heuristic"
-    assert {"acc-legacy+decs@low", "acc-legacy+decs@high"} <= set(exploratory)
+    assert set(exploratory) == {"acc-legacy+decs@low", "acc-legacy+decs@high"}
     assert all(spec["terms"][0] == config.ACCURACY_TERMS["acc-legacy"] for spec in exploratory.values())
     names = [*config.primary_specs(), *controls, *exploratory]
     assert len(names) == len(set(names))
@@ -106,7 +96,7 @@ def test_every_variant_spec_builds_a_composer(name):
     weights = {
         term["gate"]["prompt_weights"]: {} for term in spec["terms"] if "prompt_weights" in term.get("gate", {})
     }
-    composer = SyntheticComposer(spec, labeler=tiny_labeler(), vocab_size=8, prompt_weights=weights)
+    composer = SyntheticComposer(spec, labeler=tiny_labeler(), prompt_weights=weights)
     # every arm uses the LoopTool recipe's alpha, which is also Lightning Weave's
     assert composer.alpha == config.RECIPE.alpha == 2.0
     assert composer.sources <= {"agent_acc", *config.DONORS}
@@ -114,22 +104,13 @@ def test_every_variant_spec_builds_a_composer(name):
     assert all(term.direction.sources == ("agent_acc",) for term in legacy)
 
 
-def test_the_efficiency_basis_holds_only_efficiency_contrasts():
-    core = config.geometry_spec(["klear", "decs", "deepscaler"])
-    assert core["basis"] == ["decs_minus_deepscaler"] and "dler_minus_deepscaler" not in core["directions"]
-    census = config.geometry_spec(list(config.DONORS))
-    assert set(census["basis"]) == set(config.EFFICIENCY_BASIS)
-    assert not {"agent_acc", "klear", "decs", "decs_minus_klear"} & set(census["basis"])
-
-
-def test_bfcl_tags_resolve_agent_efficiency_students_by_seed():
-    default = bfcl.resolve_model("ae.joint.acc-clean+decs-deepscaler")
-    assert (
-        default.path
-        == f"{config.CHECKPOINT_ROOT}/joint/acc-clean+decs-deepscaler/seed{config.RECIPE.training_seed}/hf"
-    )
-    assert bfcl.resolve_model("ae.joint.acc-clean.s7").path.endswith("/acc-clean/seed7/hf")
+@pytest.mark.parametrize("variant,seeds", {**config.CODE_ROUND_SEEDS, **config.FOLLOWUP_SEEDS, **config.NEXT_SEEDS}.items())
+def test_bfcl_tags_resolve_agent_efficiency_students_by_seed(variant, seeds):
+    for seed in seeds:
+        tag = f"ae.joint.{variant}" + ("" if seed == config.RECIPE.training_seed else f".s{seed}")
+        assert bfcl.resolve_model(tag).path == f"{config.CHECKPOINT_ROOT}/joint/{variant}/seed{seed}/hf"
     assert bfcl.AGENT_EFF_DEFAULT_SEED == config.RECIPE.training_seed
+    assert bfcl.resolve_model("ae.joint.acc-clean.s7").path.endswith("/acc-clean/seed7/hf")
     with pytest.raises(ValueError, match="unknown"):
         bfcl.resolve_model("ae.joint")
 
@@ -165,7 +146,6 @@ def test_e1_pairs_subtract_the_accuracy_model_each_was_trained_from():
     for name in config.CODE_ROUND_PAIRS:
         assert config.DONORS[name].aliases == config.DONORS["decs"].aliases == config.R1_ALIASES
         assert config.DONORS[name].role == "efficiency" and not config.DONORS[name].core
-    assert {"e1code", "e1math"} <= set(config.EFFICIENCY_BASIS)
 
 
 def test_pair_and_tail_checks():
@@ -187,13 +167,6 @@ def test_pair_and_tail_checks():
     assert not config.tail_gate({"kl_quantiles": {"99": 1.01}}, reference)["passed"]
 
 
-def test_bfcl_tags_resolve_code_round_students():
-    for variant, seeds in config.CODE_ROUND_SEEDS.items():
-        for seed in seeds:
-            tag = f"ae.joint.{variant}" + ("" if seed == config.RECIPE.training_seed else f".s{seed}")
-            assert bfcl.resolve_model(tag).path == f"{config.CHECKPOINT_ROOT}/joint/{variant}/seed{seed}/hf"
-
-
 def test_followups_change_one_thing_each_from_the_e1math_arm():
     specs, e1math = config.followup_specs(), config.code_round_specs()["acc-legacy+e1math"]
     assert set(specs) == set(config.FOLLOWUP_SEEDS) and set(specs) <= set(config.variant_specs())
@@ -208,11 +181,7 @@ def test_followups_change_one_thing_each_from_the_e1math_arm():
     # the low budget: everything else as the E1-Math arm
     changed = {k for k in e1math["terms"][1] if e1math["terms"][1][k] != low["terms"][1].get(k)}
     assert changed == {"kl_budget"} and low["terms"][1]["kl_budget"] == config.KL_BUDGETS["low"]
-    for variant, seeds in config.FOLLOWUP_SEEDS.items():
-        assert seeds == (config.RECIPE.training_seed, config.REPLICATE_SEED)
-        for seed in seeds:
-            tag = f"ae.joint.{variant}" + ("" if seed == config.RECIPE.training_seed else f".s{seed}")
-            assert bfcl.resolve_model(tag).path == f"{config.CHECKPOINT_ROOT}/joint/{variant}/seed{seed}/hf"
+    assert all(seeds == (config.RECIPE.training_seed, config.REPLICATE_SEED) for seeds in config.FOLLOWUP_SEEDS.values())
 
 
 def test_paper_arms_use_lightning_weaves_alpha_normalized_weights_and_two_passes():
@@ -271,11 +240,7 @@ def test_turn_start_arms_differ_from_decs_mid_only_in_which_prompts_lose_decs():
         assert efficiency["direction"] == decs["terms"][1]["direction"] and efficiency["coef"] == config.DECS_MID_COEF
         assert efficiency["gate"] == {"prompt_weights": rules[name]} and "kl_budget" not in efficiency
         assert config.training_plan(name)["passes"] == 1
-    for variant, seeds in config.NEXT_SEEDS.items():
-        assert seeds == (config.RECIPE.training_seed, config.REPLICATE_SEED)
-        for seed in seeds:
-            tag = f"ae.joint.{variant}" + ("" if seed == config.RECIPE.training_seed else f".s{seed}")
-            assert bfcl.resolve_model(tag).path == f"{config.CHECKPOINT_ROOT}/joint/{variant}/seed{seed}/hf"
+    assert all(seeds == (config.RECIPE.training_seed, config.REPLICATE_SEED) for seeds in config.NEXT_SEEDS.values())
 
 
 def test_next_comparisons_pair_runs_at_the_same_seeds():

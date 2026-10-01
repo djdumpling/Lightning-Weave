@@ -45,12 +45,17 @@ Comparisons against a baseline run (same entries):
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from configs.bfcl_eval.config import _digest, message_text
 
 SIMPLE_AST = ("simple_python", "simple_java", "simple_javascript")
 OTHER_NON_LIVE = ("parallel", "multiple", "parallel_multiple", "irrelevance")
@@ -141,18 +146,6 @@ def visible_text(step) -> str:
                 "<tool_call>\n" + json.dumps({"name": name, "arguments": value}, ensure_ascii=False) + "\n</tool_call>"
             )
     return "\n".join(parts)
-
-
-def _digest(value) -> str:
-    payload = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
-
-
-def message_text(message: dict) -> str:
-    content = message.get("content")
-    if isinstance(content, list):
-        return "".join(part.get("text", "") for part in content if isinstance(part, dict))
-    return "" if content is None else str(content)
 
 
 def user_digests(question: list[list[dict]]) -> tuple[list[str | None], list[int]]:
@@ -292,8 +285,11 @@ def attach_usage(run: dict[str, list[dict]], usage_path: Path, *, require_comple
     return coverage
 
 
-def load_run(path: Path, *, step_cap: int = DEFAULT_STEP_CAP, tokenizer=None, require_usage: bool = True) -> dict:
-    """{category: [entry costs]}; attaches proxy usage when ``usage.jsonl`` exists."""
+def load_run(
+    path: Path, *, step_cap: int = DEFAULT_STEP_CAP, tokenizer=None,
+    require_usage: bool = True, include_usage: bool = True,
+) -> dict:
+    """{category: [entry costs]}; set ``include_usage=False`` to skip proxy-log reconciliation."""
     run = {}
     for category in V3_CATEGORIES:
         output = Path(path) / f"bfcl_v3.{category}" / "output.jsonl"
@@ -307,7 +303,7 @@ def load_run(path: Path, *, step_cap: int = DEFAULT_STEP_CAP, tokenizer=None, re
             raise ValueError(f"duplicate entry ids in {output}")
         run[category] = entries
     usage = Path(path) / "usage.jsonl"
-    if usage.exists():
+    if include_usage and usage.exists():
         attach_usage(run, usage, require_complete=require_usage)
     return run
 
@@ -455,6 +451,62 @@ def paired_bootstrap(
     return {"delta": float(point), "ci95": [float(low), float(high)], "pairs": sum(len(d) for _, d in differences)}
 
 
+def common_no_overflow(runs: list[dict], categories) -> dict[str, set[str]]:
+    """Entry ids that overflow in none of the runs, per category."""
+    common = {}
+    for category in categories:
+        ids = [{entry["id"] for entry in run[category] if not entry["out_of_context"]} for run in runs]
+        common[category] = set.intersection(*ids)
+    return common
+
+
+def category_rows(
+    reference: dict,
+    model: dict,
+    categories,
+    *,
+    common: dict[str, set[str]] | None = None,
+    samples: int = 2_000,
+    seed: int = 0,
+) -> list[dict]:
+    """One row per category: Δaccuracy (points), flips, overflow transitions, and the common-subset delta."""
+    rows = []
+    for category in categories:
+        before = {entry["id"]: entry for entry in reference[category]}
+        pairs = [(before[entry["id"]], entry) for entry in model[category]]
+        options = {"categories": {category: 1.0}, "samples": samples, "seed": seed}
+        full = paired_bootstrap(reference, model, _metric("is_correct"), **options)
+        row = {
+            "category": category,
+            "entries": len(pairs),
+            "lost": sum(a["is_correct"] and not b["is_correct"] for a, b in pairs),
+            "gained": sum(b["is_correct"] and not a["is_correct"] for a, b in pairs),
+            "overflow": {
+                "reference_only": sum(a["out_of_context"] and not b["out_of_context"] for a, b in pairs),
+                "model_only": sum(b["out_of_context"] and not a["out_of_context"] for a, b in pairs),
+                "both": sum(a["out_of_context"] and b["out_of_context"] for a, b in pairs),
+            },
+            "delta": 100 * full["delta"],
+            "ci95": [100 * value for value in full["ci95"]],
+        }
+        if common is not None:
+            keep = common[category]
+
+            def in_subset(base: dict, _: dict, keep=keep) -> bool:
+                return base["id"] in keep
+
+            subset = paired_bootstrap(reference, model, _metric("is_correct"), keep=in_subset, **options)
+            row.update(
+                {
+                    "delta_common_subset": 100 * subset["delta"],
+                    "ci95_common_subset": [100 * value for value in subset["ci95"]],
+                    "entries_common_subset": subset["pairs"],
+                }
+            )
+        rows.append(row)
+    return rows
+
+
 def outcome_strata(base: dict, model: dict, categories: dict[str, float]) -> dict:
     """Leaderboard-weighted shares of both / model-only / base-only / neither correct."""
     shares = Counter()
@@ -497,6 +549,7 @@ def compare(
     weights = group_weights({category: len(entries) for category, entries in base_run.items()})
     groups = ("overall", *GROUPS)
     report = {"base": base_summary, "models": {}}
+    common = common_no_overflow([base_run, *runs.values()], V3_CATEGORIES)
     for name, run in runs.items():
         summary = summarize(run)
 
@@ -509,6 +562,7 @@ def compare(
         tokens = {group: relative(bootstrap(log_tokens, weights[group])) for group in groups}
         report["models"][name] = {
             "summary": summary,
+            "categories": category_rows(base_run, run, V3_CATEGORIES, common=common, samples=samples),
             "gen_tokens_relative": tokens,
             "both_correct_gen_tokens_relative": {
                 group: relative(bootstrap(log_tokens, weights[group], both_correct)) for group in groups

@@ -42,14 +42,14 @@ Cost rates cover every generated turn:
   conversation's first turn and for later turns (which answer a new user message mid-conversation);
 - completion tokens of its later steps (responses to tool results).
 
-``--comparisons`` replaces the built-in comparisons with a JSON file ``{name: {"pairs": [[arm, reference], ...]}}``
+``--comparisons`` reads a JSON file ``{name: {"pairs": [[arm, reference], ...]}}``
 (the format of ``evaluation/bfcl_pooled.py``; other keys are ignored), naming run directories relative to ``--root``.
 
 The reference answers must come from the gorilla pin (``GORILLA_COMMIT`` in ``configs/bfcl_eval/config.py``),
 ``berkeley-function-call-leaderboard/bfcl_eval/data/possible_answer/BFCL_v4_<category>.json``. They are checked
 against every graded failure.
 
-    python evaluation/bfcl_multiturn_failures.py --root RUNS --ground-truth DIR --output failures.json \\
+    python evaluation/bfcl_multiturn_failures.py --root RUNS --ground-truth DIR --comparisons comparisons.json --output failures.json \\
         --examples examples.json
 """
 
@@ -68,7 +68,6 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from evaluation.bfcl_efficiency import MULTI_TURN, _calls, _steps, entry_costs
-from evaluation.bfcl_shared_factor import R1, R2, J
 
 CLASSES = (
     "step_limit",
@@ -104,19 +103,6 @@ COST_RATES = (
     "first_step_tokens_later_turns",
     "later_step_tokens",
 )
-COMPARISONS = {
-    "decs": [(f"{J}acc-legacy+decs", R1), (f"{J}acc-legacy+decs.s5678", R2)],
-    "decs, protect first": [
-        (f"{J}acc-legacy+decs-protect-first", R1),
-        (f"{J}acc-legacy+decs-protect-first.s5678", R2),
-    ],
-    "decs7b": [(f"{J}acc-legacy+decs7b", R1)],
-    "l1max": [(f"{J}acc-legacy+l1max", R1)],
-    "donor sum": [(f"{J}acc-legacy+donor-mean", R1)],
-    "concise prompt": [(f"{J}acc-legacy.concise", R1)],
-    "null: accuracy-only seed 5678 vs 1234": [(R2, R1)],
-}
-EXAMPLE_COMPARISON = "decs"
 REFERENCE_NAME = re.compile(r"\s*([A-Za-z_][\w.]*)\s*\(")
 TURN = re.compile(r"for turn (\d+)")
 STATE, EMPTY, RESPONSE, FORCED = (
@@ -409,19 +395,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ground-truth", required=True, type=Path, help="gorilla-pinned possible_answer directory")
     parser.add_argument("--draws", type=int, default=2_000)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--examples", type=Path, help="write lost entries of the DECS pairs here")
+    parser.add_argument("--examples", type=Path, help="write lost entries of the first comparison here")
     parser.add_argument("--examples-per-class", type=int, default=8)
-    parser.add_argument("--comparisons", type=Path, help='JSON {name: {"pairs": [[arm, reference], ...]}}')
+    parser.add_argument("--comparisons", required=True, type=Path, help='JSON {name: {"pairs": [[arm, reference], ...]}}')
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     truth = load_ground_truth(args.ground_truth)
-    comparisons = COMPARISONS
-    if args.comparisons:
-        loaded = json.loads(args.comparisons.read_text(encoding="utf-8"))
-        comparisons = {name: [tuple(pair) for pair in item["pairs"]] for name, item in loaded.items()}
+    loaded = json.loads(args.comparisons.read_text(encoding="utf-8"))
+    comparisons = {name: [tuple(pair) for pair in item["pairs"]] for name, item in loaded.items()}
     tags = sorted({tag for pairs in comparisons.values() for pair in pairs for tag in pair})
     runs = {tag: load_multiturn(args.root / tag, truth) for tag in tags}
     report = analyze(runs, comparisons, draws=args.draws)
@@ -443,7 +427,7 @@ def main() -> None:
                 cells.append(f"{rate} {row['reference']:.3f}→{row['arm']:.3f}")
         print("  behavior: " + " | ".join(cells))
     if args.examples:
-        pairs = comparisons.get(EXAMPLE_COMPARISON) or next(iter(comparisons.values()))
+        pairs = next(iter(comparisons.values()))
         questions = {}
         for category in MULTI_TURN:
             path = args.root / pairs[0][1] / f"bfcl_v3.{category}" / "output.jsonl"

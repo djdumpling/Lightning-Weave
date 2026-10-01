@@ -1,27 +1,13 @@
 """BFCL cost vectors, leaderboard weights, the usage join, paired comparisons, and the proxy's request handling."""
 
-import ast
-import hashlib
 import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from evaluation import bfcl_efficiency as efficiency
-
-MODAL_EVAL = Path(__file__).resolve().parents[1] / "configs/bfcl_eval/modal_eval.py"
-
-
-def proxy_functions(*names):
-    """Selected functions of the serving proxy, without importing Modal."""
-    tree = ast.parse(MODAL_EVAL.read_text())
-    nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in names]
-    future = ast.ImportFrom(module="__future__", names=[ast.alias("annotations")], level=0)
-    namespace = {"hashlib": hashlib, "json": json}
-    exec(compile(ast.fix_missing_locations(ast.Module([future, *nodes], [])), "modal_eval", "exec"), namespace)
-    return namespace
+from configs.bfcl_eval import config as requests
 
 
 def counts(value=10):
@@ -141,13 +127,11 @@ def test_guards_require_the_upper_bound_within_tolerance():
 
 def request(users, tools, lane, completion, time, messages=None):
     body = {"messages": messages or [{"role": "user", "content": text} for text in users], "tools": tools}
-    functions = proxy_functions("_digest", "message_text", "request_identity")
-    return {"lane": lane, **functions["request_identity"](body), "prompt_tokens": 10, "completion_tokens": completion,
+    return {"lane": lane, **requests.request_identity(body), "prompt_tokens": 10, "completion_tokens": completion,
             "reasoning_tokens": 3, "finish_reason": "stop", "time": time}
 
 
 def test_history_reasoning_counts_what_the_harness_sends_back():
-    functions = proxy_functions("message_text", "history_reasoning")
     body = {
         "messages": [
             {"role": "user", "content": "q"},
@@ -158,15 +142,14 @@ def test_history_reasoning_counts_what_the_harness_sends_back():
             {"role": "assistant", "content": [{"type": "text", "text": "plain"}]},
         ]
     }
-    assert functions["history_reasoning"](body) == {"history_assistant_messages": 4, "history_reasoning_chars": 4 + 3 + 4}
-    assert functions["history_reasoning"]({"messages": [{"role": "user", "content": "q"}]})["history_reasoning_chars"] == 0
+    assert requests.history_reasoning(body) == {"history_assistant_messages": 4, "history_reasoning_chars": 4 + 3 + 4}
+    assert requests.history_reasoning({"messages": [{"role": "user", "content": "q"}]})["history_reasoning_chars"] == 0
 
 
 def test_request_identity_matches_the_entry_side_digests():
-    functions = proxy_functions("_digest", "message_text", "request_identity")
     tools = [{"type": "function", "function": {"name": "f", "parameters": {}}}]
     body = {"messages": [{"role": "system", "content": "s"}, {"role": "user", "content": "q"}], "tools": tools}
-    identity = functions["request_identity"](body)
+    identity = requests.request_identity(body)
     entry = efficiency.entry_costs(
         {"id": "a", "is_correct": True, "num_generated_tokens": 5, "generation": "x",
          "question": [[{"role": "user", "content": "q"}]], "tools": tools}
@@ -228,8 +211,35 @@ def test_usage_join_handles_tools_identical_first_turns_retries_and_injected_tur
 
 
 def test_proxy_applies_the_cap_and_system_prompt_without_mutating_the_request():
-    functions = proxy_functions("message_text", "rewrite_request")
     body = {"messages": [{"role": "user", "content": "q"}], "max_completion_tokens": 32_768}
-    capped = functions["rewrite_request"](body, SimpleNamespace(max_completion_tokens=4096, system_prompt="be brief"))
+    capped = requests.rewrite_request(body, SimpleNamespace(max_completion_tokens=4096, system_prompt="be brief"))
     assert capped["max_completion_tokens"] == 4096 and capped["messages"][0] == {"role": "system", "content": "be brief"}
     assert body["max_completion_tokens"] == 32_768 and len(body["messages"]) == 1
+
+
+def entry(index, correct, overflow=False):
+    return {"id": f"e{index}", "is_correct": correct, "out_of_context": overflow}
+
+
+def test_category_rows_keep_the_full_comparison_primary_and_report_overflow():
+    reference = {"multi_turn_base": [entry(0, True), entry(1, True), entry(2, False), entry(3, False, overflow=True)]}
+    model = {"multi_turn_base": [entry(0, True), entry(1, False, overflow=True), entry(2, True), entry(3, False)]}
+    common = efficiency.common_no_overflow([reference, model], ["multi_turn_base"])
+    assert common == {"multi_turn_base": {"e0", "e2"}}  # one fixed subset for every compared run
+    (row,) = efficiency.category_rows(reference, model, ["multi_turn_base"], common=common, samples=50)
+    assert (row["entries"], row["lost"], row["gained"]) == (4, 1, 1)
+    assert row["delta"] == pytest.approx(0.0)
+    assert row["overflow"] == {"reference_only": 1, "model_only": 1, "both": 0}
+    assert row["entries_common_subset"] == 2 and row["delta_common_subset"] == pytest.approx(50.0)
+
+
+def test_token_only_loading_skips_the_usage_join(tmp_path):
+    output = tmp_path / "bfcl_v3.multi_turn_base" / "output.jsonl"
+    output.parent.mkdir()
+    output.write_text(json.dumps(MULTI_TURN_ROW) + "\n")
+    (tmp_path / "usage.jsonl").write_text("an incomplete usage log")
+    with pytest.raises(json.JSONDecodeError):
+        efficiency.load_run(tmp_path)
+    (entry,) = efficiency.load_run(tmp_path, include_usage=False)["multi_turn_base"]
+    assert entry["gen_tokens"] == MULTI_TURN_ROW["num_generated_tokens"]
+    assert entry["is_correct"] == MULTI_TURN_ROW["is_correct"]

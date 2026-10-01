@@ -26,14 +26,6 @@ that bucket are untouched. ``coverage`` is the student's behavior mass on the
 candidates a source can score; ``support`` is the smaller of the two anchors'
 own probability mass on them (whether the donor finds the state plausible).
 
-**Residualization** is a candidate-level analog of Lightning OPD 2.0 (arXiv
-2607.28449), which subtracts from each sampled token's disagreement the equal
-average of a token-identity lookup and a (normalized position × reference
-surprisal) lookup, both fitted on held-out prompt folds. Here each cached
-candidate's centered shift gets the same two lookups, with the surprisal of that
-candidate under the frozen student, fitted on the other prompt folds and shrunk
-toward the global mean (0 for centered shifts). A state-level offset needs no
-lookup: centering already removes it.
 """
 
 from __future__ import annotations
@@ -98,11 +90,6 @@ def bucket_shift(delta: np.ndarray) -> np.ndarray:
 
 def center(delta: np.ndarray, probs: np.ndarray) -> np.ndarray:
     return delta - (probs * delta).sum(axis=-1, keepdims=True)
-
-
-def center_stack(vectors: np.ndarray, probs: np.ndarray) -> np.ndarray:
-    """Center [T, K+1, J] direction stacks along the bucket axis."""
-    return vectors - np.einsum("tk,tkj->tj", probs, vectors)[:, None, :]
 
 
 def relevel(delta: np.ndarray) -> np.ndarray:
@@ -345,80 +332,6 @@ def direction_vectors(row: CachedRow, directions: list[Direction], probs: np.nda
 
 
 # ---------------------------------------------------------------------------
-# Residualization (cross-fitted token-identity and position × surprisal lookups)
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class Residualizer:
-    """Cross-fitted candidate-level LOPD-2.0 lookups for J directions."""
-
-    vocab_size: int
-    directions: int
-    position_bins: int = 10
-    surprisal_bins: int = 10
-    surprisal_max: float = 10.0
-    shrinkage: float = 10.0
-    folds: int = FOLDS
-    token_sum: np.ndarray = field(init=False)
-    token_weight: np.ndarray = field(init=False)
-    context_sum: np.ndarray = field(init=False)
-    context_weight: np.ndarray = field(init=False)
-
-    def __post_init__(self) -> None:
-        slots = self.vocab_size + 1  # last slot is the remaining-vocabulary bucket
-        self.token_sum = np.zeros((self.folds, slots, self.directions))
-        self.token_weight = np.zeros((self.folds, slots))
-        bins = self.position_bins * self.surprisal_bins
-        self.context_sum = np.zeros((self.folds, bins, self.directions))
-        self.context_weight = np.zeros((self.folds, bins))
-
-    def _slots(self, candidates: np.ndarray) -> np.ndarray:
-        other = np.full(candidates.shape[:-1] + (1,), self.vocab_size)
-        return np.concatenate([candidates, other], axis=-1)
-
-    def _context_bins(self, probs: np.ndarray) -> np.ndarray:
-        """[T, K+1] bin of (normalized position, candidate surprisal −log b(a|s))."""
-        positions = position_bins(probs.shape[0], self.position_bins)[:, None]
-        surprisal = -np.log(np.clip(probs, 1e-30, None))
-        surprisal = np.minimum((surprisal / self.surprisal_max * self.surprisal_bins).astype(int), self.surprisal_bins - 1)
-        return positions * self.surprisal_bins + surprisal
-
-    def fit_row(self, row: CachedRow, vectors: np.ndarray, probs: np.ndarray) -> None:
-        fold, mask = row.fold, row.loss_mask
-        weights, values = probs[mask].reshape(-1), vectors[mask].reshape(-1, self.directions)
-        for table, total, keys in (
-            (self.token_sum, self.token_weight, self._slots(row.candidate_ids)[mask]),
-            (self.context_sum, self.context_weight, self._context_bins(probs)[mask]),
-        ):
-            np.add.at(table[fold], keys.reshape(-1), weights[:, None] * values)
-            np.add.at(total[fold], keys.reshape(-1), weights)
-
-    def predict_parts(self, row: CachedRow, probs: np.ndarray) -> dict[str, np.ndarray]:
-        """Centered bias predictions [T, K+1, J] (token, context, both) using only the other folds."""
-        other = [fold for fold in range(self.folds) if fold != row.fold]
-
-        def lookup(table, total, keys):
-            means = table[other].sum(0) / (total[other].sum(0) + self.shrinkage)[:, None]
-            return center_stack(means[keys], probs)
-
-        token = lookup(self.token_sum, self.token_weight, self._slots(row.candidate_ids))
-        context = lookup(self.context_sum, self.context_weight, self._context_bins(probs))
-        return {"token": token, "context": context, "both": 0.5 * token + 0.5 * context}
-
-    def predict(self, row: CachedRow, probs: np.ndarray, *, parts: str = "both") -> np.ndarray:
-        return self.predict_parts(row, probs)[parts]
-
-
-def fit_residualizer(rows, directions: list[Direction], vocab_size: int, **kwargs) -> Residualizer:
-    residualizer = Residualizer(vocab_size=vocab_size, directions=len(directions), **kwargs)
-    for row in rows:
-        probs = bucket_probs(row.behavior_log_probs)
-        residualizer.fit_row(row, direction_vectors(row, directions, probs), probs)
-    return residualizer
-
-
-# ---------------------------------------------------------------------------
 # Streaming analysis with prompt-clustered uncertainty
 # ---------------------------------------------------------------------------
 
@@ -548,108 +461,30 @@ def row_slices(row: CachedRow, codes: np.ndarray, sources: tuple[str, ...], opti
     return slices
 
 
-RESIDUAL_VARIANTS = ("token", "context", "both")
-
-
 def analyze(
     rows: Iterator[CachedRow] | list[CachedRow],
     directions: list[Direction],
     labeler: StateLabeler,
     *,
-    residualizer: Residualizer | None = None,
     options: SliceOptions = SliceOptions(),
 ) -> dict[str, GeometryAccumulator]:
-    """One pass: the raw geometry and, with a residualizer, every residualized variant.
-
-    Returns ``{"raw": ...}`` plus ``residualized_<part>`` for each of
-    :data:`RESIDUAL_VARIANTS`; labels and direction vectors are computed once per row.
-    """
-    names = [direction.name for direction in directions]
-    variants = ["raw"] + ([f"residualized_{part}" for part in RESIDUAL_VARIANTS] if residualizer is not None else [])
-    accumulators = {variant: GeometryAccumulator(names) for variant in variants}
+    """Accumulate Fisher geometry and behavioral probes in one pass."""
+    accumulator = GeometryAccumulator([direction.name for direction in directions])
     sources = tuple(sorted({source for direction in directions for source in direction.sources}))
     for row in rows:
         probs = bucket_probs(row.behavior_log_probs)
-        raw = direction_vectors(row, directions, probs)
+        vectors = direction_vectors(row, directions, probs)
         codes = labeler.label(row.response_tokens, row.candidate_ids, np.exp(row.behavior_log_probs))
         slices = row_slices(row, codes, sources, options)
-        by_variant = {"raw": raw}
-        if residualizer is not None:
-            for part, bias in residualizer.predict_parts(row, probs).items():
-                by_variant[f"residualized_{part}"] = center_stack(raw - bias, probs)
-        for variant, vectors in by_variant.items():
-            accumulator = accumulators[variant]
-            accumulator.add(row.prompt_id, fisher_products(vectors, probs), slices)
-            for probe, contrasts in behavioral_probes(labeler, row, vectors, probs, codes):
-                accumulator.add_probe(row.prompt_id, probe, contrasts)
-    return accumulators
-
-
-# ---------------------------------------------------------------------------
-# Low-rank efficiency basis (from per-prompt Gram matrices; no design matrix needed)
-# ---------------------------------------------------------------------------
-
-
-def _normalized(gram: np.ndarray, scale: np.ndarray) -> np.ndarray:
-    return gram / np.outer(scale, scale)
-
-
-def _leading(gram: np.ndarray, rank: int) -> tuple[np.ndarray, np.ndarray]:
-    values, vectors = np.linalg.eigh(gram)
-    order = np.argsort(values)[::-1]
-    return values[order], vectors[:, order[:rank]]
-
-
-def efficiency_basis(
-    accumulator: GeometryAccumulator, basis: list[str], *, rank: int = 2, bootstrap: int = 500, seed: int = 0
-) -> dict:
-    """Principal components of independently defined efficiency contrasts under the Fisher metric.
-
-    Each contrast is scaled to unit Fisher norm on ``all`` states, so no donor
-    dominates by magnitude. Stability is reported as principal-angle cosines
-    between the full-data leading subspace and its prompt-bootstrap and
-    leave-one-contrast-out counterparts.
-    """
-    index = [accumulator.names.index(name) for name in basis]
-    if len(index) < 2:
-        raise ValueError("an efficiency basis needs at least two contrasts")
-    rank = min(rank, len(index) - 1)
-    per_prompt = np.stack(list(accumulator.grams["all"].values()))[:, index][:, :, index]
-    gram = per_prompt.sum(axis=0)
-    scale = np.sqrt(np.diag(gram))
-    values, leading = _leading(_normalized(gram, scale), rank)
-    rng = np.random.default_rng(seed)
-    angles = []
-    for draw in rng.integers(0, len(per_prompt), size=(bootstrap, len(per_prompt))):
-        sample = per_prompt[draw].sum(axis=0)
-        _, resampled = _leading(_normalized(sample, np.sqrt(np.diag(sample))), rank)
-        angles.append(np.linalg.svd(leading.T @ resampled, compute_uv=False).min())
-    leave_one_out = {}
-    for removed in range(len(index)):
-        keep = [i for i in range(len(index)) if i != removed]
-        _, reduced = _leading(_normalized(gram[np.ix_(keep, keep)], scale[keep]), 1)
-        restricted = leading[keep, 0] / np.linalg.norm(leading[keep, 0])
-        leave_one_out[basis[removed]] = float(abs(restricted @ reduced[:, 0]))
-    slice_energy = {}
-    for name, prompts in accumulator.grams.items():
-        normalized = _normalized(sum(prompts.values())[np.ix_(index, index)], scale)
-        slice_energy[name] = [float(leading[:, k] @ normalized @ leading[:, k] / values[k]) for k in range(rank)]
-    return {
-        "basis": basis,
-        "explained": (values / values.sum()).tolist(),
-        "loadings": leading.T.tolist(),
-        "bootstrap_min_principal_cosine": np.percentile(angles, [5, 50]).tolist(),
-        "leave_one_out_pc1_cosine": leave_one_out,
-        "component_slice_energy": slice_energy,
-    }
+        accumulator.add(row.prompt_id, fisher_products(vectors, probs), slices)
+        for probe, contrasts in behavioral_probes(labeler, row, vectors, probs, codes):
+            accumulator.add_probe(row.prompt_id, probe, contrasts)
+    return {"raw": accumulator}
 
 
 def load_spec(path: Path) -> tuple[list[Direction], dict]:
     spec = json.loads(Path(path).read_text(encoding="utf-8"))
     directions = [Direction.from_spec(name, item) for name, item in spec["directions"].items()]
-    unknown = set(spec.get("basis", [])) - set(spec["directions"])
-    if unknown:
-        raise ValueError(f"basis names unknown directions: {sorted(unknown)}")
     return directions, spec
 
 
@@ -661,7 +496,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--base", required=True, type=Path, help="sealed agent-acc cache (anchor/final)")
     parser.add_argument("--donor", action="append", default=[], help="NAME=DIR of a post+pre scored donor chain")
-    parser.add_argument("--spec", required=True, type=Path, help="JSON {directions: {...}, basis: [...]}")
+    parser.add_argument("--spec", required=True, type=Path, help="JSON {directions: {...}}")
     parser.add_argument("--tokenizer-json", required=True, type=Path)
     parser.add_argument("--untrained", type=Path, help="JSON {source: [token ids]} of untrained tokens")
     parser.add_argument("--prompt-metadata", type=Path, help="JSON {prompt_id: {slice key: value}}")
@@ -669,7 +504,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--max-rows", type=int)
     parser.add_argument("--bootstrap", type=int, default=1_000)
-    parser.add_argument("--raw-only", action="store_true", help="skip the residualizer fit and residualized views")
     return parser.parse_args()
 
 
@@ -688,12 +522,9 @@ def main() -> None:
         return iter_joined_rows(args.base, donors, untrained=untrained, max_rows=args.max_rows)
 
     report = {"spec": spec, "donors": donors, "fork_mass": args.fork_mass}
-    residualizer = None if args.raw_only else fit_residualizer(rows(), directions, max(table.symbols) + 1)
-    runs = analyze(rows(), directions, labeler, residualizer=residualizer, options=options)
+    runs = analyze(rows(), directions, labeler, options=options)
     for name, accumulator in runs.items():
         report[name] = accumulator.summary(bootstrap=args.bootstrap)
-        if len(spec.get("basis", [])) >= 2:
-            report[name]["efficiency_basis"] = efficiency_basis(accumulator, spec["basis"])
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"WROTE {args.output}")

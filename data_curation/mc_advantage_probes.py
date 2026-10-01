@@ -52,6 +52,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from data_curation.common import write_json, write_parquet
+from data_curation.looptool import cached_prompt_rows
 from data_curation.shift_geometry import (
     bucket_probs,
     direction_vectors,
@@ -177,13 +178,7 @@ def select_states(
 
 def reference_targets(prompts_path: Path, canonical_path: Path) -> dict[str, dict]:
     """prompt_id -> the LoopTool reference assistant turn."""
-    prompts = pq.read_table(prompts_path, columns=["prompt_id", "source_index"]).to_pylist()
-    by_source = {}
-    with canonical_path.open(encoding="utf-8") as handle:
-        for line in handle:
-            row = json.loads(line)
-            by_source[row["metadata"]["source_index"]] = row["target"]
-    return {item["prompt_id"]: by_source[item["source_index"]] for item in prompts if item["source_index"] in by_source}
+    return {p: row["target"] for p, row in cached_prompt_rows(prompts_path, canonical_path).items()}
 
 
 def score_message(text: str, target: dict) -> tuple[int, bool, bool]:

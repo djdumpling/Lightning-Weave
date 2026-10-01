@@ -37,6 +37,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from data_curation.common import write_json
+from data_curation.prepare_direct_opd_assets import candidate_token_mapping
 from data_curation.shift_geometry import iter_joined_rows
 from data_curation.shift_states import STATE_TYPES, StateLabeler, TokenTable
 
@@ -105,15 +106,6 @@ def row_diagnostics(
     return diagnostics
 
 
-def student_to_teacher(student, teacher, aliases: dict[str, str]) -> dict[int, int]:
-    student_vocab, teacher_vocab = student.get_vocab(), teacher.get_vocab()
-    mapping = {int(i): int(teacher_vocab[s]) for s, i in student_vocab.items() if s in teacher_vocab}
-    for source, target in aliases.items():
-        if source in student_vocab and target in teacher_vocab:
-            mapping.setdefault(int(student_vocab[source]), int(teacher_vocab[target]))
-    return mapping
-
-
 def pair_token_audit(student, models: dict[str, Path], aliases: dict[str, str]) -> tuple[dict, dict]:
     """(untrained student ids per role, structural-token diagnostics per role)."""
     from transformers import AutoTokenizer
@@ -123,7 +115,7 @@ def pair_token_audit(student, models: dict[str, Path], aliases: dict[str, str]) 
     untrained, structural = {}, {}
     for role, path in models.items():
         teacher = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
-        mapping = student_to_teacher(student, teacher, aliases)
+        mapping = candidate_token_mapping(student.get_vocab(), teacher.get_vocab(), aliases)
         teacher_special = sorted({mapping[i] for i in student_special if i in mapping})
         diagnostics = row_diagnostics(path, teacher_special)
         untrained[role] = sorted(i for i in student_special if i in mapping and diagnostics[mapping[i]]["untrained"])
@@ -198,7 +190,10 @@ def main() -> None:
         teachers = {role: AutoTokenizer.from_pretrained(path, trust_remote_code=True) for role, path in models.items()}
 
         def mapped(alias_map):
-            return set.intersection(*(set(student_to_teacher(student, t, alias_map)) for t in teachers.values()))
+            return set.intersection(*(
+                set(candidate_token_mapping(student.get_vocab(), teacher.get_vocab(), alias_map))
+                for teacher in teachers.values()
+            ))
 
         labeler = StateLabeler(TokenTable.from_tokenizer(student))
         rows = list(iter_joined_rows(args.cache, {}, max_rows=args.audit_rows))

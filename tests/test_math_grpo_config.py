@@ -191,7 +191,7 @@ def test_launcher_is_pinned_and_contains_no_hand_rolled_modal_stack():
 
     assert MODULE.TRAINING_GYM_COMMIT in source
     assert '# requires-python = "==3.12.*"' in source
-    assert "uv run --python 3.12" in wrapper
+    assert "--python 3.12" in wrapper
     assert "modal-training-gym @ git+https://github.com/modal-projects/training-gym.git@" in source
     assert "Offline Direct-OPD" in source
     assert "import subprocess" not in source

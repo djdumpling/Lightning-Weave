@@ -18,7 +18,11 @@ if __package__ in (None, ""):
 
 from data_curation.common import OFFLINE_STORAGE_TYPES, atomic_output, canonical_hash, parquet_paths
 from data_curation.composition import flatten_metadata, replace_metadata_fields
-from data_curation.prepare_direct_opd_assets import TOKEN_PROJECTION_MODE, resolve_model_vocab_size
+from data_curation.prepare_direct_opd_assets import (
+    TOKEN_PROJECTION_MODE,
+    candidate_token_mapping,
+    resolve_model_vocab_size,
+)
 
 SCORE_FIELDS = {
     "post_teacher_log_probs": "post_teacher_revision",
@@ -132,33 +136,16 @@ def resolve_normalization_vocab_size(compatibility, *, score_role, actual_vocab_
 class ExactTokenStringProjection:
     """Map atomic actions exactly; expand observed context in ByteLevel symbols."""
 
-    def __init__(self, student_tokenizer, teacher_tokenizer, aliases=None):
+    def __init__(self, student_tokenizer, teacher_tokenizer, aliases=None, *, record_candidates=False):
         student_vocab = student_tokenizer.get_vocab()
         teacher_vocab = teacher_tokenizer.get_vocab()
         self.teacher_tokenizer = teacher_tokenizer
         self.symbols = {int(token_id): symbol for symbol, token_id in student_vocab.items()}
         self.added_ids = set(getattr(student_tokenizer, "get_added_vocab", lambda: {})().values())
-        self.atomic_ids = {
-            token_id: int(teacher_vocab[symbol])
-            for token_id, symbol in self.symbols.items()
-            if symbol in teacher_vocab
-        }
+        self.atomic_ids = candidate_token_mapping(student_vocab, teacher_vocab)
         self.context_cache = {token_id: [target] for token_id, target in self.atomic_ids.items()}
-        # Aliases map candidate actions only (e.g. Qwen <|im_end|> -> R1 end-of-sentence); the
-        # observed context keeps its literal re-encoding so both anchors of a pair read the same text.
-        # The map must stay injective, or one teacher token's probability would count twice.
-        self.candidate_ids = dict(self.atomic_ids)
-        used = set(self.atomic_ids.values())
-        for student_symbol, teacher_symbol in (aliases or {}).items():
-            if student_symbol not in student_vocab or teacher_symbol not in teacher_vocab:
-                continue
-            student_id, teacher_id = int(student_vocab[student_symbol]), int(teacher_vocab[teacher_symbol])
-            if student_id in self.candidate_ids:
-                continue
-            if teacher_id in used:
-                raise ValueError(f"alias {student_symbol!r} -> {teacher_symbol!r} targets an already mapped teacher token")
-            self.candidate_ids[student_id] = teacher_id
-            used.add(teacher_id)
+        self.candidate_ids = candidate_token_mapping(student_vocab, teacher_vocab, aliases)
+        self.record_candidates = record_candidates
 
     def context_ids(self, student_id):
         student_id = int(student_id)
@@ -190,17 +177,15 @@ class ExactTokenStringProjection:
             candidate_mask.append(valid)
             # Zero is only a tensor-shape placeholder for masked actions.
             targets.append([0 if token is None else token for token in mapped])
-        self.last_candidate_mask = candidate_mask
-        return context, targets, indices, mask
+        return context, targets, indices, mask, candidate_mask if self.record_candidates else None
 
 
 def _prepare_scoring_row(metadata, score_field, token_projection=None):
     if token_projection is not None:
-        context, targets, indices, mask = token_projection.prepare_row(metadata)
+        context, targets, indices, mask, current = token_projection.prepare_row(metadata)
         metadata["token_projection_valid_mask"] = mask
-        if getattr(token_projection, "record_candidates", False):
+        if current is not None:
             previous = metadata.get("candidate_projection_valid_mask")
-            current = token_projection.last_candidate_mask
             metadata["candidate_projection_valid_mask"] = (
                 current
                 if previous is None
@@ -354,8 +339,8 @@ def main():
             AutoTokenizer.from_pretrained(asset_lock["models"]["student"]["path"], trust_remote_code=True),
             AutoTokenizer.from_pretrained(args.model, trust_remote_code=True),
             aliases=aliases,
+            record_candidates=args.per_candidate_validity,
         )
-        projection.record_candidates = args.per_candidate_validity
     elif args.special_token_alias or args.per_candidate_validity:
         print("token ids are shared with the student; alias and per-candidate options have no effect", flush=True)
     normalize_legacy_vllm_yarn_config(config)

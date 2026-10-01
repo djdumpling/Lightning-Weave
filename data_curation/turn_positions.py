@@ -6,7 +6,7 @@ message roles:
 
 - ``first_turn``: the target answers the conversation's first user message (no earlier assistant message);
 - ``turn_start``: the target answers a new user message after earlier assistant turns. The model must re-derive
-  the task state from the visible history here, since the harness does not send earlier reasoning back;
+  the task state from the visible history here, since the Qwen3 chat template drops reasoning from earlier turns;
 - ``after_tool``: the target answers tool results within a turn.
 
 For each rule in ``RULES`` a weight file ``{prompt_id: weight}`` is written for ``prompt_weights`` gates:

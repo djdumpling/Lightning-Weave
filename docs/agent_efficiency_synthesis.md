@@ -485,8 +485,20 @@ each probed candidate to the end of the assistant message, 8 times.
 
 ## BFCL evaluation
 
-New models land in the existing `bfcl-v3-3e6e955a00df-full` tree next to base
-and OPD, under the same protocol.
+**Interleaved thinking (from 2026-10-01).** Runs now keep the model's reasoning
+from earlier steps of the current turn, between tool calls, as the Qwen3 chat
+template intends. Earlier user turns' reasoning is still dropped, by design.
+- **What changed:** NeMo-Skills always sent that reasoning back in
+  `reasoning_content`, but vLLM 0.11.0 drops the field before templating; 0.11.1
+  and later pass it through. The usage proxy now moves it into the message text
+  as `<think>...</think>`, which the template renders byte-identically
+  (`tests/test_bfcl_efficiency.py`).
+- **Where results land:** new runs go to a new tree (`bfcl-v3-22b3e917da76-full`).
+  `--no-interleaved-thinking` reproduces the original protocol and its tree,
+  `bfcl-v3-3e6e955a00df-full`, which holds every run before 2026-10-01: base, OPD
+  and the agent-eff students.
+- **Comparisons:** results from the two protocols cannot be mixed. The training
+  caches also lack earlier reasoning in their histories.
 
 - **Request logging.** Lanes call `/lane/<category>/v1`, and the proxy logs each
   request with its user-message digests, tool-schema digest, body digest, usage

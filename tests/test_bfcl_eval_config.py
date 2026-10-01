@@ -126,6 +126,15 @@ def test_every_multi_turn_task_runs_at_once_on_a_data_parallel_server():
     assert max(CONFIG.LANES.concurrency.values()) <= CONFIG.SERVING.max_num_seqs * CONFIG.SERVING.data_parallel_size
 
 
+def test_interleaved_thinking_is_the_default_and_the_original_runs_keep_their_tree():
+    assert CONFIG.PROTOCOL.interleaved_thinking
+    legacy = replace(CONFIG.PROTOCOL, interleaved_thinking=False)
+    # every run before 2026-10-01 is in this tree; the field is left out of the legacy digest to keep its name
+    assert CONFIG.run_id(protocol=legacy) == "bfcl-v3-3e6e955a00df-full"
+    assert "interleaved_thinking" not in legacy.resolved() and CONFIG.PROTOCOL.resolved()["interleaved_thinking"]
+    assert CONFIG.run_id() != CONFIG.run_id(protocol=legacy)
+
+
 def test_decoding_seed_replicates_get_their_own_run_trees():
     seeded = replace(CONFIG.PROTOCOL, seed=1)
     assert CONFIG.run_id() != CONFIG.run_id(protocol=seeded)

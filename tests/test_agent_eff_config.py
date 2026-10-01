@@ -248,8 +248,10 @@ def test_next_comparisons_pair_runs_at_the_same_seeds():
     from dataclasses import replace
 
     comparisons = json.loads((ROOT / "configs/agent_eff/next_comparisons.json").read_text())
-    decoding = {bfcl.run_id(0, replace(bfcl.PROTOCOL, seed=seed)): seed for seed in (0, *config.EXTRA_DECODING_SEEDS)}
-    assert decoding[bfcl.run_id()] == 0  # the default tree holds every earlier run
+    # this round ran before interleaved thinking, so its trees are the legacy protocol's
+    legacy = replace(bfcl.PROTOCOL, interleaved_thinking=False)
+    decoding = {bfcl.run_id(0, replace(legacy, seed=seed)): seed for seed in (0, *config.EXTRA_DECODING_SEEDS)}
+    assert decoding[bfcl.run_id(protocol=legacy)] == 0  # the legacy tree holds every earlier run
     used = set()
     for name, item in comparisons.items():
         assert item["pairs"], name

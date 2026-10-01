@@ -1,6 +1,7 @@
 """BFCL cost vectors, leaderboard weights, the usage join, paired comparisons, and the proxy's request handling."""
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -208,6 +209,50 @@ def test_usage_join_handles_tools_identical_first_turns_retries_and_injected_tur
     path.write_text("\n".join(json.dumps(record) for record in log[:-2]))
     with pytest.raises(ValueError, match="reconcile"):
         efficiency.attach_usage({k: [dict(e) for e in v] for k, v in run.items()}, path)
+
+
+TOOL_CALL = {"id": "c0", "type": "function", "function": {"name": "cd", "arguments": '{"folder": "a"}'}}
+CONVERSATION = [
+    {"role": "user", "content": "turn 1"},
+    {"role": "assistant", "content": "Done.", "reasoning_content": "REASON-TURN-1"},
+    {"role": "user", "content": "turn 2"},
+    {"role": "assistant", "content": None, "reasoning_content": "REASON-TURN-2-STEP-1", "tool_calls": [TOOL_CALL]},
+    {"role": "tool", "tool_call_id": "c0", "content": "ok"},
+]
+
+
+def test_history_reasoning_moves_into_the_message_text_without_mutating_the_request():
+    body = {"messages": [dict(message) for message in CONVERSATION], "model": "m"}
+    sent = requests.inline_history_reasoning(body)
+    assert body["messages"] == CONVERSATION and sent["model"] == "m"
+    assert sent["messages"][1] == {"role": "assistant", "content": "<think>\nREASON-TURN-1\n</think>\n\nDone."}
+    step = sent["messages"][3]
+    assert step["content"] == "<think>\nREASON-TURN-2-STEP-1\n</think>\n\n" and step["tool_calls"] == [TOOL_CALL]
+    assert "reasoning_content" not in step and sent["messages"][4] == CONVERSATION[4]
+    # the newer field name, and a message whose text already holds its reasoning (no duplication)
+    renamed = {"messages": [{"role": "assistant", "content": "x", "reasoning": "r"}]}
+    assert requests.inline_history_reasoning(renamed)["messages"][0]["content"] == "<think>\nr\n</think>\n\nx"
+    inline = {"role": "assistant", "content": "<think>\nr\n</think>\n\nx", "reasoning_content": "r"}
+    kept = requests.inline_history_reasoning({"messages": [inline]})["messages"][0]
+    assert kept == {"role": "assistant", "content": inline["content"]}
+
+
+def test_inlined_reasoning_renders_exactly_as_the_reasoning_field_in_the_qwen3_template():
+    jinja2 = pytest.importorskip("jinja2")
+    source = (Path(__file__).parent / "fixtures" / "qwen3_4b_chat_template.jinja").read_text(encoding="utf-8")
+    template = jinja2.Environment().from_string(source)
+    tools = [{"type": "function", "function": {"name": "cd", "parameters": {"type": "object", "properties": {}}}}]
+    parsed_call = {**TOOL_CALL, "function": {"name": "cd", "arguments": {"folder": "a"}}}
+    # what vLLM 0.11.1+ hands the template (the reasoning field), and what the proxy sends vLLM 0.11.0 instead
+    native = [{**m, "tool_calls": [parsed_call]} if "tool_calls" in m else m for m in CONVERSATION]
+    inlined = requests.inline_history_reasoning({"messages": native})["messages"]
+    expected = template.render(messages=native, tools=tools, add_generation_prompt=True)
+    assert template.render(messages=inlined, tools=tools, add_generation_prompt=True) == expected
+    # the template keeps reasoning within the current turn and drops it from earlier turns
+    assert "REASON-TURN-2-STEP-1" in expected and "REASON-TURN-1" not in expected
+    # without the field (what vLLM 0.11.0 hands it), the current turn's reasoning is lost
+    dropped = [{key: value for key, value in m.items() if key != "reasoning_content"} for m in native]
+    assert "REASON-TURN-2-STEP-1" not in template.render(messages=dropped, tools=tools, add_generation_prompt=True)
 
 
 def test_proxy_applies_the_cap_and_system_prompt_without_mutating_the_request():

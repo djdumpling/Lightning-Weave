@@ -166,6 +166,12 @@ class Protocol:
     reasoning_parser: str = "qwen3"
     dtype: str = "bfloat16"
     seed: int = 0
+    # The model sees its reasoning from earlier steps of the current turn (between tool calls), as the Qwen3 chat
+    # template intends ("interleaved thinking"). NeMo-Skills sends that reasoning back in each assistant message's
+    # reasoning_content, but vLLM 0.11.0 drops the field before templating (0.11.1+ passes it through), so the usage
+    # proxy moves it into the message text as <think>...</think>, which the template renders identically. The
+    # template still drops reasoning from earlier user turns. False reproduces the runs made before 2026-10-01.
+    interleaved_thinking: bool = True
 
     def validate(self) -> None:
         if self.bfcl_version not in RECIPE_GEN_BUDGET:
@@ -182,8 +188,11 @@ class Protocol:
 
     def resolved(self) -> dict[str, object]:
         self.validate()
+        fields = asdict(self)
+        if not self.interleaved_thinking:
+            del fields["interleaved_thinking"]  # the original runs' digest, from before the field existed
         return {
-            **asdict(self),
+            **fields,
             "recipe_tokens_to_generate": RECIPE_GEN_BUDGET[self.bfcl_version],
             "agentic_eval": AGENTIC_EVAL_COMMIT,
             "nemo_skills": NEMO_SKILLS_COMMIT,
@@ -392,6 +401,25 @@ def history_reasoning(body: dict) -> dict:
             start = text.find("<think>")
             chars += end - (start + len("<think>") if -1 < start < end else 0)
     return {"history_assistant_messages": messages, "history_reasoning_chars": chars}
+
+
+def inline_history_reasoning(body: dict) -> dict:
+    """Move each assistant message's reasoning field into its text as ``<think>...</think>``.
+
+    vLLM 0.11.0 drops ``reasoning_content`` and ``reasoning`` from request messages. The Qwen3 chat template reads
+    reasoning from either the field or a ``<think>`` block in the content and renders both identically, keeping it
+    only for messages after the last user query.
+    """
+    messages = []
+    for message in body.get("messages") or []:
+        reasoning = message.get("reasoning_content") or message.get("reasoning")
+        if message.get("role") == "assistant" and reasoning:
+            message = {key: value for key, value in message.items() if key not in ("reasoning_content", "reasoning")}
+            content = message_text(message)
+            if "</think>" not in content:
+                message["content"] = f"<think>\n{reasoning}\n</think>\n\n{content}"
+        messages.append(message)
+    return {**body, "messages": messages}
 
 
 def rewrite_request(body: dict, spec: ModelSpec) -> dict:

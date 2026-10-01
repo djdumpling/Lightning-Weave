@@ -57,6 +57,7 @@ from config import (  # noqa: E402 - after the sys.path setup above
     NEMO_SKILLS_COMMIT,
     NEMO_SKILLS_REPO,
     PROTOCOL,
+    Protocol,
     RECIPE_GEN_BUDGET,
     REMOTE_CHECKPOINT_ROOT,
     REMOTE_MODEL_ROOT,
@@ -68,6 +69,7 @@ from config import (  # noqa: E402 - after the sys.path setup above
     ModelSpec,
     request_identity,
     history_reasoning,
+    inline_history_reasoning,
     rewrite_request,
     driver_command,
     resolve_model,
@@ -635,10 +637,14 @@ LANE_PREFIX = "/lane/"
 UNFORWARDED_HEADERS = {"host", "content-length", "transfer-encoding", "connection", "accept-encoding"}
 
 
-def start_usage_proxy(log_path: Path, tokenizer_path: str, spec: ModelSpec, stop: threading.Event) -> threading.Thread:
+def start_usage_proxy(
+    log_path: Path, tokenizer_path: str, spec: ModelSpec, protocol: Protocol, stop: threading.Event
+) -> threading.Thread:
     """Forward lane requests to vLLM; log each completion's identity and usage.
 
-    Lanes call ``/lane/<category>/v1/...`` so every record carries its category.
+    Lanes call ``/lane/<category>/v1/...`` so every record carries its category. Under
+    ``protocol.interleaved_thinking`` each request's history reasoning is moved into the message text, which vLLM
+    0.11.0 would otherwise drop. The logged identity and history describe the request as the harness sent it.
     """
 
     import asyncio
@@ -687,8 +693,11 @@ def start_usage_proxy(log_path: Path, tokenizer_path: str, spec: ModelSpec, stop
             if path.endswith("/chat/completions") and request.method == "POST":
                 parsed = json.loads(body)
                 identity = {**request_identity(parsed), **history_reasoning(parsed)}
+                sent = inline_history_reasoning(parsed) if protocol.interleaved_thinking else parsed
                 if spec.max_completion_tokens is not None or spec.system_prompt is not None:
-                    body = json.dumps(rewrite_request(parsed, spec)).encode("utf-8")
+                    sent = rewrite_request(sent, spec)
+                if sent is not parsed:
+                    body = json.dumps(sent).encode("utf-8")
             headers = {key: value for key, value in request.headers.items() if key.lower() not in UNFORWARDED_HEADERS}
             url = f"http://127.0.0.1:{SERVING.port}{path}"
             if request.query_string:
@@ -791,9 +800,9 @@ def serve_and_evaluate(job: dict) -> dict:
     """Serve one model for exactly as long as its category lanes run."""
 
     tag, run, smoke_samples = job["tag"], job["run_id"], job["smoke_samples"]
-    protocol = replace(PROTOCOL, seed=job["seed"])
+    protocol = replace(PROTOCOL, seed=job["seed"], interleaved_thinking=job["interleaved_thinking"])
     if run_id(smoke_samples, protocol) != run:
-        raise RuntimeError(f"run id {run} does not match the protocol for seed {job['seed']}")
+        raise RuntimeError(f"run id {run} does not match the protocol of job {job}")
     spec = resolve_model(tag)
     model_path = spec.path
     checkpoint_volume.reload()  # a reused container would otherwise miss checkpoints exported since it started
@@ -827,7 +836,7 @@ def serve_and_evaluate(job: dict) -> dict:
         check_serving_window(list(server.lines), yarn=spec.yarn)
         defaults = check_generation_defaults(list(server.lines))
         probe = probe_endpoint(server, api_key, thinking=spec.thinking)
-        proxy = start_usage_proxy(root / "usage.jsonl", model_path, spec, stop)
+        proxy = start_usage_proxy(root / "usage.jsonl", model_path, spec, protocol, stop)
         print(f"[{tag}] sampling defaults {defaults}; probe {probe}", flush=True)
         plan = plan_categories.remote(job["categories"], smoke_samples)
         with modal.forward(USAGE_PROXY_PORT) as tunnel:
@@ -976,8 +985,12 @@ def main(
     seed: int = 0,
     wait_for_checkpoints: bool = False,
     max_wait_hours: float = 12.0,
+    interleaved_thinking: bool = True,
 ) -> None:
     """Evaluate each model on BFCL, concurrently; ``seed`` selects the decoding-seed replicate.
+
+    ``--no-interleaved-thinking`` reproduces the runs made before 2026-10-01, in which vLLM dropped the reasoning
+    of earlier steps within a turn (see ``Protocol.interleaved_thinking``).
 
     ``--wait-for-checkpoints`` hands the run to a server-side function that starts each model once its
     agent-efficiency checkpoint is exported, and returns immediately; models whose checkpoints do not appear
@@ -988,10 +1001,20 @@ def main(
     for tag in tags:
         resolve_model(tag)
     selected = [category.strip() for category in categories.split(",") if category.strip()]
-    run = run_id(smoke_samples, replace(PROTOCOL, seed=seed))
+    run = run_id(smoke_samples, replace(PROTOCOL, seed=seed, interleaved_thinking=interleaved_thinking))
     version = PROTOCOL.bfcl_version
-    print(f"run {run}: models={tags} categories={selected or f'all {version}'} smoke_samples={smoke_samples}", flush=True)
-    job = {"run_id": run, "categories": selected, "smoke_samples": smoke_samples, "seed": seed}
+    print(
+        f"run {run}: models={tags} categories={selected or f'all {version}'} smoke_samples={smoke_samples} "
+        f"interleaved_thinking={interleaved_thinking}",
+        flush=True,
+    )
+    job = {
+        "run_id": run,
+        "categories": selected,
+        "smoke_samples": smoke_samples,
+        "seed": seed,
+        "interleaved_thinking": interleaved_thinking,
+    }
     jobs = [{"tag": tag, **job} for tag in tags]
     if wait_for_checkpoints:
         call = evaluate_when_ready.spawn(jobs, max_wait_hours)

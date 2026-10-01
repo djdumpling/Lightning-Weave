@@ -1,0 +1,300 @@
+{
+  "turn starts protected vs DECS mid": {
+    "pairs": [
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-protect-turn-starts",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs"
+      ],
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs.s5678"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-protect-turn-starts",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs.s5678"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-protect-turn-starts",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs.s5678"
+      ]
+    ],
+    "rules": [
+      [
+        "recovery",
+        "multi_turn_accuracy",
+        1.0
+      ]
+    ]
+  },
+  "random multi-turn gate vs DECS mid": {
+    "pairs": [
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-gate-random-multi-turn",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs"
+      ],
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs.s5678"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-gate-random-multi-turn",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs.s5678"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-gate-random-multi-turn",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs.s5678"
+      ]
+    ],
+    "rules": [
+      [
+        "recovery",
+        "multi_turn_accuracy",
+        1.0
+      ]
+    ]
+  },
+  "turn starts protected vs random multi-turn gate": {
+    "pairs": [
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-protect-turn-starts",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-gate-random-multi-turn"
+      ],
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-protect-turn-starts",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-gate-random-multi-turn"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-protect-turn-starts",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-gate-random-multi-turn"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678"
+      ]
+    ],
+    "rules": [
+      [
+        "recovery",
+        "multi_turn_accuracy",
+        1.0
+      ]
+    ]
+  },
+  "turn starts protected vs accuracy-only": {
+    "pairs": [
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-protect-turn-starts",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy.s5678"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-protect-turn-starts",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy.s5678"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-protect-turn-starts",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy.s5678"
+      ]
+    ],
+    "rules": [
+      [
+        "reduces",
+        "single_turn_tokens"
+      ]
+    ]
+  },
+  "random multi-turn gate vs accuracy-only": {
+    "pairs": [
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-gate-random-multi-turn",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy.s5678"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-gate-random-multi-turn",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy.s5678"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-gate-random-multi-turn",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy.s5678"
+      ]
+    ],
+    "rules": [
+      [
+        "reduces",
+        "single_turn_tokens"
+      ]
+    ]
+  },
+  "DECS mid vs accuracy-only": {
+    "pairs": [
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy+decs.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy.s5678"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy+decs.s5678",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy.s5678"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy+decs.s5678",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy.s5678"
+      ]
+    ],
+    "rules": [
+      [
+        "reduces",
+        "single_turn_tokens"
+      ]
+    ]
+  },
+  "paper composition vs half accuracy": {
+    "pairs": [
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-acc-legacy+decs",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-half-acc-legacy"
+      ],
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-acc-legacy+decs.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-half-acc-legacy.s5678"
+      ]
+    ],
+    "rules": [
+      [
+        "non_inferior",
+        "accuracy",
+        1.0
+      ]
+    ]
+  },
+  "paper composition vs paper accuracy-only": {
+    "pairs": [
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-acc-legacy+decs",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-acc-legacy"
+      ],
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-acc-legacy+decs.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-acc-legacy.s5678"
+      ]
+    ]
+  },
+  "half accuracy vs paper accuracy-only": {
+    "pairs": [
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-half-acc-legacy",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-acc-legacy"
+      ],
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-half-acc-legacy.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-acc-legacy.s5678"
+      ]
+    ]
+  },
+  "paper accuracy-only (400 updates) vs acc-legacy (200)": {
+    "pairs": [
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-acc-legacy",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.paper-acc-legacy.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy.s5678"
+      ]
+    ]
+  },
+  "null, training seed: accuracy-only 5678 vs 1234": {
+    "pairs": [
+      [
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy.s5678",
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy.s5678",
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy"
+      ]
+    ]
+  },
+  "null, decoding seed: accuracy-only seeds 1 and 2 vs 0": {
+    "pairs": [
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-8b2ad2de30cd-full/ae.joint.acc-legacy.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy.s5678"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy"
+      ],
+      [
+        "bfcl-v3-4743b22b979b-full/ae.joint.acc-legacy.s5678",
+        "bfcl-v3-3e6e955a00df-full/ae.joint.acc-legacy.s5678"
+      ]
+    ]
+  }
+}

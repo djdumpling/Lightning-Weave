@@ -53,6 +53,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--top-p", type=float, default=float(os.getenv("TOP_P", "1.0")))
     result.add_argument("--seed", type=int, default=1234)
     result.add_argument("--rollout-seed", type=int, default=42)
+    result.add_argument("--rollout-shuffle", action="store_true",
+                        help="Permute the cached rows with --rollout-seed instead of reading them in stored order.")
     result.add_argument("--loss-mode", choices=["tilted_target", "policy_gradient"], default="tilted_target")
     result.add_argument("--ray-address", default=os.getenv("RAY_JOB_ADDRESS"),
                         help="Existing Ray dashboard address; otherwise start a local Ray head.")
@@ -135,6 +137,8 @@ def build_train_args(args: argparse.Namespace) -> list[str]:
         "--seed", str(args.seed), "--actor-num-nodes", "1", "--actor-num-gpus-per-node", str(args.num_gpus),
         "--rollout-num-gpus", "0", "--rollout-num-gpus-per-engine", "1",
     ]
+    if args.rollout_shuffle:
+        options.append("--rollout-shuffle")
     if args.wandb_project:
         options.extend(["--use-wandb", "--wandb-project", args.wandb_project, "--wandb-always-use-train-step"])
         if args.wandb_group:

@@ -207,6 +207,7 @@ def test_mixture_and_repetition_preserve_prompt_groups(tmp_path, monkeypatch):
             output_dir=repeated,
             total_rows=16,
             student_model_path=None,
+            copy=False,
         ),
     )
     repeat.main()
@@ -218,6 +219,20 @@ def test_mixture_and_repetition_preserve_prompt_groups(tmp_path, monkeypatch):
     for index, shard in enumerate(repeated_manifest["shards"]):
         source = output / manifest["shards"][index % 2]["path"]
         assert (repeated / shard["path"]).stat().st_ino == source.stat().st_ino
+    copied = tmp_path / "copied"
+    monkeypatch.setattr(
+        repeat,
+        "parse_args",
+        lambda: Namespace(
+            manifest=output / "manifest.json", output_dir=copied, total_rows=16, student_model_path=None, copy=True
+        ),
+    )
+    repeat.main()
+    copied_manifest, copied_metadata = read_output(copied)
+    assert copied_manifest == repeated_manifest and copied_metadata.equals(repeated_metadata)
+    for shard in copied_manifest["shards"]:
+        assert (copied / shard["path"]).stat().st_ino != (repeated / shard["path"]).stat().st_ino
+        assert (copied / shard["path"]).read_bytes() == (repeated / shard["path"]).read_bytes()
 
 
 def test_repeated_plan_preserves_partial_cycle():

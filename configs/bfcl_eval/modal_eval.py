@@ -26,6 +26,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from dataclasses import replace
 from pathlib import Path
 
 import modal
@@ -37,6 +38,7 @@ sys.path.insert(0, str(ENTRYPOINT_DIR))
 from config import (  # noqa: E402 - after the sys.path setup above
     AGENTIC_EVAL_BFCL_SUBDIR,
     AGENTIC_EVAL_COMMIT,
+    AGENT_EFF_PREFIX,
     BFCL_PROJECT_ROOT,
     CONTEXT_OVERFLOW_MARKERS,
     DDGS_VERSION,
@@ -52,7 +54,6 @@ from config import (  # noqa: E402 - after the sys.path setup above
     MODAL_MODEL_VOLUME,
     MODAL_RESULTS_VOLUME,
     MODAL_VLLM_CACHE_VOLUME,
-    MODELS,
     NEMO_SKILLS_COMMIT,
     NEMO_SKILLS_REPO,
     PROTOCOL,
@@ -64,7 +65,9 @@ from config import (  # noqa: E402 - after the sys.path setup above
     SERVING,
     SERVING_IMAGE,
     WEB_PREFIX,
+    ModelSpec,
     driver_command,
+    resolve_model,
     run_id,
 )
 
@@ -315,6 +318,7 @@ def run_category(job: dict) -> dict:
         base_url=job["base_url"],
         concurrency=job["concurrency"],
         smoke_samples=job["smoke_samples"],
+        random_seed=job["seed"],
     )
     print(f"[{tag}:{category}] concurrency={job['concurrency']}", flush=True)
 
@@ -443,13 +447,13 @@ class VllmServer:
             self.process.kill()
 
 
-def check_serving_window(lines: list[str]) -> None:
+def check_serving_window(lines: list[str], *, yarn: bool = True) -> None:
     """Confirm vLLM started with the YaRN window rather than silently capping it."""
 
     text = "".join(lines)
     if f"max_seq_len={PROTOCOL.max_model_len}" not in text:
         raise RuntimeError(f"vLLM did not report max_seq_len={PROTOCOL.max_model_len}; check --hf-overrides rope_scaling")
-    if "yarn" not in text:
+    if yarn and "yarn" not in text:
         raise RuntimeError("vLLM's startup log does not mention the yarn rope_scaling override")
 
 
@@ -488,7 +492,7 @@ def request_json(url: str, body: dict | None, api_key: str | None) -> tuple[int,
             return error.code, {}
 
 
-def probe_endpoint(server: VllmServer, api_key: str) -> dict:
+def probe_endpoint(server: VllmServer, api_key: str, *, thinking: bool = True) -> dict:
     """The serving contract BFCL relies on: auth, overflow errors, split reasoning, native tool_calls."""
 
     status, _ = request_json(server.url("/v1/models"), None, None)
@@ -530,8 +534,11 @@ def probe_endpoint(server: VllmServer, api_key: str) -> dict:
         content = message.get("content") or ""
         if "<think>" in content or "</think>" in content:
             raise RuntimeError("reasoning leaked into content; the qwen3 reasoning parser is not active")
-        if not (message.get("reasoning_content") or message.get("reasoning")):
+        reasoning = message.get("reasoning_content") or message.get("reasoning")
+        if thinking and not reasoning:
             raise RuntimeError("no reasoning field in the response; thinking is not being split")
+        if not thinking and reasoning and reasoning.strip():
+            raise RuntimeError("thinking is disabled but the response still reasons")
         calls = message.get("tool_calls") or []
         if calls:
             call = calls[0]["function"]
@@ -619,6 +626,193 @@ def monitor_metrics(server: VllmServer, tag: str, path: Path, stop: threading.Ev
     return thread
 
 
+USAGE_PROXY_PORT = SERVING.port + 1
+LANE_PREFIX = "/lane/"
+# Hop-by-hop headers are the proxy's own; accept-encoding is dropped so upstream bodies stay parseable.
+UNFORWARDED_HEADERS = {"host", "content-length", "transfer-encoding", "connection", "accept-encoding"}
+
+
+def _digest(value) -> str:
+    payload = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def message_text(message: dict) -> str:
+    content = message.get("content")
+    if isinstance(content, list):
+        return "".join(part.get("text", "") for part in content if isinstance(part, dict))
+    return "" if content is None else str(content)
+
+
+def request_identity(body: dict) -> dict:
+    """What joins a chat request to its BFCL entry (see ``evaluation/bfcl_efficiency.py``).
+
+    ``users`` (digests of every user message, in order) must be a prefix of the
+    entry's user messages; single-turn entries also match ``tools_digest``.
+    ``body_digest`` identifies retries of the same request.
+    """
+    messages, tools = body.get("messages") or [], body.get("tools") or []
+    return {
+        "users": [_digest(message_text(m)) for m in messages if m.get("role") == "user"],
+        "tools_digest": _digest(tools),
+        "messages": len(messages),
+        "body_digest": _digest(body),
+    }
+
+
+def history_reasoning(body: dict) -> dict:
+    """How much earlier reasoning the harness sends back in assistant messages (a field, or ``<think>`` text).
+
+    Whether that reasoning then reaches the model depends on the chat template, which
+    ``evaluation/bfcl_breakdown.py --template`` checks.
+    """
+    messages = chars = 0
+    for message in body.get("messages") or []:
+        if message.get("role") != "assistant":
+            continue
+        messages += 1
+        chars += len(message.get("reasoning_content") or message.get("reasoning") or "")
+        text = message_text(message)
+        end = text.find("</think>")
+        if end != -1:
+            start = text.find("<think>")
+            chars += end - (start + len("<think>") if -1 < start < end else 0)
+    return {"history_assistant_messages": messages, "history_reasoning_chars": chars}
+
+
+def rewrite_request(body: dict, spec: ModelSpec) -> dict:
+    """Apply an inference-time efficiency baseline (a lower cap, a system instruction) to a chat request."""
+    body = dict(body)
+    if spec.max_completion_tokens is not None:
+        for key in ("max_completion_tokens", "max_tokens"):
+            if key in body:
+                body[key] = min(int(body[key]), spec.max_completion_tokens)
+        body.setdefault("max_completion_tokens", spec.max_completion_tokens)
+    if spec.system_prompt is not None:
+        messages = [dict(message) for message in body.get("messages") or []]
+        if messages and messages[0].get("role") == "system":
+            messages[0]["content"] = f"{message_text(messages[0])}\n\n{spec.system_prompt}"
+        else:
+            messages.insert(0, {"role": "system", "content": spec.system_prompt})
+        body["messages"] = messages
+    return body
+
+
+def start_usage_proxy(log_path: Path, tokenizer_path: str, spec: ModelSpec, stop: threading.Event) -> threading.Thread:
+    """Forward lane requests to vLLM; log each completion's identity and usage.
+
+    Lanes call ``/lane/<category>/v1/...`` so every record carries its category.
+    """
+
+    import asyncio
+
+    import aiohttp
+    from aiohttp import web
+    from transformers import AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = log_path.open("a", encoding="utf-8")
+    lock = threading.Lock()
+    ready = threading.Event()
+
+    def record(lane: str, identity: dict, response: dict) -> None:
+        usage = response.get("usage") or {}
+        for choice in response.get("choices") or []:
+            message = choice.get("message") or {}
+            reasoning = message.get("reasoning_content") or message.get("reasoning") or ""
+            line = {
+                "lane": lane,
+                **identity,
+                "prompt_tokens": usage.get("prompt_tokens"),
+                "completion_tokens": usage.get("completion_tokens"),
+                "reasoning_tokens": len(tokenizer.encode(reasoning, add_special_tokens=False)) if reasoning else 0,
+                "finish_reason": choice.get("finish_reason"),
+                "tool_calls": len(message.get("tool_calls") or []),
+                "time": time.time(),
+            }
+            with lock:
+                handle.write(json.dumps(line) + "\n")
+                handle.flush()
+
+    async def serve() -> None:
+        session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=None, sock_read=None), connector=aiohttp.TCPConnector(limit=0)
+        )
+
+        async def forward(request: web.Request) -> web.StreamResponse:
+            lane, path = "", request.path
+            if path.startswith(LANE_PREFIX):
+                lane, _, rest = path[len(LANE_PREFIX) :].partition("/")
+                path = "/" + rest
+            body = await request.read()
+            identity = None
+            if path.endswith("/chat/completions") and request.method == "POST":
+                parsed = json.loads(body)
+                identity = {**request_identity(parsed), **history_reasoning(parsed)}
+                if spec.max_completion_tokens is not None or spec.system_prompt is not None:
+                    body = json.dumps(rewrite_request(parsed, spec)).encode("utf-8")
+            headers = {key: value for key, value in request.headers.items() if key.lower() not in UNFORWARDED_HEADERS}
+            url = f"http://127.0.0.1:{SERVING.port}{path}"
+            if request.query_string:
+                url += f"?{request.query_string}"
+            async with session.request(request.method, url, data=body, headers=headers) as upstream:
+                if "text/event-stream" in upstream.headers.get("Content-Type", ""):
+                    raise web.HTTPNotImplemented(text="streaming responses are not logged; BFCL lanes do not stream")
+                payload = await upstream.read()
+                content_type = upstream.headers.get("Content-Type", "application/json")
+                status = upstream.status
+            if identity is not None and status == 200:
+                try:
+                    record(lane, identity, json.loads(payload))
+                except Exception as error:  # noqa: BLE001 - logging must never fail a request
+                    print(f"usage log failed: {error!r}", flush=True)
+            return web.Response(body=payload, status=status, headers={"Content-Type": content_type})
+
+        app_ = web.Application(client_max_size=1024**3)
+        app_.router.add_route("*", "/{tail:.*}", forward)
+        runner = web.AppRunner(app_, access_log=None)
+        await runner.setup()
+        await web.TCPSite(runner, "0.0.0.0", USAGE_PROXY_PORT).start()
+        ready.set()
+        while not stop.is_set():
+            await asyncio.sleep(1)
+        await runner.cleanup()
+        await session.close()
+        handle.close()
+
+    thread = threading.Thread(target=lambda: asyncio.run(serve()), daemon=True)
+    thread.start()
+    if not ready.wait(60):
+        raise RuntimeError("usage proxy did not start")
+    return thread
+
+
+def thinking_off_template(model_path: str) -> str:
+    """The checkpoint's own chat template with enable_thinking forced to false."""
+
+    template = json.loads((Path(model_path) / "tokenizer_config.json").read_text(encoding="utf-8"))["chat_template"]
+    if "enable_thinking" not in template:
+        raise RuntimeError(f"{model_path}'s chat template has no enable_thinking switch")
+    path = Path("/tmp/chat_template_thinking_off.jinja")
+    path.write_text("{%- set enable_thinking = false %}\n" + template, encoding="utf-8")
+    return str(path)
+
+
+def serving_record(spec: ModelSpec) -> dict:
+    """Non-default serving overrides; empty for the original base/opd tags so their manifests still match."""
+
+    defaults = ModelSpec(spec.path)
+    return {
+        name: getattr(spec, name)
+        for name in ("thinking", "yarn", "reasoning_parser", "max_completion_tokens", "system_prompt")
+        if getattr(spec, name) != getattr(defaults, name)
+    }
+
+
+AGENT_EFF_PROVENANCE = "agent_eff_provenance.json"
+
+
 def model_identity(model_path: str) -> str:
     digest = hashlib.sha256()
     root = Path(model_path)
@@ -660,35 +854,47 @@ def serve_and_evaluate(job: dict) -> dict:
     """Serve one model for exactly as long as its category lanes run."""
 
     tag, run, smoke_samples = job["tag"], job["run_id"], job["smoke_samples"]
-    model_path = MODELS[tag]
+    protocol = replace(PROTOCOL, seed=job["seed"])
+    if run_id(smoke_samples, protocol) != run:
+        raise RuntimeError(f"run id {run} does not match the protocol for seed {job['seed']}")
+    spec = resolve_model(tag)
+    model_path = spec.path
+    checkpoint_volume.reload()  # a reused container would otherwise miss checkpoints exported since it started
     if not (Path(model_path) / "config.json").exists():
         raise FileNotFoundError(f"{tag} checkpoint not found at {model_path}")
     results_volume.reload()
     root = Path(REMOTE_RESULTS_ROOT) / run / tag
-    write_or_check_manifest(
-        root / "manifest.json",
-        {
-            "tag": tag,
-            "model_path": model_path,
-            "model_identity": model_identity(model_path),
-            "protocol": PROTOCOL.resolved(),
-            "smoke_samples": smoke_samples,
-        },
-    )
+    manifest = {
+        "tag": tag,
+        "model_path": model_path,
+        "model_identity": model_identity(model_path),
+        "protocol": protocol.resolved(),
+        "smoke_samples": smoke_samples,
+    }
+    if serving_record(spec):
+        manifest["serving_overrides"] = serving_record(spec)
+    provenance = Path(model_path) / AGENT_EFF_PROVENANCE
+    if provenance.exists():
+        manifest["training_provenance"] = json.loads(provenance.read_text(encoding="utf-8"))
+    write_or_check_manifest(root / "manifest.json", manifest)
     results_volume.commit()
 
-    api_key = secrets.token_urlsafe(32)
-    server = VllmServer(SERVING.vllm_command(model_path, api_key, PROTOCOL))
+    # token_urlsafe can start with '-', which vllm's argument parser reads as a flag.
+    api_key = "sk-" + secrets.token_urlsafe(32)
+    proxy = None
+    template = None if spec.thinking else thinking_off_template(model_path)
+    server = VllmServer(SERVING.vllm_command(model_path, api_key, protocol, spec, template))
     stop = threading.Event()
     try:
         server.wait_ready()
-        check_serving_window(list(server.lines))
+        check_serving_window(list(server.lines), yarn=spec.yarn)
         defaults = check_generation_defaults(list(server.lines))
-        probe = probe_endpoint(server, api_key)
+        probe = probe_endpoint(server, api_key, thinking=spec.thinking)
+        proxy = start_usage_proxy(root / "usage.jsonl", model_path, spec, stop)
         print(f"[{tag}] sampling defaults {defaults}; probe {probe}", flush=True)
         plan = plan_categories.remote(job["categories"], smoke_samples)
-        with modal.forward(SERVING.port) as tunnel:
-            base_url = f"{tunnel.url}/v1"
+        with modal.forward(USAGE_PROXY_PORT) as tunnel:
+            base_url = tunnel.url
             monitor = monitor_metrics(server, tag, root / "vllm_metrics.jsonl", stop)
             committer = commit_periodically(results_volume, stop, 600)
             jobs = [
@@ -696,9 +902,10 @@ def serve_and_evaluate(job: dict) -> dict:
                     **entry,
                     "tag": tag,
                     "run_id": run,
-                    "base_url": base_url,
+                    "base_url": f"{base_url}{LANE_PREFIX}{entry['category']}/v1",
                     "api_key": api_key,
                     "smoke_samples": smoke_samples,
+                    "seed": protocol.seed,
                 }
                 for entry in plan
             ]
@@ -715,6 +922,8 @@ def serve_and_evaluate(job: dict) -> dict:
 
     monitor.join()
     committer.join()
+    if proxy is not None:
+        proxy.join(timeout=30)
     lanes, failures = [], []
     for entry, outcome in zip(plan, outcomes):
         if isinstance(outcome, BaseException):
@@ -724,12 +933,16 @@ def serve_and_evaluate(job: dict) -> dict:
     gpus = subprocess.run(
         ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], capture_output=True, text=True
     ).stdout.split("\n")
+    # A partial rerun (e.g. one category) must not drop the lanes an earlier launch finished.
+    previous = root / "summary.json"
+    merged_lanes = {lane["category"]: lane for lane in (json.loads(previous.read_text()).get("lanes", []) if previous.exists() else [])}
+    merged_lanes.update({lane["category"]: lane for lane in lanes})
     summary = {
         "tag": tag,
         "run_id": run,
         # Throughput only; not part of the protocol, so a resume may land on either type.
         "gpus": [name for name in gpus if name],
-        "lanes": lanes,
+        "lanes": sorted(merged_lanes.values(), key=lambda lane: lane["category"]),
         "failures": failures,
         "probe": probe,
     }
@@ -753,6 +966,61 @@ BUCKETS = {
 }
 
 
+def checkpoint_ready(tag: str) -> bool:
+    """An agent-efficiency student is complete once export has written its provenance file (its last step)."""
+    if not tag.startswith(AGENT_EFF_PREFIX):
+        return True
+    return (Path(resolve_model(tag).path) / AGENT_EFF_PROVENANCE).exists()
+
+
+EVALUATION_CLAIM = "evaluation_claim.json"
+
+
+@app.function(
+    image=lane_image,
+    cpu=1,
+    memory=2_048,
+    timeout=86_400,
+    volumes={REMOTE_CHECKPOINT_ROOT: checkpoint_volume, REMOTE_RESULTS_ROOT: results_volume},
+)
+def evaluate_when_ready(jobs: list[dict], max_wait_hours: float = 12.0, poll_seconds: int = 60) -> dict:
+    """Start each model's evaluation as soon as its checkpoint is complete, then wait for all of them.
+
+    Runs server-side, so the local client may disconnect. Models whose checkpoints do not appear
+    within ``max_wait_hours`` are reported as missing rather than failing the others. Before starting
+    a model, a claim file is committed to its results directory; a model whose directory already holds
+    a claim or a manifest is skipped (``claimed``), so a restarted input never starts a second
+    evaluation of the same model. To rerun a model, remove its results directory first.
+    """
+    deadline = time.monotonic() + max_wait_hours * 3_600
+    waiting, calls, claimed = list(jobs), {}, []
+    while waiting and time.monotonic() < deadline:
+        checkpoint_volume.reload()
+        results_volume.reload()
+        for job in [job for job in waiting if checkpoint_ready(job["tag"])]:
+            waiting.remove(job)
+            root = Path(REMOTE_RESULTS_ROOT) / job["run_id"] / job["tag"]
+            if (root / EVALUATION_CLAIM).exists() or (root / "manifest.json").exists():
+                print(f"[{job['tag']}] already claimed by an earlier evaluation; not starting another", flush=True)
+                claimed.append(job["tag"])
+                continue
+            root.mkdir(parents=True, exist_ok=True)
+            (root / EVALUATION_CLAIM).write_text(json.dumps({"time": time.time()}) + "\n", encoding="utf-8")
+            results_volume.commit()
+            print(f"[{job['tag']}] checkpoint complete; evaluating", flush=True)
+            calls[job["tag"]] = serve_and_evaluate.spawn(job)
+        if waiting:
+            time.sleep(poll_seconds)
+    summaries, errors = [], {}
+    for tag, call in calls.items():
+        try:
+            summaries.append(call.get())
+        except Exception as error:  # one failed model must not hide the others' results
+            errors[tag] = f"{type(error).__name__}: {error}"
+    print_comparison([summary for summary in summaries if summary.get("aggregate")])
+    return {"summaries": summaries, "errors": errors, "claimed": claimed, "missing": [job["tag"] for job in waiting]}
+
+
 def print_comparison(summaries: list[dict]) -> None:
     aggregates = {s["tag"]: s.get("aggregate") for s in summaries}
     if not all(a and a.get("complete") for a in aggregates.values()):
@@ -764,21 +1032,35 @@ def print_comparison(summaries: list[dict]) -> None:
 
 
 @app.local_entrypoint()
-def main(models: str = "base,opd", categories: str = "", smoke_samples: int = 0) -> None:
-    """Evaluate each model on BFCL, concurrently, one H100 per model."""
+def main(
+    models: str = "base,opd",
+    categories: str = "",
+    smoke_samples: int = 0,
+    seed: int = 0,
+    wait_for_checkpoints: bool = False,
+    max_wait_hours: float = 12.0,
+) -> None:
+    """Evaluate each model on BFCL, concurrently; ``seed`` selects the decoding-seed replicate.
+
+    ``--wait-for-checkpoints`` hands the run to a server-side function that starts each model once its
+    agent-efficiency checkpoint is exported, and returns immediately; models whose checkpoints do not appear
+    within ``--max-wait-hours`` are reported as missing.
+    """
 
     tags = [tag.strip() for tag in models.split(",") if tag.strip()]
-    unknown = sorted(set(tags) - set(MODELS))
-    if unknown:
-        raise ValueError(f"unknown model tags {unknown}; choose from {sorted(MODELS)}")
+    for tag in tags:
+        resolve_model(tag)
     selected = [category.strip() for category in categories.split(",") if category.strip()]
-    run = run_id(smoke_samples)
+    run = run_id(smoke_samples, replace(PROTOCOL, seed=seed))
     version = PROTOCOL.bfcl_version
     print(f"run {run}: models={tags} categories={selected or f'all {version}'} smoke_samples={smoke_samples}", flush=True)
-    calls = [
-        serve_and_evaluate.spawn({"tag": tag, "run_id": run, "categories": selected, "smoke_samples": smoke_samples})
-        for tag in tags
-    ]
+    job = {"run_id": run, "categories": selected, "smoke_samples": smoke_samples, "seed": seed}
+    jobs = [{"tag": tag, **job} for tag in tags]
+    if wait_for_checkpoints:
+        call = evaluate_when_ready.spawn(jobs, max_wait_hours)
+        print(f"evaluations run server-side as each checkpoint completes: {call.object_id}", flush=True)
+        return
+    calls = [serve_and_evaluate.spawn(job) for job in jobs]
     summaries = [call.get() for call in calls]
     print(json.dumps(summaries, indent=2, sort_keys=True))
     print_comparison(summaries)

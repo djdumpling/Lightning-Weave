@@ -107,9 +107,15 @@ def test_driver_command_is_the_agentic_eval_recipe():
         "++max_concurrent_requests=64",
         "++inference.tokens_to_generate=32768",
         "++inference.timeout=3600",
+        "++inference.random_seed=0",  # NeMo-Skills' default, now explicit
     ):
         assert arg in command
     assert not any(arg.startswith("++max_samples") for arg in command)
+    # a decoding-seed replicate changes every request's sampling seed, not only vLLM's engine seed
+    replicate = CONFIG.driver_command(
+        category="simple_python", input_file="i", output_file="o", base_url="u", concurrency=64, random_seed=3
+    )
+    assert "++inference.random_seed=3" in replicate and "++inference.random_seed=0" not in replicate
 
 
 def test_smoke_runs_are_partial_and_exclude_memory():
@@ -129,3 +135,26 @@ def test_every_multi_turn_task_runs_at_once_on_a_data_parallel_server():
     command = CONFIG.SERVING.vllm_command("/m", "k", CONFIG.PROTOCOL)
     assert command[command.index("--data-parallel-size") + 1] == "4"
     assert max(CONFIG.LANES.concurrency.values()) <= CONFIG.SERVING.max_num_seqs * CONFIG.SERVING.data_parallel_size
+
+
+def test_decoding_seed_replicates_get_their_own_run_trees():
+    seeded = replace(CONFIG.PROTOCOL, seed=1)
+    assert CONFIG.run_id() != CONFIG.run_id(protocol=seeded)
+    assert CONFIG.run_id(protocol=replace(CONFIG.PROTOCOL, seed=0)) == CONFIG.run_id()
+
+
+def test_inference_time_baselines_only_change_serving():
+    assert CONFIG.MODEL_SPECS["base-cap4k"].max_completion_tokens == 4_096
+    assert CONFIG.MODEL_SPECS["base-concise"].system_prompt == CONFIG.CONCISE_SYSTEM_PROMPT
+    assert CONFIG.MODEL_SPECS["base-cap4k"].path == CONFIG.MODELS["base"]
+
+
+def test_agent_eff_students_take_the_concise_prompt_as_a_last_tag_part():
+    root = CONFIG.AGENT_EFF_ROOT
+    concise = CONFIG.resolve_model("ae.joint.acc-legacy+decs.concise")
+    assert concise.path == f"{root}/joint/acc-legacy+decs/seed{CONFIG.AGENT_EFF_DEFAULT_SEED}/hf"
+    assert concise.system_prompt == CONFIG.CONCISE_SYSTEM_PROMPT
+    seeded = CONFIG.resolve_model("ae.joint.acc-legacy.s5678.concise")
+    assert seeded.path == f"{root}/joint/acc-legacy/seed5678/hf" and seeded.system_prompt == CONFIG.CONCISE_SYSTEM_PROMPT
+    assert CONFIG.resolve_model("ae.joint.acc-legacy.s5678").system_prompt is None
+    assert CONFIG.resolve_model("ae.joint.concise").path.endswith("/joint/concise/seed1234/hf")  # a variant name, not a suffix

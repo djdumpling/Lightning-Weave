@@ -65,12 +65,27 @@ def parse_args():
     parser.add_argument("--score-field", required=True, choices=tuple(SCORE_FIELDS))
     parser.add_argument("--device")
     parser.add_argument("--dtype", choices=["float32", "bfloat16", "float16"], default="float32")
+    parser.add_argument(
+        "--compute-dtype",
+        choices=["float32", "bfloat16", "float16"],
+        help="cast the model to this dtype after loading it at --dtype (e.g. bfloat16 weights computed in float32)",
+    )
     parser.add_argument("--chunk-size", type=int, default=4096)
     parser.add_argument("--row-batch-size", type=int, default=8)
     parser.add_argument("--attn-implementation")
     parser.add_argument("--rank", type=int, default=int(os.environ.get("RANK", 0)))
     parser.add_argument("--world-size", type=int, default=int(os.environ.get("WORLD_SIZE", 1)))
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument(
+        "--special-token-alias",
+        type=Path,
+        help="JSON {student symbol: teacher symbol} used to map otherwise missing candidate actions",
+    )
+    parser.add_argument(
+        "--per-candidate-validity",
+        action="store_true",
+        help="also record which candidates map (candidate_projection_valid_mask) and the pre-projection loss mask",
+    )
     return parser.parse_args()
 
 
@@ -117,7 +132,7 @@ def resolve_normalization_vocab_size(compatibility, *, score_role, actual_vocab_
 class ExactTokenStringProjection:
     """Map atomic actions exactly; expand observed context in ByteLevel symbols."""
 
-    def __init__(self, student_tokenizer, teacher_tokenizer):
+    def __init__(self, student_tokenizer, teacher_tokenizer, aliases=None):
         student_vocab = student_tokenizer.get_vocab()
         teacher_vocab = teacher_tokenizer.get_vocab()
         self.teacher_tokenizer = teacher_tokenizer
@@ -129,6 +144,21 @@ class ExactTokenStringProjection:
             if symbol in teacher_vocab
         }
         self.context_cache = {token_id: [target] for token_id, target in self.atomic_ids.items()}
+        # Aliases map candidate actions only (e.g. Qwen <|im_end|> -> R1 end-of-sentence); the
+        # observed context keeps its literal re-encoding so both anchors of a pair read the same text.
+        # The map must stay injective, or one teacher token's probability would count twice.
+        self.candidate_ids = dict(self.atomic_ids)
+        used = set(self.atomic_ids.values())
+        for student_symbol, teacher_symbol in (aliases or {}).items():
+            if student_symbol not in student_vocab or teacher_symbol not in teacher_vocab:
+                continue
+            student_id, teacher_id = int(student_vocab[student_symbol]), int(teacher_vocab[teacher_symbol])
+            if student_id in self.candidate_ids:
+                continue
+            if teacher_id in used:
+                raise ValueError(f"alias {student_symbol!r} -> {teacher_symbol!r} targets an already mapped teacher token")
+            self.candidate_ids[student_id] = teacher_id
+            used.add(teacher_id)
 
     def context_ids(self, student_id):
         student_id = int(student_id)
@@ -152,12 +182,15 @@ class ExactTokenStringProjection:
         for tokens in response:
             indices.append(boundary - 1)
             boundary += len(tokens)
-        targets, mask = [], []
+        targets, mask, candidate_mask = [], [], []
         for candidates in metadata["candidate_ids"]:
-            mapped = [self.atomic_ids.get(int(token)) for token in candidates]
-            mask.append(all(token is not None for token in mapped))
+            mapped = [self.candidate_ids.get(int(token)) for token in candidates]
+            valid = [token is not None for token in mapped]
+            mask.append(all(valid))
+            candidate_mask.append(valid)
             # Zero is only a tensor-shape placeholder for masked actions.
             targets.append([0 if token is None else token for token in mapped])
+        self.last_candidate_mask = candidate_mask
         return context, targets, indices, mask
 
 
@@ -165,6 +198,16 @@ def _prepare_scoring_row(metadata, score_field, token_projection=None):
     if token_projection is not None:
         context, targets, indices, mask = token_projection.prepare_row(metadata)
         metadata["token_projection_valid_mask"] = mask
+        if getattr(token_projection, "record_candidates", False):
+            previous = metadata.get("candidate_projection_valid_mask")
+            current = token_projection.last_candidate_mask
+            metadata["candidate_projection_valid_mask"] = (
+                current
+                if previous is None
+                else [[bool(a) and bool(b) for a, b in zip(old, new)] for old, new in zip(previous, current)]
+            )
+            if metadata.get("loss_mask_before_token_projection") is None:
+                metadata["loss_mask_before_token_projection"] = [bool(value) for value in metadata["loss_mask"]]
     else:
         prompt = [int(token) for token in metadata["prompt_tokens"]]
         response = [int(token) for token in metadata["response_tokens"]]
@@ -306,16 +349,25 @@ def main():
     )
     projection = None
     if compatibility.get("mode") == TOKEN_PROJECTION_MODE and score_role != "student":
+        aliases = json.loads(args.special_token_alias.read_text()) if args.special_token_alias else None
         projection = ExactTokenStringProjection(
             AutoTokenizer.from_pretrained(asset_lock["models"]["student"]["path"], trust_remote_code=True),
             AutoTokenizer.from_pretrained(args.model, trust_remote_code=True),
+            aliases=aliases,
         )
+        projection.record_candidates = args.per_candidate_validity
+    elif args.special_token_alias or args.per_candidate_validity:
+        print("token ids are shared with the student; alias and per-candidate options have no effect", flush=True)
     normalize_legacy_vllm_yarn_config(config)
     model_kwargs = dict(config=config, trust_remote_code=True, torch_dtype=getattr(torch, args.dtype))
     if args.attn_implementation:
         model_kwargs["attn_implementation"] = args.attn_implementation
     model = AutoModelForCausalLM.from_pretrained(args.model, **model_kwargs)
-    model.to(args.device)
+    if args.compute_dtype:
+        # Weights are first rounded to --dtype, so only the arithmetic changes (each tensor is cast as it moves).
+        model.to(device=args.device, dtype=getattr(torch, args.compute_dtype))
+    else:
+        model.to(args.device)
     model.eval()
 
     def score_rows(rows, first_row_index):

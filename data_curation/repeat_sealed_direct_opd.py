@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Repeat complete shards cyclically; request a total that ends at a shard boundary."""
+"""Repeat complete shards cyclically; request a total that ends at a shard boundary.
+
+Shards are hard-linked by default. ``--copy`` writes byte-identical copies instead, for filesystems without
+hard links (e.g. Modal Volumes); the manifest is the same either way."""
 
 from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import sys
 from itertools import cycle
 from pathlib import Path
@@ -24,6 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--total-rows", required=True, type=int)
     parser.add_argument("--student-model-path", type=Path)
+    parser.add_argument("--copy", action="store_true", help="copy shards instead of hard-linking them")
     return parser.parse_args()
 
 
@@ -39,6 +44,7 @@ def repeated_shard_plan(shards, *, total_rows):
 def main() -> None:
     args = parse_args()
     manifest = read_manifest(args.manifest)
+    place = shutil.copyfile if args.copy else os.link
     output_shards = []
     total_tokens = 0
     token_cache = {}
@@ -48,7 +54,7 @@ def main() -> None:
         ):
             source = args.manifest.parent / shard["path"]
             name = f"repeat-c{cycle_index:02d}-s{source_index:05d}-o{index:05d}.parquet"
-            os.link(source, temporary / name)
+            place(source, temporary / name)
             if shard["path"] not in token_cache:
                 token_cache[shard["path"]] = trainable_tokens(pq.read_table(source, columns=["metadata.loss_mask"]))
             total_tokens += token_cache[shard["path"]]

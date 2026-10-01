@@ -1348,3 +1348,46 @@ def test_skywork_converter_matches_official_dapo_prompt():
     assert converted["prompt"] == [{"content": f"{PROMPT_PREFIX}What is 1+1?{PROMPT_SUFFIX}", "role": "user"}]
     assert converted["reward_model"]["ground_truth"] == "2"
     assert converted["extra_info"]["prompt_style"] == "dapo_original"
+
+
+def test_cross_tokenizer_projection_aliases_candidates_and_records_per_candidate_validity():
+    from data_curation.precompute_direct_opd_scores import ExactTokenStringProjection, _prepare_scoring_row
+
+    class StudentTokenizer:
+        def get_vocab(self):
+            return {"a": 0, "b": 1, "<|im_end|>": 2, "<|im_start|>": 3}
+
+        def get_added_vocab(self):
+            return {"<|im_end|>": 2, "<|im_start|>": 3}
+
+    class TeacherTokenizer:
+        class Model:
+            def tokenize(self, symbol):
+                return [SimpleNamespace(value=symbol, id={"a": 4, "b": 5}[symbol])]
+
+        backend_tokenizer = SimpleNamespace(model=Model())
+
+        def get_vocab(self):
+            return {"a": 4, "b": 5, "<eos>": 6}
+
+        def encode(self, text, add_special_tokens=False):
+            return [4]
+
+    plain = ExactTokenStringProjection(StudentTokenizer(), TeacherTokenizer())
+    aliased = ExactTokenStringProjection(StudentTokenizer(), TeacherTokenizer(), aliases={"<|im_end|>": "<eos>"})
+    aliased.record_candidates = True
+    row = {"prompt_tokens": [0], "response_tokens": [1, 2], "candidate_ids": [[1, 2], [3, 0]], "loss_mask": [True, True]}
+    assert plain.prepare_row(dict(row))[1:4:2] == ([[5, 0], [0, 4]], [False, False])
+    metadata = dict(row)
+    _, targets, _ = _prepare_scoring_row(metadata, "post_teacher_log_probs", aliased)
+    assert targets == [[5, 6], [0, 4]]
+    assert metadata["token_projection_valid_mask"] == [True, False]
+    assert metadata["candidate_projection_valid_mask"] == [[True, True], [False, True]]
+    assert metadata["loss_mask_before_token_projection"] == [True, True]
+    metadata["loss_mask"] = [True, False]
+    _prepare_scoring_row(metadata, "pre_teacher_log_probs", aliased)
+    assert metadata["loss_mask_before_token_projection"] == [True, True]
+    with pytest.raises(ValueError, match="already mapped"):
+        ExactTokenStringProjection(
+            StudentTokenizer(), TeacherTokenizer(), aliases={"<|im_end|>": "<eos>", "<|im_start|>": "<eos>"}
+        )

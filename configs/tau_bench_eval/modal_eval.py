@@ -708,7 +708,8 @@ def serve_and_evaluate(job: dict) -> dict:
     def devices(first: int, count: int) -> dict[str, str]:
         return {"CUDA_VISIBLE_DEVICES": ",".join(str(index) for index in range(first, first + count))}
 
-    api_key = secrets.token_urlsafe(32)
+    # token_urlsafe can start with '-', which vllm's argument parser reads as a flag.
+    api_key = "sk-" + secrets.token_urlsafe(32)
     server = VllmServer(
         SERVING.vllm_command(model_path, api_key, PROTOCOL), SERVING.port, devices(0, SERVING.gpus) if USER else None
     )
@@ -724,7 +725,7 @@ def serve_and_evaluate(job: dict) -> dict:
         print(f"[{tag}] sampling defaults {defaults}; probe {probe}", flush=True)
         if USER:
             # Started after the agent is up, so the two servers' ports cannot race.
-            user_key = secrets.token_urlsafe(32)
+            user_key = "sk-" + secrets.token_urlsafe(32)
             user_server = VllmServer(
                 SERVING.user_vllm_command(USER, user_key),
                 SERVING.user_port,

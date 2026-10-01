@@ -54,6 +54,71 @@ MODELS = {
     "base": f"{REMOTE_MODEL_ROOT}/models--Qwen--Qwen3-4B/snapshots/{BASE_REVISION}",
     "opd": f"{REMOTE_CHECKPOINT_ROOT}/looptool-offline-dopd-qwen3-4b-v1/hf",
 }
+THINKING_2507_REVISION = "768f209d9ea81521153ed38c47d515654e938aea"
+# Agent-efficiency students are addressed as ``ae.<arm>.<variant>`` (see configs/agent_eff).
+AGENT_EFF_PREFIX = "ae."
+AGENT_EFF_ROOT = f"{REMOTE_CHECKPOINT_ROOT}/agent-eff"
+AGENT_EFF_DEFAULT_SEED = 1234
+CONCISE_SYSTEM_PROMPT = (
+    "Reason only as much as the task requires. Once you know which tool calls or answer are needed, "
+    "stop thinking and respond."
+)
+# Inference-time variants any agent-efficiency student takes as a last tag part, e.g. ``ae.joint.acc-legacy.concise``.
+AGENT_EFF_DECODING = {"concise": {"system_prompt": CONCISE_SYSTEM_PROMPT}}
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    """Per-model serving differences, recorded in each results manifest."""
+
+    path: str
+    # False renders the Qwen3 chat template with enable_thinking=false (the empty-think baseline).
+    thinking: bool = True
+    # Static YaRN over 32,768 original positions; not for checkpoints that are natively long-context.
+    yarn: bool = True
+    # None keeps Protocol.reasoning_parser; Thinking-2507's template opens <think> in the prompt.
+    reasoning_parser: str | None = None
+    # Inference-time efficiency baselines, applied by the serving proxy to every request:
+    # a lower per-step generation cap, and a system instruction to keep reasoning short.
+    max_completion_tokens: int | None = None
+    system_prompt: str | None = None
+
+
+MODEL_SPECS = {
+    "base": ModelSpec(MODELS["base"]),
+    "opd": ModelSpec(MODELS["opd"]),
+    "base-nothink": ModelSpec(MODELS["base"], thinking=False),
+    "opd-nothink": ModelSpec(MODELS["opd"], thinking=False),
+    "base-cap4k": ModelSpec(MODELS["base"], max_completion_tokens=4_096),
+    "opd-cap4k": ModelSpec(MODELS["opd"], max_completion_tokens=4_096),
+    "base-concise": ModelSpec(MODELS["base"], system_prompt=CONCISE_SYSTEM_PROMPT),
+    "opd-concise": ModelSpec(MODELS["opd"], system_prompt=CONCISE_SYSTEM_PROMPT),
+    # V0 after 20 of its 50 replay rounds (80 of 200 updates), where its training loss flattens.
+    "opd-r20": ModelSpec(f"{REMOTE_CHECKPOINT_ROOT}/looptool-offline-dopd-qwen3-4b-v1/hf-iter0000019"),
+    "thinking2507": ModelSpec(
+        f"{REMOTE_MODEL_ROOT}/models--Qwen--Qwen3-4B-Thinking-2507/snapshots/{THINKING_2507_REVISION}",
+        yarn=False,
+        reasoning_parser="deepseek_r1",
+    ),
+}
+
+
+def resolve_model(tag: str) -> ModelSpec:
+    """A registered tag, or ``ae.<arm>.<variant>[.s<training seed>][.<decoding>]`` for an agent-efficiency student."""
+    if tag in MODEL_SPECS:
+        return MODEL_SPECS[tag]
+    if tag.startswith(AGENT_EFF_PREFIX):
+        parts = tag[len(AGENT_EFF_PREFIX) :].split(".")
+        decoding = AGENT_EFF_DECODING[parts.pop()] if len(parts) > 2 and parts[-1] in AGENT_EFF_DECODING else {}
+        seed = AGENT_EFF_DEFAULT_SEED
+        if len(parts) == 3 and parts[2].startswith("s") and parts[2][1:].isdigit():
+            seed = int(parts.pop()[1:])
+        if len(parts) == 2 and all(parts) and "/" not in tag:
+            arm, variant = parts
+            return ModelSpec(f"{AGENT_EFF_ROOT}/{arm}/{variant}/seed{seed}/hf", **decoding)
+    raise ValueError(
+        f"unknown model tag {tag!r}; choose from {sorted(MODEL_SPECS)} or ae.<arm>.<variant>[.s<seed>][.concise]"
+    )
 
 # bfcl_eval hardcodes its result/score trees here and NeMo-Skills scores as
 # this FC handler, so the directory name is fixed regardless of the model.
@@ -162,8 +227,16 @@ class Serving:
         if self.data_parallel_size != self.gpus:
             raise ValueError("each data-parallel rank serves one GPU")
 
-    def vllm_command(self, model_path: str, api_key: str, protocol: Protocol) -> list[str]:
-        return [
+    def vllm_command(
+        self,
+        model_path: str,
+        api_key: str,
+        protocol: Protocol,
+        spec: ModelSpec | None = None,
+        chat_template: str | None = None,
+    ) -> list[str]:
+        spec = spec or ModelSpec(model_path)
+        command = [
             "vllm", "serve", model_path,
             "--served-model-name", protocol.served_model_name,
             "--host", "0.0.0.0",
@@ -172,7 +245,6 @@ class Serving:
             "--dtype", protocol.dtype,
             "--seed", str(protocol.seed),
             "--max-model-len", str(protocol.max_model_len),
-            "--hf-overrides", json.dumps({"rope_scaling": protocol.rope_scaling}),
             "--data-parallel-size", str(self.data_parallel_size),
             "--max-num-seqs", str(self.max_num_seqs),
             "--max-num-batched-tokens", str(self.max_num_batched_tokens),
@@ -181,9 +253,14 @@ class Serving:
             "--generation-config", "auto",
             "--enable-auto-tool-choice",
             "--tool-call-parser", protocol.tool_call_parser,
-            "--reasoning-parser", protocol.reasoning_parser,
+            "--reasoning-parser", spec.reasoning_parser or protocol.reasoning_parser,
             "--uvicorn-log-level", "warning",
         ]
+        if spec.yarn:
+            command += ["--hf-overrides", json.dumps({"rope_scaling": protocol.rope_scaling})]
+        if chat_template is not None:
+            command += ["--chat-template", chat_template]
+        return command
 
 
 @dataclass(frozen=True)
@@ -224,9 +301,9 @@ SERVING.validate()
 LANES = Lanes()
 
 
-def run_id(smoke_samples: int = 0) -> str:
+def run_id(smoke_samples: int = 0, protocol: Protocol = PROTOCOL) -> str:
     prefix = f"smoke{smoke_samples}" if smoke_samples else "full"
-    return f"bfcl-{PROTOCOL.bfcl_version}-{PROTOCOL.digest()}-{prefix}"
+    return f"bfcl-{protocol.bfcl_version}-{protocol.digest()}-{prefix}"
 
 
 def driver_command(
@@ -237,8 +314,13 @@ def driver_command(
     base_url: str,
     concurrency: int,
     smoke_samples: int = 0,
+    random_seed: int = 0,
 ) -> list[str]:
-    """The agentic-eval lane driver's NeMo-Skills invocation, verbatim apart from scheduling."""
+    """The agentic-eval lane driver's NeMo-Skills invocation, verbatim apart from scheduling.
+
+    ``random_seed`` is the decoding seed. NeMo-Skills sends it as every request's sampling ``seed`` (its default is
+    0), so a decoding-seed replicate must pass it here: vLLM's engine ``--seed`` alone does not change it.
+    """
 
     command = [
         "python", "-m", "nemo_skills.inference.eval.bfcl",
@@ -256,6 +338,7 @@ def driver_command(
         f"++max_concurrent_requests={concurrency}",
         f"++inference.tokens_to_generate={PROTOCOL.tokens_to_generate}",
         f"++inference.timeout={LANES.request_timeout_s}",
+        f"++inference.random_seed={random_seed}",
     ]
     if smoke_samples:
         if category.startswith(MEMORY_PREFIX):
@@ -272,7 +355,7 @@ def main() -> None:
                 "protocol": PROTOCOL.resolved(),
                 "serving": asdict(SERVING),
                 "lanes": asdict(LANES),
-                "models": MODELS,
+                "models": {tag: asdict(spec) for tag, spec in MODEL_SPECS.items()},
             },
             indent=2,
             sort_keys=True,

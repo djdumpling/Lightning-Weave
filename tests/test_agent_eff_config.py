@@ -1,5 +1,6 @@
 """The agent-efficiency registry: pins, provenance, the primary matrix, and geometry directions."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -272,3 +273,69 @@ def test_next_comparisons_pair_runs_at_the_same_seeds():
             assert arm_decoding == reference_decoding or name.startswith("null, decoding seed"), (name, pair)
             assert arm_training == reference_training or name.startswith("null, training seed"), (name, pair)
     assert set(config.NEXT_SEEDS) <= used
+
+
+def test_projection_round_is_pre_registered_against_the_bfcl_decoder():
+    from configs.bfcl_eval import config as bfcl
+    from evaluation import bfcl_pooled
+
+    assert config.PROJECTION_ARMS == ("uniform", "ordinary", "projected")
+    assert config.PROJECTION_NONINFERIORITY_MARGIN == 1.5 and config.PROJECTION_SAVINGS_TOLERANCE == 3.0
+    sampling = config.PROJECTION_SAMPLING
+    assert (sampling["temperature"], sampling["top_p"]) == (bfcl.PROTOCOL.temperature, bfcl.PROTOCOL.top_p)
+    assert sampling["top_k"] == bfcl.PROTOCOL.expected_generation_defaults["top_k"]
+    assert config.PROJECTION_DONOR in config.DONORS and config.PROJECTION_RECIPIENT in config.ACCURACY_TERMS
+    rules = config.PROJECTION_RULES
+    for arm in config.PROJECTION_ARMS:
+        assert ["non_inferior", "multi_turn_accuracy", 1.5] in rules[f"{arm} vs recipient"]
+    for rule in (rule for arm_rules in rules.values() for rule in arm_rules):
+        bfcl_pooled.verdict(rule, {rule[1]: [0.0, 1.0]})  # every rule is one the pooled analysis can apply
+    assert config.resolved()["projection"]["rules"] == rules
+
+
+def test_projection_training_reads_every_recipient_sample_once_and_bfcl_finds_each_student():
+    from configs.bfcl_eval import config as bfcl
+
+    rows = config.RECIPE.selected_prompts * config.PROJECTION_SAMPLING["responses_per_prompt"]
+    plan = config.projection_training_plan(rows)
+    assert (rows, plan["num_rollout"], plan["final_iteration"], plan["optimizer_updates"]) == (25_600, 100, 99, 400)
+    assert plan["learning_rate"] == config.RECIPE.learning_rate
+    with pytest.raises(ValueError, match="whole batches"):
+        config.projection_training_plan(rows + 1)
+    tags = config.projection_tags()
+    assert len(tags) == len(config.PROJECTION_ARMS) * len(config.PROJECTION_SEEDS)
+    for tag in tags:
+        arm = tag.split(".")[2]
+        seed = int(tag.split(".s")[-1]) if ".s" in tag else config.RECIPE.training_seed
+        assert bfcl.resolve_model(tag).path == f"{config.PROJECTION_CHECKPOINT_ROOT}/{arm}/seed{seed}/hf"
+    assert config.projection_paths()["recipient_hf"].endswith("/joint/acc-legacy/seed1234/hf")
+
+
+def test_drift_replays_draw_disjoint_seed_blocks_from_a_separate_logged_run():
+    drift = config.PROJECTION_DRIFT
+    blocks = {name: set(range(seed, seed + drift["responses"])) for name, seed in drift["seeds"].items()}
+    assert not blocks["reference"] & blocks["null"] and not (blocks["reference"] | blocks["null"]) & blocks["arms"]
+    assert drift["logged_decoding_seed"] not in (0, *config.EXTRA_DECODING_SEEDS)  # apart from the accuracy runs
+
+
+def test_projection_comparisons_file_is_the_pre_registration():
+    path = Path(__file__).resolve().parents[1] / "configs/agent_eff/projection_comparisons.json"
+    comparisons = json.loads(path.read_text())
+    assert comparisons == config.projection_comparisons()
+    for name, item in comparisons.items():
+        assert len(item["pairs"]) == len(config.PROJECTION_SEEDS) * len(config.PROJECTION_BFCL_TREES)
+        for arm_run, reference_run in item["pairs"]:
+            assert arm_run.split("/")[0] == reference_run.split("/")[0]  # the same decoding seed
+            if name.endswith("vs recipient"):
+                assert reference_run.endswith("/ae.joint.acc-legacy")
+            else:
+                assert arm_run.endswith(".s5678") == reference_run.endswith(".s5678")  # the same training seed
+    assert comparisons["projected vs ordinary"]["rules"] == config.PROJECTION_RULES["projected vs ordinary"]
+
+
+def test_the_probe_draws_disjoint_seed_blocks_and_keeps_inconclusive_readings():
+    probe = config.PROJECTION_PROBE
+    blocks = {name: set(range(seed, seed + probe["responses"])) for name, seed in probe["seeds"].items()}
+    assert not blocks["reference"] & blocks["null"] and not (blocks["reference"] | blocks["null"]) & blocks["students"]
+    assert probe["thresholds"]["weak"] < probe["thresholds"]["substantial"]  # leaves an inconclusive band
+    assert 0 < probe["equivalence_fraction"] < 1 and probe["heldout_prompts"].endswith("reasoning-value/prompts.jsonl")

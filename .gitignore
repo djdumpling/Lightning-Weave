@@ -17,7 +17,9 @@ venv/
 /external/
 /checkpoints/
 /outputs/
-/results/
+/results/*
+!/results/*.md
+!/results/agent_eff/
 /logs/
 /wandb/
 *.log

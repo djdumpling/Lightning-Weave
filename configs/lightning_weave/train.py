@@ -55,7 +55,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--rollout-seed", type=int, default=42)
     result.add_argument("--rollout-shuffle", action="store_true",
                         help="Permute the cached rows with --rollout-seed instead of reading them in stored order.")
-    result.add_argument("--loss-mode", choices=["tilted_target", "policy_gradient"], default="tilted_target")
+    result.add_argument("--loss-mode", choices=["tilted_target", "policy_gradient", "sequence_weighted"],
+                        default="tilted_target")
     result.add_argument("--ray-address", default=os.getenv("RAY_JOB_ADDRESS"),
                         help="Existing Ray dashboard address; otherwise start a local Ray head.")
     result.add_argument("--dashboard-port", type=int, default=8265)
@@ -128,7 +129,7 @@ def build_train_args(args: argparse.Namespace) -> list[str]:
         "--direct-opd-top-k", str(args.top_k),
         "--disable-compute-advantages-and-returns", "--loss-type", "custom_loss",
         "--custom-loss-function-path", "slime.rollout.offline_direct_opd.megatron_loss",
-        "--calculate-per-token-loss", "--offline-direct-opd-loss-mode", args.loss_mode,
+        "--offline-direct-opd-loss-mode", args.loss_mode,
         "--offline-direct-opd-kl-coef", str(args.alpha), "--entropy-coef", "0.0",
         "--optimizer", "adam", "--lr", str(args.lr), "--lr-decay-style", "constant",
         "--weight-decay", "0.01", "--adam-beta1", "0.9", "--adam-beta2", "0.999", "--clip-grad", "1.0",
@@ -137,6 +138,10 @@ def build_train_args(args: argparse.Namespace) -> list[str]:
         "--seed", str(args.seed), "--actor-num-nodes", "1", "--actor-num-gpus-per-node", str(args.num_gpus),
         "--rollout-num-gpus", "0", "--rollout-num-gpus-per-engine", "1",
     ]
+    # The tilted and policy-gradient objectives are token means over the batch; the sequence-weighted objective sums
+    # each response's log-likelihood and divides by the fixed global batch size instead.
+    if args.loss_mode != "sequence_weighted":
+        options.append("--calculate-per-token-loss")
     if args.rollout_shuffle:
         options.append("--rollout-shuffle")
     if args.wandb_project:

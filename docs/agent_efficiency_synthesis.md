@@ -462,6 +462,169 @@ python evaluation/bfcl_multiturn_failures.py --root RESULTS --ground-truth DIR -
   --comparisons configs/agent_eff/next_comparisons.json
 ```
 
+## Decision-preserving projection (pre-registered 2026-10-01)
+
+Every donor, strength, gate and composition so far pays the same multi-turn price per token saved, while single-turn
+savings are free. The working explanation is a property of the target, not of the donor. Write a response as
+reasoning z followed by a decision a: its complete visible output, exactly as BFCL's server shows it (calls with
+arguments, in order, and any visible text), with how it ended (its finish reason). The ordinary tilt
+q ∝ p0(z, a | h) · e^{s(z)/α} changes the decision distribution too:
+
+    q(a | h) ∝ p0(a | h) · Z(h, a),    Z(h, a) = E_{z ~ p0(· | h, a)}[e^{s(z)/α}],
+
+so decisions whose reasoning is short gain probability. In a multi-turn task the environment executes each decision,
+and a small shift per step compounds. The projection keeps the recipient's decision distribution and tilts only the
+reasoning within each decision:
+
+    q*(z, a | h) = p0(a | h) · q_B(z | h, a).
+
+By the KL chain rule it is the closest target to the ordinary one with p0's decision marginals; it needs no accuracy
+labels. If later histories depend only on earlier histories and decisions (P(h' | h, z, a) = P(h' | h, a)), matching
+decisions at every step preserves the whole interaction, in a stochastic environment too. Under interleaved thinking
+the reasoning stays visible later in the same turn, so there the projection is not exact.
+
+**Arms** (`PROJECTION_*` in `configs/agent_eff/config.py`). All three start from the recipient, acc-legacy at
+training seed 1234, and fit the same samples of it; only the weights differ (`data_curation/decision_projection.py`):
+
+| arm | weight of sample i of a prompt with N samples | what it isolates |
+| --- | --- | --- |
+| `uniform` | 1 | training on its own samples, e.g. sharpening |
+| `ordinary` | N · e^{s_i/α} / Σ_prompt e^{s_j/α} | the usual tilt in sequence form |
+| `projected` | n_g · e^{s_i/α} / Σ_{j ∈ g} e^{s_j/α}, g = i's decision group | decision preservation |
+
+- **Decisions** are the server's content, compared byte for byte: no whitespace, argument-order or call-format
+  normalization. The split follows the pinned vLLM 0.11.0 `qwen3` reasoning parser (`served_split`): unless both
+  `<think>` and `</think>` are present, the whole output is content, so an unclosed reasoning block is visible text
+  (BFCL shows and keeps it in the history) and two different unclosed responses are two decisions. A length-limited
+  response keeps what it showed, marked by its finish reason.
+- **Samples**: 8 per LoopTool prompt (25,600) from the recipient with BFCL's decoder (T 0.6, top-p 0.95, top-k 20;
+  `collect_direct_opd_rollouts.py --sampling-top-k`). They are drawn without BFCL's static YaRN override, because
+  training computes the likelihood without it: the reference is the policy being fitted, and YaRN is added at
+  evaluation alike for the recipient and every arm, as for every earlier student.
+- **Score**: reasoning-only DOPD (`data_curation/score_reasoning.py`), s = log DECS(z | h) − log R1-Distill-1.5B(z | h).
+  z is the reasoning through its closing `</think>` (all of an unclosed response, also when the prompt opened the
+  block); h is BOS plus the recipient's exact prompt text and the response's opening `<think>`, encoded with the
+  donors' shared tokenizer, without a chat template. Both donors load at their pinned snapshots, in float32. Decision
+  tokens are not scored.
+- **One α** for all arms, the weakest tilt at which the projected target's implied cut in response tokens reaches 15%
+  (`calibrate_alpha` scans a fixed log grid from weak to strong tilt, then bisects the first bracket: savings need not
+  grow as the tilt strengthens). If no grid point reaches 15%, the weights stage stops the round, with its
+  diagnostics written, for a decision before training. The ordinary arm then implies more, because it can also move
+  decisions; realized savings are measured.
+- **Optional anchor** w_η = (1 − η) w + η for every arm, η = 0 unless the weight diagnostics call for it. It keeps each
+  decision group's total weight.
+- **Training** (`--loss-mode sequence_weighted`): weighted, summed log-likelihood over complete responses, including
+  the decision and the stop token, with no token KL. The per-sample reducer is used and the trainer divides by the
+  fixed global batch size, so a step fits Σ_i w_i log p(y_i) / 64; dividing by each batch's token count instead would
+  weight a response by the inverse length of its batch (tested through slime's Megatron wrapper:
+  `tests/test_sequence_weighted_loss.py`). Log-probabilities are temperature-scaled (T 0.6), as slime's
+  generation-config lock requires. One pass over the 25,600 rows at the recipe's batch sizes and learning rate: 100
+  batches of 256, 400 updates, the same budget for all three arms (their comparison is the control; the earlier 200
+  vs 400 result does not establish equivalence under this loss). Training seeds 1234 and 5678 both start from the
+  same recipient and samples (5678 also reorders the rows).
+
+**Decision rules, fixed in advance** (`PROJECTION_RULES`, applied by `evaluation/bfcl_pooled.py`; each arm is paired
+with the recipient at the same BFCL decoding seed 0, 1, 2):
+
+- Each arm against the recipient, multi-turn accuracy: **no detectable cost** if lo > −1.5 points, **costs** if
+  hi < 0, **inconclusive** otherwise. Total tokens: **reduced** if hi < 0.
+- Projected against ordinary, multi-turn accuracy: **recovers** if lo > 0 (**partial** if also hi < +1.5), **does not
+  recover** if hi < +1.5, **inconclusive** otherwise.
+- "At matched savings" is claimed only if the two arms' realized total-token savings against the recipient (pooled
+  point estimates) differ by at most 3 percentage points (`decision_projection.savings_matched`).
+- Pre-registered hypothesis: the donor supplies useful shortening within identical decisions, and the projection gives
+  less decision drift on fixed histories and better multi-turn accuracy than the ordinary tilt at comparable realized
+  savings.
+
+**Decision drift** (`evaluation/decision_drift.py`, `PROJECTION_DRIFT`; exploratory). Histories come from one new
+recipient run at BFCL decoding seed 3, made with `--log-requests` (a run tree evaluated without logging cannot be
+backfilled). That run serves only the drift histories and stays out of the accuracy comparisons at seeds 0-2. Up to
+500 turn starts and 500 later steps of its multi-turn requests, exactly as the model saw them, are chosen by a fixed
+hash and frozen (`histories.frozen.json` records their hash, which `compare` checks) before any arm is replayed.
+Each history is replayed to the recipient twice and to every arm: 4 responses each, with BFCL's serving settings
+(its decoder, 32,768 new tokens, the 65,536-token YaRN context), each reduced to its decision as the server shows it.
+vLLM seeds the n samples of a request s, s + 1, ..., so the recipient's reference draw, its null draw and the arms
+use disjoint blocks (0, 1,000, 2,000); the arms share one, for paired comparisons between them. Two views, byte-exact
+and call-level (calls with arguments; any text reply counts as "reply"), each give per arm: the total variation from
+the reference draw minus the null draw's, and the reference match rate against the null draw's, averaged over
+histories with a bootstrap, overall and by kind. With 4 samples the empirical total variation saturates: if nearly
+every response is unique, two draws of one policy and two different policies are all at distance 1, and the excess is
+0 either way. Each view therefore reports how often each model repeats a decision and how often the recipient's own
+two draws never agree; a small excess where these are high is no evidence that decisions were preserved.
+
+**Diagnostics before training** (`decision_projection.py diagnose`): decision-group coverage, the
+shortest-within-decision bound, effective sample size per prompt and per group, the target-weighted length curve, the
+ordinary target's decision movement (total variation; the projection's is 0 by construction), and the within-group
+score–length rank correlation (ties share their mean rank; a local check only).
+
+**Caveats.**
+
+- A text reply is a decision with its exact wording, so nearly every text reply is a singleton and gets no efficiency
+  push. On the frozen-base shard (200 prompts × 4), 75% of samples share a decision with another sample; the
+  recipient's 8 samples per prompt must be re-checked.
+- The target preserves the recipient's empirical decision frequencies, not the trained student's; student drift is
+  measured, not assumed. Fitting T-scaled likelihoods matches the decoder's temperature but not its top-k / top-p
+  truncation, which the uniform arm shares and the drift measurement covers.
+- Reasoning-only scoring differs from the complete-response log-ratio: the donors' likelihood of the decision tokens
+  can vary with the reasoning before them, even within one decision group.
+
+**The probe of the trained students (pre-registered 2026-10-02, before any probe result;** `PROJECTION_PROBE`,
+`evaluation/projection_probe.py`**).** The first round realized 3–5% BFCL savings, and the BFCL comparisons were
+inconclusive. Before any more training, one job measures what the existing students learned:
+
+- **Prompts:** 400 training prompts, chosen by a fixed hash, and the 600 held-out LoopTool prompts of the
+  reasoning-value probe (never trained on; tool-call references).
+- **Sampling:** 8 responses each with the collection settings. The recipient samples twice, in disjoint seed blocks;
+  every student samples once, in one shared block.
+- **Teacher forcing:** the recipient and every student score the cached responses of the training prompts.
+- **Realization:** training-prompt savings divided by the arm's target-implied savings on the same 400 prompts.
+  "Substantially realized" if the lower bound is at least 0.7, "weakly realized" if the upper bound is at most 0.4,
+  inconclusive otherwise. High realization shows the shortening was largely learned, not that the target was fitted
+  completely or that more training cannot help transfer. Low realization motivates examining optimization (the
+  teacher-forced fit slope first) without proving that more passes are the cure.
+- **Generalization:** undefined unless the training-prompt savings are shown positive. Then "generalizes" if held-out
+  savings are at least 0.7 × training-prompt savings with confidence, "training-specific" if at most 0.4 × with
+  confidence, inconclusive otherwise. These are contrasts resampling both prompt sets, not a ratio of bootstrap draws.
+- **Decision movement:** an unbiased estimate of Σ_a (p_a − q_a)² between each student's and the recipient's
+  call-level decisions, per prompt, with a bootstrap over prompts. Two separate flags, which can both hold: detectable
+  movement if the lower bound is above 0; within the margin if the upper bound is below half the ordinary target's own
+  squared distance on the training prompts. The margin is a mechanism diagnostic, not a guarantee of preserved
+  accuracy. Byte-exact distances and held-out exact-call accuracy are descriptive.
+- **What follows:**
+  - weak realization: inspect the fit slope, then continue one seed of all three arms for passes 2 and 3 at the same
+    learning rate and re-probe;
+  - substantial realization: the BFCL dose is lost in transfer, so the next experiment changes what is transferred
+    (for example a length-scored projection, or training states closer to BFCL's), not the number of passes;
+  - inconclusive: the fit slope decides whether optimization is examined first. The teacher-forced log-likelihoods
+    are raw (T = 1) while training fits T = 0.6, so the slope is a descriptive proxy: a weak slope alone does not
+    establish poor optimization of the actual objective.
+
+  A length-only score tests whether conditional projection improves compression; it does not test DOPD capability
+  transfer, so a donor-scored arm stays. Savings matched on held-out LoopTool prompts need not match on BFCL: there,
+  dose and dose matching are measured outcomes. BFCL accuracy stays the primary outcome, rejected calls a secondary
+  reliability outcome (resampling whole tasks, reporting both the rate and the rejected calls per task), and the
+  decision distance a separate mechanism diagnostic.
+
+**Running** (each stage reuses finished work; `tests/test_projection_pipeline.py` runs every stage's real command
+locally on a tiny cache, with vLLM and the donors stubbed):
+
+```bash
+bash scripts/run_agent_eff.sh projection --stages sample --workers 8           # GPU: the recipient's samples
+bash scripts/run_agent_eff.sh projection --stages score --workers 8            # GPU: reasoning-only DECS scores
+bash scripts/run_agent_eff.sh projection --stages weights --workers 8          # CPU: diagnostics, alpha, sealed arms
+bash scripts/run_agent_eff.sh projection --stages train --seeds 1234,5678      # GPU: convert, train, export
+# BFCL: the six students with logging, and the recipient's logged multi-turn run for the drift histories
+AGENTIC_EVAL_DIR=~/agentic-eval-36a183a0 bash scripts/run_bfcl_eval.sh run --wait-for-checkpoints --log-requests \
+  --models "ae.projection.uniform,ae.projection.uniform.s5678,ae.projection.ordinary,ae.projection.ordinary.s5678,ae.projection.projected,ae.projection.projected.s5678"
+# (repeat with --seed 1 and --seed 2)
+AGENTIC_EVAL_DIR=~/agentic-eval-36a183a0 bash scripts/run_bfcl_eval.sh run --seed 3 --log-requests --models ae.joint.acc-legacy \
+  --categories multi_turn_base,multi_turn_miss_func,multi_turn_miss_param,multi_turn_long_context
+# freeze the histories as soon as that run finishes, before inspecting any arm's outputs
+bash scripts/run_agent_eff.sh projection --stages histories --logged-run <seed-3 run id>/ae.joint.acc-legacy
+bash scripts/run_agent_eff.sh projection --stages drift --seeds 1234,5678
+bash scripts/run_agent_eff.sh projection --stages probe --seeds 1234,5678         # the students on LoopTool prompts
+```
+
 ## Monte Carlo probes
 
 [`mc_advantage_probes.py`](../data_curation/mc_advantage_probes.py) continues

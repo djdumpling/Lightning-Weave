@@ -1,0 +1,353 @@
+{
+  "decs": {
+    "rows": 800,
+    "coefficient": 3.1135845716525035,
+    "per_state": {
+      "all": {
+        "tokens": 348574,
+        "mean_added_kl": 0.014524360548038486,
+        "support_mass_kl_share": 0.0003281039943176249,
+        "mean_support_mass_change": -1.031974729666184e-05,
+        "accuracy_target_other_mass": 0.0001298498355696437,
+        "composed_target_other_mass": 0.0001401695828663057
+      },
+      "think_open": {
+        "tokens": 800,
+        "mean_added_kl": 1.0763896155536452e-07,
+        "support_mass_kl_share": 0.957073131518996,
+        "mean_support_mass_change": -1.486224808815162e-07,
+        "accuracy_target_other_mass": 1.0572754191709444e-07,
+        "composed_target_other_mass": 2.5435002279861064e-07
+      },
+      "think_body": {
+        "tokens": 287743,
+        "mean_added_kl": 0.013941564077929569,
+        "support_mass_kl_share": 0.0001686676426884047,
+        "mean_support_mass_change": -7.0136757040827266e-06,
+        "accuracy_target_other_mass": 4.8288279764380725e-05,
+        "composed_target_other_mass": 5.5301955468463407e-05
+      },
+      "think_reflection_fork": {
+        "tokens": 1073,
+        "mean_added_kl": 0.8357800914147174,
+        "support_mass_kl_share": 9.595528488038919e-05,
+        "mean_support_mass_change": -3.343082381117091e-05,
+        "accuracy_target_other_mass": 1.270240435694581e-05,
+        "composed_target_other_mass": 4.613322816811672e-05
+      },
+      "think_close": {
+        "tokens": 799,
+        "mean_added_kl": 4.102519457810343e-10,
+        "support_mass_kl_share": 0.00032906335192817274,
+        "mean_support_mass_change": 1.9103568817237726e-11,
+        "accuracy_target_other_mass": 3.386606667453605e-08,
+        "composed_target_other_mass": 3.3846963105718814e-08
+      },
+      "act_vs_talk": {
+        "tokens": 670,
+        "mean_added_kl": 9.798692046415448e-05,
+        "support_mass_kl_share": 0.0011902770190567286,
+        "mean_support_mass_change": -1.3345161142057008e-07,
+        "accuracy_target_other_mass": 5.901565419218607e-07,
+        "composed_target_other_mass": 7.236081533424307e-07
+      },
+      "tool_syntax": {
+        "tokens": 7832,
+        "mean_added_kl": 1.0554025666448048e-06,
+        "support_mass_kl_share": 0.0031365068683273704,
+        "mean_support_mass_change": -2.318303219353231e-09,
+        "accuracy_target_other_mass": 9.626052831409896e-09,
+        "composed_target_other_mass": 1.1944356050763127e-08
+      },
+      "tool_name": {
+        "tokens": 8943,
+        "mean_added_kl": 8.250280457583624e-06,
+        "support_mass_kl_share": 0.00014272948321571695,
+        "mean_support_mass_change": -2.1005109411246346e-09,
+        "accuracy_target_other_mass": 8.897348720192734e-08,
+        "composed_target_other_mass": 9.107399814305197e-08
+      },
+      "tool_args": {
+        "tokens": 15955,
+        "mean_added_kl": 0.00019485564274611506,
+        "support_mass_kl_share": 0.003030187245940628,
+        "mean_support_mass_change": -8.300079578592137e-07,
+        "accuracy_target_other_mass": 5.122988522562956e-07,
+        "composed_target_other_mass": 1.3423068101155092e-06
+      },
+      "call_boundary": {
+        "tokens": 1294,
+        "mean_added_kl": 0.00026721422773970106,
+        "support_mass_kl_share": 6.00576215561645e-05,
+        "mean_support_mass_change": -1.7420993064744384e-09,
+        "accuracy_target_other_mass": 5.155922466167713e-07,
+        "composed_target_other_mass": 5.173343459232458e-07
+      },
+      "post_text": {
+        "tokens": 23220,
+        "mean_added_kl": 0.006193610695337655,
+        "support_mass_kl_share": 0.006179131615493214,
+        "mean_support_mass_change": -6.586576206316731e-05,
+        "accuracy_target_other_mass": 0.0013498292853309191,
+        "composed_target_other_mass": 0.001415695047394087
+      },
+      "think_stop_fork": {
+        "tokens": 90,
+        "mean_added_kl": 0.04685767362533288,
+        "support_mass_kl_share": 1.6913358701171666e-05,
+        "mean_support_mass_change": -1.7196203904020398e-06,
+        "accuracy_target_other_mass": 3.657479191242362e-06,
+        "composed_target_other_mass": 5.377099581644402e-06
+      },
+      "end_of_message": {
+        "tokens": 155,
+        "mean_added_kl": 0.018062124508699807,
+        "support_mass_kl_share": 3.115176438651437e-05,
+        "mean_support_mass_change": -9.045342615867217e-07,
+        "accuracy_target_other_mass": 2.8916749942542453e-06,
+        "composed_target_other_mass": 3.796209255840967e-06
+      }
+    },
+    "added_kl_quantiles": [
+      3.9488716194284774e-08,
+      0.019214826809087926,
+      0.05965337301197076,
+      0.2766267998179506,
+      4.87221379271262
+    ]
+  },
+  "e1code": {
+    "rows": 800,
+    "coefficient": 5.970741402044257,
+    "per_state": {
+      "all": {
+        "tokens": 348574,
+        "mean_added_kl": 0.014801060305338986,
+        "support_mass_kl_share": 0.0009679053967786747,
+        "mean_support_mass_change": -2.0969139440784184e-05,
+        "accuracy_target_other_mass": 0.0001298498355696437,
+        "composed_target_other_mass": 0.000150818975010428
+      },
+      "think_open": {
+        "tokens": 800,
+        "mean_added_kl": 8.372214748626993e-07,
+        "support_mass_kl_share": 0.9726251052211298,
+        "mean_support_mass_change": -3.756981942291959e-07,
+        "accuracy_target_other_mass": 1.0572754191709444e-07,
+        "composed_target_other_mass": 4.814257361462904e-07
+      },
+      "think_body": {
+        "tokens": 287743,
+        "mean_added_kl": 0.01580105168480507,
+        "support_mass_kl_share": 0.0007854917675600502,
+        "mean_support_mass_change": -9.306684905916462e-06,
+        "accuracy_target_other_mass": 4.8288279764380725e-05,
+        "composed_target_other_mass": 5.7594964670297214e-05
+      },
+      "think_reflection_fork": {
+        "tokens": 1073,
+        "mean_added_kl": 0.37638955419087955,
+        "support_mass_kl_share": 2.4478525960152674e-05,
+        "mean_support_mass_change": -6.497106244771287e-06,
+        "accuracy_target_other_mass": 1.270240435694581e-05,
+        "composed_target_other_mass": 1.9199510601717097e-05
+      },
+      "think_close": {
+        "tokens": 799,
+        "mean_added_kl": 9.187364814903284e-08,
+        "support_mass_kl_share": 0.010550669034738095,
+        "mean_support_mass_change": -8.781722929149635e-10,
+        "accuracy_target_other_mass": 3.386606667453605e-08,
+        "composed_target_other_mass": 3.4744238967451015e-08
+      },
+      "act_vs_talk": {
+        "tokens": 670,
+        "mean_added_kl": 0.00042351688194608954,
+        "support_mass_kl_share": 0.0005050669532117861,
+        "mean_support_mass_change": -1.5698155231462984e-07,
+        "accuracy_target_other_mass": 5.901565419218607e-07,
+        "composed_target_other_mass": 7.471380942364905e-07
+      },
+      "tool_syntax": {
+        "tokens": 7832,
+        "mean_added_kl": 1.2689277785063073e-07,
+        "support_mass_kl_share": 0.5691466882617667,
+        "mean_support_mass_change": -1.9375896115186483e-08,
+        "accuracy_target_other_mass": 9.626052831409896e-09,
+        "composed_target_other_mass": 2.900194894659638e-08
+      },
+      "tool_name": {
+        "tokens": 8943,
+        "mean_added_kl": 5.330929352718678e-06,
+        "support_mass_kl_share": 1.3212520497752693e-05,
+        "mean_support_mass_change": -7.543492474725174e-11,
+        "accuracy_target_other_mass": 8.897348720192734e-08,
+        "composed_target_other_mass": 8.904892212667459e-08
+      },
+      "tool_args": {
+        "tokens": 15955,
+        "mean_added_kl": 0.00016881716822966585,
+        "support_mass_kl_share": 9.125841028040345e-05,
+        "mean_support_mass_change": -1.0165306858377455e-07,
+        "accuracy_target_other_mass": 5.122988522562956e-07,
+        "composed_target_other_mass": 6.139519208400702e-07
+      },
+      "call_boundary": {
+        "tokens": 1294,
+        "mean_added_kl": 0.0012151342910059833,
+        "support_mass_kl_share": 0.007864687822597326,
+        "mean_support_mass_change": -3.3391611809139925e-06,
+        "accuracy_target_other_mass": 5.155922466167713e-07,
+        "composed_target_other_mass": 3.854753427530764e-06
+      },
+      "post_text": {
+        "tokens": 23220,
+        "mean_added_kl": 0.008545260371082657,
+        "support_mass_kl_share": 0.007041459261345034,
+        "mean_support_mass_change": -0.00019881890608074688,
+        "accuracy_target_other_mass": 0.0013498292853309191,
+        "composed_target_other_mass": 0.0015486481914116653
+      },
+      "think_stop_fork": {
+        "tokens": 90,
+        "mean_added_kl": 0.0503992846490745,
+        "support_mass_kl_share": 1.363681242972369e-05,
+        "mean_support_mass_change": -4.064742598089113e-07,
+        "accuracy_target_other_mass": 3.657479191242362e-06,
+        "composed_target_other_mass": 4.063953451051274e-06
+      },
+      "end_of_message": {
+        "tokens": 155,
+        "mean_added_kl": 0.0077475957313821115,
+        "support_mass_kl_share": 0.0010288768865093095,
+        "mean_support_mass_change": -8.250231641705069e-06,
+        "accuracy_target_other_mass": 2.8916749942542453e-06,
+        "composed_target_other_mass": 1.1141906635959315e-05
+      }
+    },
+    "added_kl_quantiles": [
+      5.376059648613954e-08,
+      0.022465199690884615,
+      0.0687205569530111,
+      0.2910454670297644,
+      5.103481123838129
+    ]
+  },
+  "e1math": {
+    "rows": 800,
+    "coefficient": 7.94470008052652,
+    "per_state": {
+      "all": {
+        "tokens": 348574,
+        "mean_added_kl": 0.014975845985761797,
+        "support_mass_kl_share": 0.00048087224032681154,
+        "mean_support_mass_change": -3.6939890672351643e-06,
+        "accuracy_target_other_mass": 0.0001298498355696437,
+        "composed_target_other_mass": 0.000133543824636879
+      },
+      "think_open": {
+        "tokens": 800,
+        "mean_added_kl": 2.906879716661405e-06,
+        "support_mass_kl_share": 0.9694019907417104,
+        "mean_support_mass_change": -9.756897681964528e-07,
+        "accuracy_target_other_mass": 1.0572754191709444e-07,
+        "composed_target_other_mass": 1.0814173101135471e-06
+      },
+      "think_body": {
+        "tokens": 287743,
+        "mean_added_kl": 0.01508659343529783,
+        "support_mass_kl_share": 0.00014074936535757917,
+        "mean_support_mass_change": -2.7964268513527525e-06,
+        "accuracy_target_other_mass": 4.8288279764380725e-05,
+        "composed_target_other_mass": 5.1084706615733496e-05
+      },
+      "think_reflection_fork": {
+        "tokens": 1073,
+        "mean_added_kl": 0.5959559473614678,
+        "support_mass_kl_share": 8.861898841754635e-05,
+        "mean_support_mass_change": -3.061854994078279e-05,
+        "accuracy_target_other_mass": 1.270240435694581e-05,
+        "composed_target_other_mass": 4.33209542977286e-05
+      },
+      "think_close": {
+        "tokens": 799,
+        "mean_added_kl": 4.702908195854231e-10,
+        "support_mass_kl_share": 0.00157082480701001,
+        "mean_support_mass_change": 2.7585374674261552e-11,
+        "accuracy_target_other_mass": 3.386606667453605e-08,
+        "composed_target_other_mass": 3.383848129986179e-08
+      },
+      "act_vs_talk": {
+        "tokens": 670,
+        "mean_added_kl": 0.00010212787287527696,
+        "support_mass_kl_share": 7.16359953507712e-05,
+        "mean_support_mass_change": 4.85412660199861e-09,
+        "accuracy_target_other_mass": 5.901565419218607e-07,
+        "composed_target_other_mass": 5.853024153198621e-07
+      },
+      "tool_syntax": {
+        "tokens": 7832,
+        "mean_added_kl": 1.868683993632165e-06,
+        "support_mass_kl_share": 0.0010301550229614496,
+        "mean_support_mass_change": -2.7970349069162144e-10,
+        "accuracy_target_other_mass": 9.626052831409896e-09,
+        "composed_target_other_mass": 9.905756322101516e-09
+      },
+      "tool_name": {
+        "tokens": 8943,
+        "mean_added_kl": 8.722620947365763e-06,
+        "support_mass_kl_share": 0.00013904733874920655,
+        "mean_support_mass_change": -4.848087063066376e-10,
+        "accuracy_target_other_mass": 8.897348720192734e-08,
+        "composed_target_other_mass": 8.945829590823397e-08
+      },
+      "tool_args": {
+        "tokens": 15955,
+        "mean_added_kl": 0.00045123486656708617,
+        "support_mass_kl_share": 0.00048502653951721996,
+        "mean_support_mass_change": 1.2774922921831022e-07,
+        "accuracy_target_other_mass": 5.122988522562956e-07,
+        "composed_target_other_mass": 3.845496230379854e-07
+      },
+      "call_boundary": {
+        "tokens": 1294,
+        "mean_added_kl": 0.017225247983863518,
+        "support_mass_kl_share": 0.0037475421822673405,
+        "mean_support_mass_change": -7.563915488175194e-06,
+        "accuracy_target_other_mass": 5.155922466167713e-07,
+        "composed_target_other_mass": 8.079507734791966e-06
+      },
+      "post_text": {
+        "tokens": 23220,
+        "mean_added_kl": 0.008285134893734971,
+        "support_mass_kl_share": 0.009100503515833856,
+        "mean_support_mass_change": -1.893536361618648e-05,
+        "accuracy_target_other_mass": 0.0013498292853309191,
+        "composed_target_other_mass": 0.0013687646489471017
+      },
+      "think_stop_fork": {
+        "tokens": 90,
+        "mean_added_kl": 0.10654127246961244,
+        "support_mass_kl_share": 3.062248167189736e-06,
+        "mean_support_mass_change": -1.6494907476571896e-07,
+        "accuracy_target_other_mass": 3.657479191242362e-06,
+        "composed_target_other_mass": 3.8224282660080806e-06
+      },
+      "end_of_message": {
+        "tokens": 155,
+        "mean_added_kl": 0.0519115409074193,
+        "support_mass_kl_share": 0.0003076012454191579,
+        "mean_support_mass_change": -1.2227932142300046e-05,
+        "accuracy_target_other_mass": 2.8916749942542453e-06,
+        "composed_target_other_mass": 1.511960713655429e-05
+      }
+    },
+    "added_kl_quantiles": [
+      2.925466382465004e-08,
+      0.02540934391087642,
+      0.07119645631624547,
+      0.27153313985638355,
+      6.169424656997132
+    ]
+  }
+}

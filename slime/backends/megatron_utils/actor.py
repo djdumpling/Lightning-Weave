@@ -243,6 +243,7 @@ class MegatronTrainRayActor(TrainRayActor):
             "post_teacher_log_probs": torch.float32,
             "pre_teacher_log_probs": torch.float32,
             "student_ref_sampled_log_probs": torch.float32,
+            "sequence_weights": torch.float32,
         }
         for key, dtype in direct_opd_dtypes.items():
             if key in rollout_data:

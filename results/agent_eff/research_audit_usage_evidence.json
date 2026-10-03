@@ -1,0 +1,1993 @@
+{
+  "definition": "A real single sequential conversation strictly increases input message count within one user-turn prefix. Usage join uses chronological request time; a non-increasing count flags mixed attempts or mixed entries despite token-count reconciliation. This check detects some errors and cannot prove all other joins correct.",
+  "runs": {
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-clean": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-clean+decs": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-clean+decs-deepscaler": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-clean+decs-deepscaler-flipped": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_miss_param_61",
+          "messages": [
+            4,
+            1,
+            6,
+            9
+          ],
+          "completion_tokens": [
+            221,
+            3623,
+            400,
+            289
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs+e1code": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_long_context_43",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            283,
+            214
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_65",
+          "messages": [
+            5,
+            15,
+            1,
+            3,
+            5,
+            7,
+            11,
+            13,
+            15,
+            19,
+            21,
+            23
+          ],
+          "completion_tokens": [
+            192,
+            166,
+            846,
+            330,
+            151,
+            365,
+            281,
+            132,
+            184,
+            196,
+            136,
+            466
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_85",
+          "messages": [
+            6,
+            4,
+            6
+          ],
+          "completion_tokens": [
+            376,
+            290,
+            438
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_181",
+          "messages": [
+            1,
+            1
+          ],
+          "completion_tokens": [
+            322,
+            377
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs-deepscaler": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs-gate-random-multi-turn": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_miss_param_38",
+          "messages": [
+            11,
+            1,
+            3,
+            7,
+            9,
+            11,
+            13,
+            15,
+            17,
+            19,
+            21,
+            23,
+            25,
+            27,
+            29,
+            31,
+            33
+          ],
+          "completion_tokens": [
+            310,
+            934,
+            2169,
+            281,
+            545,
+            629,
+            806,
+            292,
+            319,
+            203,
+            247,
+            379,
+            254,
+            169,
+            314,
+            207,
+            220
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_90",
+          "messages": [
+            11,
+            1,
+            3,
+            7,
+            9,
+            11,
+            13,
+            15
+          ],
+          "completion_tokens": [
+            214,
+            359,
+            244,
+            240,
+            207,
+            211,
+            161,
+            341
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_111",
+          "messages": [
+            3,
+            3,
+            5
+          ],
+          "completion_tokens": [
+            262,
+            200,
+            165
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_183",
+          "messages": [
+            9,
+            5,
+            7,
+            11
+          ],
+          "completion_tokens": [
+            333,
+            768,
+            407,
+            374
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_190",
+          "messages": [
+            15,
+            9,
+            11
+          ],
+          "completion_tokens": [
+            400,
+            418,
+            376
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_miss_param_39",
+          "messages": [
+            7,
+            3,
+            5
+          ],
+          "completion_tokens": [
+            129,
+            159,
+            226
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_53",
+          "messages": [
+            5,
+            9,
+            7,
+            11,
+            13,
+            15
+          ],
+          "completion_tokens": [
+            336,
+            154,
+            264,
+            173,
+            202,
+            367
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_55",
+          "messages": [
+            5,
+            1,
+            3,
+            5,
+            9,
+            11,
+            13,
+            15
+          ],
+          "completion_tokens": [
+            218,
+            1095,
+            466,
+            204,
+            125,
+            165,
+            132,
+            164
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_57",
+          "messages": [
+            9,
+            3,
+            7,
+            9
+          ],
+          "completion_tokens": [
+            176,
+            1673,
+            195,
+            205
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_69",
+          "messages": [
+            3,
+            1,
+            3,
+            7,
+            9,
+            11
+          ],
+          "completion_tokens": [
+            223,
+            1145,
+            245,
+            220,
+            208,
+            283
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_75",
+          "messages": [
+            8,
+            1,
+            3,
+            5,
+            7,
+            9,
+            13
+          ],
+          "completion_tokens": [
+            166,
+            495,
+            236,
+            279,
+            155,
+            152,
+            240
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_104",
+          "messages": [
+            3,
+            1,
+            5
+          ],
+          "completion_tokens": [
+            209,
+            305,
+            535
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_109",
+          "messages": [
+            11,
+            11
+          ],
+          "completion_tokens": [
+            322,
+            276
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_137",
+          "messages": [
+            3,
+            1,
+            5
+          ],
+          "completion_tokens": [
+            145,
+            564,
+            310
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_138",
+          "messages": [
+            11,
+            9
+          ],
+          "completion_tokens": [
+            347,
+            514
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_143",
+          "messages": [
+            5,
+            1,
+            3
+          ],
+          "completion_tokens": [
+            213,
+            183,
+            137
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs-protect-first": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_base_15",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            164,
+            249
+          ]
+        },
+        {
+          "id": "multi_turn_base_96",
+          "messages": [
+            1,
+            4,
+            1,
+            6
+          ],
+          "completion_tokens": [
+            352,
+            325,
+            352,
+            172
+          ]
+        },
+        {
+          "id": "multi_turn_base_110",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            170,
+            213
+          ]
+        },
+        {
+          "id": "multi_turn_base_141",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            131,
+            191
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs-protect-first.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs-protect-turn-starts": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs.concise": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_miss_param_17",
+          "messages": [
+            16,
+            13
+          ],
+          "completion_tokens": [
+            276,
+            309
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_37",
+          "messages": [
+            3,
+            1,
+            5
+          ],
+          "completion_tokens": [
+            381,
+            820,
+            254
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_66",
+          "messages": [
+            17,
+            9,
+            11,
+            15,
+            17,
+            19,
+            21
+          ],
+          "completion_tokens": [
+            159,
+            284,
+            465,
+            126,
+            254,
+            117,
+            193
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_117",
+          "messages": [
+            11,
+            9
+          ],
+          "completion_tokens": [
+            147,
+            207
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_124",
+          "messages": [
+            15,
+            15
+          ],
+          "completion_tokens": [
+            315,
+            248
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_141",
+          "messages": [
+            5,
+            3
+          ],
+          "completion_tokens": [
+            117,
+            186
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_166",
+          "messages": [
+            6,
+            1,
+            5,
+            7
+          ],
+          "completion_tokens": [
+            250,
+            1019,
+            191,
+            216
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_190",
+          "messages": [
+            11,
+            1,
+            3,
+            5,
+            7,
+            11
+          ],
+          "completion_tokens": [
+            355,
+            1242,
+            1302,
+            985,
+            459,
+            328
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs7b": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs@high": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs@low": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_base_50",
+          "messages": [
+            4,
+            1
+          ],
+          "completion_tokens": [
+            162,
+            267
+          ]
+        },
+        {
+          "id": "multi_turn_base_78",
+          "messages": [
+            1,
+            1,
+            5
+          ],
+          "completion_tokens": [
+            462,
+            333,
+            287
+          ]
+        },
+        {
+          "id": "multi_turn_base_144",
+          "messages": [
+            3,
+            1,
+            3
+          ],
+          "completion_tokens": [
+            149,
+            519,
+            178
+          ]
+        },
+        {
+          "id": "multi_turn_base_153",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            285,
+            322
+          ]
+        },
+        {
+          "id": "multi_turn_base_192",
+          "messages": [
+            4,
+            1
+          ],
+          "completion_tokens": [
+            207,
+            192
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_3",
+          "messages": [
+            5,
+            3
+          ],
+          "completion_tokens": [
+            259,
+            316
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_38",
+          "messages": [
+            3,
+            1,
+            5,
+            7,
+            9
+          ],
+          "completion_tokens": [
+            321,
+            4682,
+            227,
+            166,
+            230
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_60",
+          "messages": [
+            5,
+            1,
+            3,
+            5,
+            7,
+            11
+          ],
+          "completion_tokens": [
+            175,
+            1192,
+            286,
+            161,
+            262,
+            208
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_68",
+          "messages": [
+            9,
+            7
+          ],
+          "completion_tokens": [
+            369,
+            539
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_72",
+          "messages": [
+            3,
+            1,
+            5
+          ],
+          "completion_tokens": [
+            222,
+            701,
+            207
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_109",
+          "messages": [
+            9,
+            9
+          ],
+          "completion_tokens": [
+            254,
+            254
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_115",
+          "messages": [
+            1,
+            5,
+            3
+          ],
+          "completion_tokens": [
+            412,
+            115,
+            177
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_124",
+          "messages": [
+            17,
+            17
+          ],
+          "completion_tokens": [
+            274,
+            315
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_138",
+          "messages": [
+            15,
+            13
+          ],
+          "completion_tokens": [
+            266,
+            212
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_150",
+          "messages": [
+            5,
+            1,
+            3,
+            7
+          ],
+          "completion_tokens": [
+            213,
+            808,
+            246,
+            271
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_172",
+          "messages": [
+            7,
+            7,
+            9
+          ],
+          "completion_tokens": [
+            306,
+            462,
+            299
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_174",
+          "messages": [
+            5,
+            1,
+            4,
+            8,
+            10
+          ],
+          "completion_tokens": [
+            316,
+            1639,
+            357,
+            272,
+            408
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_177",
+          "messages": [
+            7,
+            3,
+            6
+          ],
+          "completion_tokens": [
+            361,
+            2327,
+            467
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+donor-mean": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+e1code": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_miss_param_44",
+          "messages": [
+            1,
+            1,
+            3,
+            7
+          ],
+          "completion_tokens": [
+            302,
+            302,
+            1050,
+            313
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_55",
+          "messages": [
+            7,
+            1,
+            3,
+            5,
+            7,
+            9,
+            11,
+            13
+          ],
+          "completion_tokens": [
+            290,
+            947,
+            402,
+            261,
+            286,
+            216,
+            195,
+            157
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_62",
+          "messages": [
+            5,
+            1,
+            3,
+            5,
+            7
+          ],
+          "completion_tokens": [
+            320,
+            1780,
+            305,
+            491,
+            484
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_98",
+          "messages": [
+            11,
+            7,
+            9,
+            11,
+            13,
+            15
+          ],
+          "completion_tokens": [
+            198,
+            226,
+            1065,
+            264,
+            244,
+            495
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_103",
+          "messages": [
+            5,
+            3,
+            7
+          ],
+          "completion_tokens": [
+            135,
+            235,
+            327
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_124",
+          "messages": [
+            17,
+            15
+          ],
+          "completion_tokens": [
+            320,
+            305
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_150",
+          "messages": [
+            14,
+            11,
+            15
+          ],
+          "completion_tokens": [
+            244,
+            540,
+            250
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_166",
+          "messages": [
+            8,
+            1,
+            3,
+            5
+          ],
+          "completion_tokens": [
+            259,
+            1153,
+            212,
+            194
+          ]
+        },
+        {
+          "id": "multi_turn_miss_param_194",
+          "messages": [
+            3,
+            1,
+            3,
+            7
+          ],
+          "completion_tokens": [
+            564,
+            1090,
+            260,
+            298
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+e1code.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+e1math": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+e1math+e1code": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_base_13",
+          "messages": [
+            3,
+            1,
+            5,
+            7
+          ],
+          "completion_tokens": [
+            163,
+            1339,
+            313,
+            257
+          ]
+        },
+        {
+          "id": "multi_turn_base_58",
+          "messages": [
+            4,
+            1,
+            5,
+            7
+          ],
+          "completion_tokens": [
+            170,
+            979,
+            164,
+            248
+          ]
+        },
+        {
+          "id": "multi_turn_base_70",
+          "messages": [
+            9,
+            9,
+            11
+          ],
+          "completion_tokens": [
+            288,
+            352,
+            462
+          ]
+        },
+        {
+          "id": "multi_turn_base_75",
+          "messages": [
+            4,
+            1,
+            6,
+            8,
+            10,
+            12
+          ],
+          "completion_tokens": [
+            264,
+            370,
+            260,
+            192,
+            225,
+            232
+          ]
+        },
+        {
+          "id": "multi_turn_base_83",
+          "messages": [
+            8,
+            7,
+            9,
+            11,
+            13,
+            15
+          ],
+          "completion_tokens": [
+            265,
+            167,
+            272,
+            179,
+            202,
+            193
+          ]
+        },
+        {
+          "id": "multi_turn_base_89",
+          "messages": [
+            7,
+            1,
+            3,
+            5
+          ],
+          "completion_tokens": [
+            220,
+            837,
+            176,
+            209
+          ]
+        },
+        {
+          "id": "multi_turn_base_104",
+          "messages": [
+            5,
+            1,
+            3
+          ],
+          "completion_tokens": [
+            519,
+            358,
+            181
+          ]
+        },
+        {
+          "id": "multi_turn_base_108",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            165,
+            158
+          ]
+        },
+        {
+          "id": "multi_turn_base_141",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            151,
+            183
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_41",
+          "messages": [
+            1,
+            1,
+            3,
+            5,
+            7,
+            9,
+            11,
+            13,
+            15,
+            17,
+            21
+          ],
+          "completion_tokens": [
+            897,
+            870,
+            281,
+            279,
+            253,
+            397,
+            292,
+            261,
+            722,
+            253,
+            247
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_54",
+          "messages": [
+            1,
+            1,
+            4,
+            6,
+            8,
+            10,
+            12,
+            16
+          ],
+          "completion_tokens": [
+            284,
+            284,
+            404,
+            279,
+            183,
+            367,
+            253,
+            363
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_162",
+          "messages": [
+            11,
+            9
+          ],
+          "completion_tokens": [
+            649,
+            408
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_187",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            244,
+            588
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_196",
+          "messages": [
+            9,
+            7,
+            9
+          ],
+          "completion_tokens": [
+            443,
+            810,
+            854
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_196",
+          "messages": [
+            15,
+            13
+          ],
+          "completion_tokens": [
+            385,
+            460
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+e1math+e1code.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+e1math-protected": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_base_55",
+          "messages": [
+            7,
+            1,
+            5,
+            7,
+            9,
+            11,
+            13,
+            15
+          ],
+          "completion_tokens": [
+            260,
+            477,
+            107,
+            235,
+            134,
+            156,
+            134,
+            176
+          ]
+        },
+        {
+          "id": "multi_turn_base_67",
+          "messages": [
+            11,
+            8
+          ],
+          "completion_tokens": [
+            284,
+            457
+          ]
+        },
+        {
+          "id": "multi_turn_base_76",
+          "messages": [
+            4,
+            1,
+            4
+          ],
+          "completion_tokens": [
+            176,
+            593,
+            228
+          ]
+        },
+        {
+          "id": "multi_turn_base_84",
+          "messages": [
+            1,
+            1
+          ],
+          "completion_tokens": [
+            522,
+            526
+          ]
+        },
+        {
+          "id": "multi_turn_base_90",
+          "messages": [
+            9,
+            1,
+            3,
+            5,
+            7,
+            9,
+            11,
+            15
+          ],
+          "completion_tokens": [
+            146,
+            400,
+            202,
+            183,
+            259,
+            184,
+            196,
+            224
+          ]
+        },
+        {
+          "id": "multi_turn_base_145",
+          "messages": [
+            3,
+            1,
+            5
+          ],
+          "completion_tokens": [
+            83,
+            280,
+            390
+          ]
+        },
+        {
+          "id": "multi_turn_base_148",
+          "messages": [
+            9,
+            7
+          ],
+          "completion_tokens": [
+            320,
+            185
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+e1math-protected.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+e1math.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+e1math@low": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+e1math@low.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+heuristic": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+l1max": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+nemotron": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy-scaled": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy.concise": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_base_27",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            47,
+            276
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.paper-acc-legacy": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_miss_func_40",
+          "messages": [
+            11,
+            9
+          ],
+          "completion_tokens": [
+            391,
+            1363
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_44",
+          "messages": [
+            13,
+            9,
+            11
+          ],
+          "completion_tokens": [
+            151,
+            484,
+            136
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_59",
+          "messages": [
+            1,
+            3,
+            3,
+            7
+          ],
+          "completion_tokens": [
+            344,
+            190,
+            190,
+            297
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_90",
+          "messages": [
+            6,
+            1,
+            3,
+            5,
+            9,
+            11,
+            13,
+            15
+          ],
+          "completion_tokens": [
+            243,
+            728,
+            283,
+            297,
+            223,
+            165,
+            175,
+            215
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_181",
+          "messages": [
+            7,
+            5,
+            9
+          ],
+          "completion_tokens": [
+            341,
+            810,
+            429
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_196",
+          "messages": [
+            9,
+            9,
+            11
+          ],
+          "completion_tokens": [
+            470,
+            394,
+            416
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_199",
+          "messages": [
+            13,
+            11
+          ],
+          "completion_tokens": [
+            207,
+            573
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_3",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            381,
+            295
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_90",
+          "messages": [
+            10,
+            1,
+            3,
+            6,
+            8,
+            12,
+            14
+          ],
+          "completion_tokens": [
+            190,
+            774,
+            356,
+            245,
+            183,
+            175,
+            299
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_90",
+          "messages": [
+            26,
+            23
+          ],
+          "completion_tokens": [
+            226,
+            3457
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_166",
+          "messages": [
+            5,
+            1,
+            3,
+            7
+          ],
+          "completion_tokens": [
+            220,
+            1307,
+            161,
+            435
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_183",
+          "messages": [
+            21,
+            19
+          ],
+          "completion_tokens": [
+            237,
+            204
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.paper-acc-legacy+decs": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.paper-acc-legacy+decs.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.paper-acc-legacy.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.paper-half-acc-legacy": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_base_6",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            171,
+            816
+          ]
+        },
+        {
+          "id": "multi_turn_base_36",
+          "messages": [
+            3,
+            1,
+            3,
+            5
+          ],
+          "completion_tokens": [
+            139,
+            4152,
+            260,
+            146
+          ]
+        },
+        {
+          "id": "multi_turn_base_89",
+          "messages": [
+            3,
+            1,
+            3,
+            5
+          ],
+          "completion_tokens": [
+            205,
+            782,
+            139,
+            148
+          ]
+        },
+        {
+          "id": "multi_turn_base_114",
+          "messages": [
+            5,
+            1,
+            3
+          ],
+          "completion_tokens": [
+            400,
+            335,
+            206
+          ]
+        },
+        {
+          "id": "multi_turn_base_117",
+          "messages": [
+            17,
+            15
+          ],
+          "completion_tokens": [
+            471,
+            196
+          ]
+        },
+        {
+          "id": "multi_turn_base_137",
+          "messages": [
+            9,
+            9
+          ],
+          "completion_tokens": [
+            224,
+            218
+          ]
+        },
+        {
+          "id": "multi_turn_base_184",
+          "messages": [
+            5,
+            1,
+            5
+          ],
+          "completion_tokens": [
+            414,
+            520,
+            338
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/ae.joint.paper-half-acc-legacy.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/base": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/opd": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/opd-cap4k": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/opd-concise": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-22b3e917da76-full/opd-nothink": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_base_40",
+          "messages": [
+            1,
+            1
+          ],
+          "completion_tokens": [
+            18,
+            18
+          ]
+        },
+        {
+          "id": "multi_turn_base_43",
+          "messages": [
+            3,
+            3
+          ],
+          "completion_tokens": [
+            18,
+            15
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_40",
+          "messages": [
+            1,
+            1
+          ],
+          "completion_tokens": [
+            18,
+            18
+          ]
+        },
+        {
+          "id": "multi_turn_miss_func_43",
+          "messages": [
+            3,
+            3
+          ],
+          "completion_tokens": [
+            18,
+            15
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-22b3e917da76-full/opd-r20": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs-gate-random-multi-turn": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_long_context_23",
+          "messages": [
+            5,
+            1,
+            3,
+            5,
+            9
+          ],
+          "completion_tokens": [
+            183,
+            586,
+            399,
+            229,
+            193
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_63",
+          "messages": [
+            3,
+            1
+          ],
+          "completion_tokens": [
+            226,
+            119
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_64",
+          "messages": [
+            5,
+            1,
+            3,
+            5,
+            7
+          ],
+          "completion_tokens": [
+            208,
+            677,
+            179,
+            268,
+            164
+          ]
+        },
+        {
+          "id": "multi_turn_long_context_69",
+          "messages": [
+            5,
+            1,
+            3,
+            7,
+            9,
+            11
+          ],
+          "completion_tokens": [
+            174,
+            1224,
+            198,
+            282,
+            260,
+            299
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs-protect-turn-starts": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-3905dd869e16-full/base": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs-gate-random-multi-turn": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs-gate-random-multi-turn.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": [
+        {
+          "id": "multi_turn_miss_param_38",
+          "messages": [
+            13,
+            1,
+            3,
+            5,
+            7,
+            9,
+            11,
+            13,
+            15,
+            17,
+            21,
+            23,
+            25,
+            27,
+            29
+          ],
+          "completion_tokens": [
+            260,
+            2289,
+            1025,
+            574,
+            398,
+            1214,
+            625,
+            734,
+            418,
+            283,
+            1419,
+            619,
+            642,
+            411,
+            254
+          ]
+        }
+      ]
+    },
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs-protect-turn-starts": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs-protect-turn-starts.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy.s5678": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    },
+    "bfcl-v3-a9dc3055c864-full/base": {
+      "multi_turn_entries": 800,
+      "reconciled": 800,
+      "impossible_assigned_turns": []
+    }
+  },
+  "runs_checked": 66,
+  "runs_with_impossible_lineage": 16,
+  "impossible_assigned_turns": 111
+}

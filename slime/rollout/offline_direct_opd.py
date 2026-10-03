@@ -44,8 +44,22 @@ DIRECT_OPD_SEALED_PAYLOAD_FIELDS = frozenset(
 )
 
 
+# Optional per-response fitting weight for the ``sequence_weighted`` loss (data_curation/decision_projection.py).
+SEQUENCE_WEIGHT_FIELD = "sequence_weight"
+
+
 class OfflineDirectOPDDataError(ValueError):
     """Raised when an offline Direct-OPD row violates the sealed schema."""
+
+
+def _validate_sequence_weight(value: Any) -> float:
+    try:
+        weight = float(value)
+    except (TypeError, ValueError) as exc:
+        raise OfflineDirectOPDDataError(f"{SEQUENCE_WEIGHT_FIELD} must be a number, got {value!r}") from exc
+    if not math.isfinite(weight) or weight < 0:
+        raise OfflineDirectOPDDataError(f"{SEQUENCE_WEIGHT_FIELD} must be finite and non-negative, got {weight}")
+    return weight
 
 
 def file_sha256(path: str | Path) -> str:
@@ -513,6 +527,9 @@ def validate_offline_direct_opd_metadata(
             raise OfflineDirectOPDDataError(f"{field} contains a positive log-probability")
         normalized[field] = values
 
+    if metadata.get(SEQUENCE_WEIGHT_FIELD) is not None:
+        normalized[SEQUENCE_WEIGHT_FIELD] = _validate_sequence_weight(metadata[SEQUENCE_WEIGHT_FIELD])
+
     if require_provenance:
         for field in (
             "sample_id",
@@ -542,6 +559,8 @@ def attach_offline_direct_opd_fields(sample: Sample, *, expected_top_k: int | No
     for field in DIRECT_OPD_SAMPLE_FIELDS:
         setattr(sample, field, normalized[field])
     sample.rollout_log_probs = normalized["behavior_sampled_log_probs"]
+    if normalized.get(SEQUENCE_WEIGHT_FIELD) is not None:
+        sample.sequence_weights = [normalized[SEQUENCE_WEIGHT_FIELD]] * len(normalized["response_tokens"])
 
 
 def _validate_trusted_sealed_metadata_shape(
@@ -699,6 +718,12 @@ def hydrate_offline_direct_opd_sample(
         behavior_sampled_log_probs,
         dtype=torch.float32,
     )
+    if normalized.get(SEQUENCE_WEIGHT_FIELD) is not None:
+        sample.sequence_weights = torch.full(
+            (len(response_tokens),),
+            _validate_sequence_weight(normalized[SEQUENCE_WEIGHT_FIELD]),
+            dtype=torch.float32,
+        )
     # The large sealed arrays now live in explicit top-level Sample fields.
     # Keeping the original object arrays in metadata would make Ray serialize
     # the entire payload a second time.  Preserve flags and provenance only.
@@ -975,6 +1000,39 @@ def offline_direct_opd_tilted_target_terms(
         "behavior_topk_abs_diff": (
             current_candidate_log_probs.detach() - behavior_candidate_log_probs
         ).abs().mean(dim=-1),
+    }
+
+
+def offline_direct_opd_sequence_weighted_terms(
+    sampled_log_probs: torch.Tensor,
+    sequence_weights: torch.Tensor,
+    *,
+    response_tokens: int | torch.Tensor,
+) -> dict[str, torch.Tensor]:
+    """Per-token terms of weighted, summed log-likelihood over complete cached responses.
+
+    Every response y_i, sampled from the student itself, carries one weight w_i, repeated on each of its tokens.
+    The mode uses the per-sample reducer (no ``--calculate-per-token-loss``), which averages each response's terms over
+    its ``response_tokens`` loss-masked tokens; the trainer then divides by the fixed global batch size. Scaling the
+    loss term by ``response_tokens`` turns that mean back into a sum, so a step fits
+    sum_i w_i log p(y_i) / global_batch_size. Normalizing by the batch's token count instead would weight a
+    response by the inverse length of the batch it lands in. The fixed point is each prompt's weighted empirical
+    distribution over its responses; with uniform weights this is plain self-distillation on the cached samples.
+    """
+
+    if sampled_log_probs.ndim != 1:
+        raise ValueError(f"sampled_log_probs must have shape [T], got {sampled_log_probs.shape}")
+    if sequence_weights.shape != sampled_log_probs.shape:
+        raise ValueError(
+            f"sequence_weights has shape {sequence_weights.shape}, expected {sampled_log_probs.shape}"
+        )
+    weights = sequence_weights.float().detach()
+    log_probs = sampled_log_probs.float()
+    length = torch.as_tensor(response_tokens, dtype=torch.float32, device=log_probs.device).detach()
+    return {
+        "sequence_weighted_loss": -(weights * length * log_probs),
+        "sampled_log_prob": log_probs.detach(),
+        "sequence_weight": weights,
     }
 
 
@@ -1346,7 +1404,14 @@ def megatron_loss(
     from slime.backends.megatron_utils.loss import get_responses
     from slime.utils.ppo_utils import calculate_log_probs_and_entropy
 
-    if not args.calculate_per_token_loss:
+    loss_mode = getattr(args, "offline_direct_opd_loss_mode", "policy_gradient")
+    if loss_mode == "sequence_weighted":
+        if args.calculate_per_token_loss:
+            raise ValueError(
+                "sequence_weighted Offline Direct-OPD normalizes by the global batch size; "
+                "omit --calculate-per-token-loss"
+            )
+    elif not args.calculate_per_token_loss:
         raise ValueError("Offline Direct-OPD requires --calculate-per-token-loss for token-mean reduction")
 
     required_fields = DIRECT_OPD_SAMPLE_FIELDS
@@ -1366,8 +1431,25 @@ def megatron_loss(
     token_terms: dict[str, list[torch.Tensor]] = {}
     tp_group = mpu.get_tensor_model_parallel_group()
 
-    loss_mode = getattr(args, "offline_direct_opd_loss_mode", "policy_gradient")
+    if loss_mode == "sequence_weighted" and batch.get("sequence_weights") is None:
+        raise KeyError(f"sequence_weighted Offline Direct-OPD needs metadata.{SEQUENCE_WEIGHT_FIELD} on every row")
     for sample_index, (logits_chunk, sampled_tokens) in enumerate(response_chunks):
+        if loss_mode == "sequence_weighted":
+            sampled_log_probs, _ = calculate_log_probs_and_entropy(
+                logits_chunk,
+                sampled_tokens,
+                tp_group,
+                with_entropy=False,
+                chunk_size=args.log_probs_chunk_size,
+            )
+            terms = offline_direct_opd_sequence_weighted_terms(
+                sampled_log_probs.squeeze(-1),
+                batch["sequence_weights"][sample_index].to(logits_chunk.device),
+                response_tokens=batch["loss_masks"][sample_index].sum().clamp_min(1),
+            )
+            for name, value in terms.items():
+                token_terms.setdefault(name, []).append(value)
+            continue
         candidate_ids = batch["candidate_ids"][sample_index].to(device=logits_chunk.device, dtype=torch.long)
         if candidate_ids.shape[0] != logits_chunk.shape[0]:
             raise ValueError(
@@ -1416,6 +1498,11 @@ def megatron_loss(
             token_terms.setdefault(name, []).append(value)
 
     reduced = {name: sum_of_sample_mean(torch.cat(values, dim=0)) for name, values in token_terms.items()}
+    if loss_mode == "sequence_weighted":
+        loss = reduced["sequence_weighted_loss"]
+        log = {"loss": loss.detach()}
+        log.update({name: reduced[name].detach() for name in ("sequence_weighted_loss", "sampled_log_prob", "sequence_weight")})
+        return loss, log
     alpha = float(args.offline_direct_opd_kl_coef)
     if loss_mode == "policy_gradient":
         loss = reduced["direct_loss"] + alpha * reduced["kl_loss"]

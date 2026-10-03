@@ -2,7 +2,7 @@
 # requires-python = "==3.12.*"
 # dependencies = ["modal==1.5.5"]
 # ///
-"""Score donors, analyze shifts, and compose/train/export agent-efficiency students on Modal.
+"""Score donors and compose/train/export agent-efficiency students on Modal.
 
 See docs/agent_efficiency_synthesis.md for commands and the experiment protocol.
 Long-running stages execute server-side and reuse completed artifacts.
@@ -30,7 +30,6 @@ else:
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from configs.agent_eff import config as agent_eff  # noqa: E402
-from configs.bfcl_eval.config import MODAL_RESULTS_VOLUME as BFCL_RESULTS_VOLUME  # noqa: E402
 
 from configs.agent_eff.config import (  # noqa: E402
     AGENT_ACC,
@@ -44,22 +43,18 @@ from configs.agent_eff.config import (  # noqa: E402
     MODAL_CHECKPOINT_VOLUME,
     MODAL_DATA_VOLUME,
     MODAL_MODEL_VOLUME,
-    PRECISION_CHECK,
-    PROBE_ROOT,
     PROMPT_DATA,
     PROVENANCE_FILE,
     RECIPE,
     REMOTE_MODEL_ROOT,
     REMOTE_REPO,
     ROLLOUT_DIR,
-    ROLLOUT_IMAGE,
     RUNTIME_IMAGE,
     STUDENT_MODEL,
     STUDENT_REVISION,
     STUDENT_TOKENIZER_JSON,
     SYNTHETIC_ROOT,
     TURN_POSITION_ROOT,
-    geometry_spec,
     variant_sources,
     variant_specs,
 )
@@ -81,15 +76,6 @@ cpu_image = (
         extra_index_url="https://download.pytorch.org/whl/cpu",
     )
     .env({"HF_HOME": REMOTE_MODEL_ROOT, "PYTHONPATH": REMOTE_REPO})
-    .add_local_dir(str(PROJECT_ROOT), remote_path=REMOTE_REPO, copy=True)
-)
-
-rollout_image = (
-    modal.Image.from_registry(ROLLOUT_IMAGE)
-    .entrypoint([])
-    .run_commands("ln -sf /usr/bin/python3 /usr/local/bin/python")
-    .uv_pip_install("pyarrow==20.0.0")
-    .env({"HF_HOME": REMOTE_MODEL_ROOT, "PYTHONPATH": REMOTE_REPO, "VLLM_WORKER_MULTIPROC_METHOD": "spawn"})
     .add_local_dir(str(PROJECT_ROOT), remote_path=REMOTE_REPO, copy=True)
 )
 
@@ -267,88 +253,11 @@ def score_chain(names: list[str], workers: int) -> dict:
 
 
 @app.function(image=cpu_image, cpu=2, memory=4_096, timeout=86_400)
-def onboard_chain(names: list[str], workers: int, tag: str) -> str:
-    """Server-side download -> prepare -> score -> verify for new donors, then geometry with the core."""
+def onboard_chain(names: list[str], workers: int) -> dict:
+    """Server-side download -> prepare -> score -> verify for new donors."""
     download.remote(names)
     list(prepare.map(names))  # each audit is written next to the donor's scores
-    print(json.dumps(score_chain.remote(names, workers), indent=2), flush=True)
-    core = [name for name, item in DONORS.items() if item.core]
-    return analyze.remote(tag, core + [name for name in names if name not in core])
-
-
-def precision_root(name: str) -> Path:
-    return Path(DONORS[name].directory) / "precision"
-
-
-# float32 needs room: a 14B model's weights alone take 59 GB, so the re-score runs on an H200.
-@app.function(image=runtime_image, gpu="H200", cpu=8, memory=131_072, timeout=14_400, volumes=DATA_AND_MODELS)
-def precision_score(name: str) -> dict:
-    """Re-score the first rows of the first cache shard with other numerics (PRECISION_CHECK), post then pre.
-
-    The weights are rounded to bfloat16 exactly as in the main run, then computed in float32 with SDPA attention,
-    so the two scores differ only in arithmetic. Everything else matches ``score_donor_shard``: the asset lock,
-    aliases, per-candidate validity, and chunk size. Finished stages are skipped, so a restarted call resumes.
-    """
-    import pyarrow.parquet as pq
-
-    from data_curation.shift_geometry import shard_names
-
-    data_volume.reload()
-    model_volume.reload()
-    donor = DONORS[name]
-    directory = Path(donor.directory)
-    root = precision_root(name)
-    require_paths([directory / "assets.json", directory / "aliases.json", donor.pre.path, donor.post.path])
-    shard = shard_names(Path(BASE_CACHE))[0]
-    subset = root / "input" / shard
-    if not subset.exists():
-        subset.parent.mkdir(parents=True, exist_ok=True)
-        partial = subset.with_name(subset.name + ".partial")
-        pq.write_table(pq.read_table(Path(ROLLOUT_DIR) / shard).slice(0, PRECISION_CHECK["rows"]), partial)
-        partial.rename(subset)
-        data_volume.commit()
-    stages = {
-        "post": (donor.post, "post_teacher_log_probs", root / "input"),
-        "pre": (donor.pre, "pre_teacher_log_probs", root / "post"),
-    }
-    for stage, (model, field, source) in stages.items():
-        output = root / stage
-        output.mkdir(parents=True, exist_ok=True)
-        run(
-            [
-                "python", "data_curation/precompute_direct_opd_scores.py",
-                "--model", model.path, "--model-revision", model.revision,
-                "--asset-lock", str(directory / "assets.json"), "--score-field", field,
-                "--input", str(source), "--output-dir", str(output),
-                "--dtype", PRECISION_CHECK["weights_dtype"], "--compute-dtype", PRECISION_CHECK["compute_dtype"],
-                "--device", "cuda:0", "--row-batch-size", "1", "--chunk-size", str(RECIPE.sequence_tokens),
-                "--attn-implementation", PRECISION_CHECK["attn_implementation"],
-                "--per-candidate-validity", "--special-token-alias", str(directory / "aliases.json"),
-            ]
-        )
-        data_volume.commit()
-    return precision_compare.remote(name)
-
-
-@app.function(image=cpu_image, cpu=4, memory=16_384, timeout=3_600, volumes=DATA_AND_MODELS)
-def precision_compare(name: str) -> dict:
-    """The re-scored shift against the main scores of the same rows (``check_score_precision.py``)."""
-    data_volume.reload()
-    donor = DONORS[name]
-    directory = Path(donor.directory)
-    output = directory / "precision.json"
-    require_paths([precision_root(name) / "pre", donor.scores, directory / "untrained.json"])
-    settings = {key: PRECISION_CHECK[key] for key in ("rows", "weights_dtype", "compute_dtype", "attn_implementation")}
-    run(
-        [
-            "python", "data_curation/check_score_precision.py",
-            "--base", BASE_CACHE, "--main", donor.scores, "--check", str(precision_root(name) / "pre"),
-            "--name", name, "--untrained", str(directory / "untrained.json"),
-            "--settings", json.dumps(settings, sort_keys=True), "--output", str(output),
-        ]
-    )
-    data_volume.commit()
-    return json.loads(output.read_text(encoding="utf-8"))
+    return score_chain.remote(names, workers)
 
 
 def ensure_turn_positions() -> Path:
@@ -384,114 +293,6 @@ def prompt_weight_arguments(names) -> list[str]:
     paths = {name: prompt_weight_path(name) for name in sorted(set(names))}
     require_paths(paths.values())
     return [argument for name, path in paths.items() for argument in ("--prompt-weights", f"{name}={path}")]
-
-
-def prompt_metadata() -> str:
-    """{prompt_id: {conversation, target}} from the canonical LoopTool rows, for analysis slices."""
-    from data_curation.looptool import cached_prompt_rows
-
-    output = Path(ANALYSIS_ROOT) / "prompt_metadata.json"
-    rows = cached_prompt_rows(PROMPT_DATA, CANONICAL_DATA)
-    metadata = {
-        p: {"conversation": row["metadata"]["conversation_kind"], "target": row["metadata"]["target_kind"]}
-        for p, row in rows.items()
-    }
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(metadata) + "\n")
-    return str(output)
-
-
-@app.function(image=cpu_image, cpu=16, memory=131_072, timeout=43_200, volumes=DATA_AND_MODELS)
-def analyze(tag: str, names: list[str], max_rows: int = 0) -> str:
-    data_volume.reload()
-    model_volume.reload()
-    donors = verified_donors(names)
-    spec_path = Path(ANALYSIS_ROOT) / f"{tag}.spec.json"
-    spec_path.parent.mkdir(parents=True, exist_ok=True)
-    spec_path.write_text(json.dumps(geometry_spec(list(donors)), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    output = Path(ANALYSIS_ROOT) / f"{tag}.json"
-    command = [
-        "python", "data_curation/shift_geometry.py",
-        "--base", BASE_CACHE, "--spec", str(spec_path), "--tokenizer-json", STUDENT_TOKENIZER_JSON,
-        "--untrained", merged_untrained([AGENT_ACC.name, *donors]), "--prompt-metadata", prompt_metadata(),
-        "--output", str(output), *donor_arguments(donors),
-    ]
-    if max_rows:
-        command += ["--max-rows", str(max_rows)]
-    run(command)
-    data_volume.commit()
-    return str(output)
-
-
-@app.function(image=cpu_image, cpu=8, memory=65_536, timeout=21_600, volumes=DATA_AND_MODELS)
-def probe_select(tag: str) -> str:
-    data_volume.reload()
-    model_volume.reload()
-    states = Path(PROBE_ROOT) / tag / "states.parquet"
-    if not states.exists():
-        states.parent.mkdir(parents=True, exist_ok=True)
-        run(
-            [
-                "python", "data_curation/mc_advantage_probes.py", "select",
-                "--base", BASE_CACHE, "--tokenizer-json", STUDENT_TOKENIZER_JSON, "--output", str(states),
-            ]
-        )
-        data_volume.commit()
-    return str(states)
-
-
-@app.function(image=rollout_image, gpu="H100", cpu=8, memory=65_536, timeout=43_200, volumes=DATA_AND_MODELS)
-def probe_rollout_shard(tag: str, rank: int, world_size: int) -> str:
-    data_volume.reload()
-    model_volume.reload()
-    root = Path(PROBE_ROOT) / tag
-    output = root / f"records-r{rank:03d}-of-{world_size:03d}.parquet"
-    if output.exists():
-        return f"rank {rank}: existing"
-    run(
-        [
-            "python", "data_curation/mc_advantage_probes.py", "rollout",
-            "--states", str(root / "states.parquet"), "--prompts", PROMPT_DATA, "--canonical", CANONICAL_DATA,
-            "--model", agent_eff.Model(STUDENT_MODEL, STUDENT_REVISION).path, "--output", str(output),
-            "--max-response-tokens", str(RECIPE.max_response_tokens),
-            "--max-model-len", str(RECIPE.sequence_tokens + 8),
-            "--rank", str(rank), "--world-size", str(world_size),
-        ]
-    )
-    data_volume.commit()
-    return f"rank {rank}: complete"
-
-
-@app.function(image=cpu_image, cpu=8, memory=65_536, timeout=21_600, volumes=DATA_AND_MODELS)
-def probe_evaluate(tag: str, names: list[str], world_size: int) -> str:
-    data_volume.reload()
-    model_volume.reload()
-    donors = verified_donors(names)
-    root = Path(PROBE_ROOT) / tag
-    records = [root / f"records-r{rank:03d}-of-{world_size:03d}.parquet" for rank in range(world_size)]
-    require_paths(records)
-    spec_path = root / "spec.json"
-    spec_path.write_text(json.dumps(geometry_spec(list(donors)), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    run(
-        [
-            "python", "data_curation/mc_advantage_probes.py", "evaluate",
-            "--states", str(root / "states.parquet"), "--records", *map(str, records),
-            "--base", BASE_CACHE, "--spec", str(spec_path),
-            "--untrained", merged_untrained([AGENT_ACC.name, *donors]),
-            "--output", str(root / "report.json"), *donor_arguments(donors),
-        ]
-    )
-    data_volume.commit()
-    return str(root / "report.json")
-
-
-@app.function(image=cpu_image, cpu=2, memory=4_096, timeout=86_400)
-def probe_chain(tag: str, names: list[str], workers: int) -> str:
-    """Server-side select -> rollouts -> evaluate; finished rollout shards are reused."""
-    probe_select.remote(tag)
-    for result in probe_rollout_shard.starmap([(tag, rank, workers) for rank in range(workers)], order_outputs=False):
-        print(result, flush=True)
-    return probe_evaluate.remote(tag, names, workers)
 
 
 @app.function(image=cpu_image, cpu=8, memory=65_536, timeout=21_600, volumes=DATA_AND_MODELS)
@@ -530,30 +331,6 @@ def compose(variant: str) -> dict:
     data_volume.commit()
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
     return {"path": str(output), "calibration": manifest["post_teacher_model"]["calibration"]}
-
-
-@app.function(image=cpu_image, cpu=16, memory=131_072, timeout=21_600, volumes=DATA_AND_MODELS)
-def review(variants: list[str], tag: str) -> str:
-    """Geometry of the composed targets themselves: how each arm moves the student's forks."""
-    data_volume.reload()
-    model_volume.reload()
-    targets = {variant: str(Path(SYNTHETIC_ROOT) / variant) for variant in variants}
-    require_paths([Path(path) / "manifest.json" for path in targets.values()])
-    spec = {"directions": {v: {"terms": [{"source": v, "coef": 1.0}], "keep_untrained": True} for v in variants}}
-    spec_path = Path(ANALYSIS_ROOT) / f"{tag}.spec.json"
-    spec_path.parent.mkdir(parents=True, exist_ok=True)
-    spec_path.write_text(json.dumps(spec, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    output = Path(ANALYSIS_ROOT) / f"{tag}.json"
-    run(
-        [
-            "python", "data_curation/shift_geometry.py",
-            "--base", BASE_CACHE, "--spec", str(spec_path), "--tokenizer-json", STUDENT_TOKENIZER_JSON,
-            "--prompt-metadata", prompt_metadata(), "--output", str(output),
-            *donor_arguments(targets),
-        ]
-    )
-    data_volume.commit()
-    return str(output)
 
 
 @app.function(
@@ -656,17 +433,9 @@ def train(variant: str, seed: int = RECIPE.training_seed) -> str:
 @app.function(image=runtime_image, cpu=16, memory=65_536, timeout=14_400, volumes=ALL_VOLUMES)
 def export(variant: str, seed: int = RECIPE.training_seed) -> str:
     """Export the completed final iteration and record its provenance next to the weights."""
-    return export_checkpoint(training_root(variant, seed))
-
-
-def export_checkpoint(root: Path) -> str:
-    """Convert ``root``'s final iteration to Hugging Face format at ``root/hf``; the provenance file is written last.
-
-    Tokenizer and config files come from the base student snapshot, which every student shares, so an export never
-    carries another checkpoint's provenance file before its own weights are complete.
-    """
     model_volume.reload()
     checkpoint_volume.reload()
+    root = training_root(variant, seed)
     require_paths([root / "COMPLETE.json"])
     provenance = json.loads((root / "COMPLETE.json").read_text())
     output = root / "hf"
@@ -751,421 +520,6 @@ def build_chain(variants: list[str], seeds: list[int]) -> dict:
     return report
 
 
-# --- Decision-preserving projection (docs/agent_efficiency_synthesis.md) ------------------------------------------
-# sample (GPU) -> score (GPU) -> weights and seal (CPU) -> convert the recipient, train, export (GPU). Each stage reuses
-# what an earlier attempt finished; the weights stage stops the round if the projected target cannot reach the
-# pre-registered savings.
-PROJECTION = agent_eff.projection_paths()
-
-
-def projection_recipient() -> tuple[str, str]:
-    """The recipient's exported checkpoint and an identity string for it, from its training provenance."""
-    path = PROJECTION["recipient_hf"]
-    require_paths([Path(path) / PROVENANCE_FILE])
-    record = json.loads((Path(path) / PROVENANCE_FILE).read_text(encoding="utf-8"))
-    return path, f"agent-eff/{record['variant']}/seed{record['seed']}/{record['target_revision']}"
-
-
-def projection_root(arm: str, seed: int) -> Path:
-    return Path(agent_eff.PROJECTION_CHECKPOINT_ROOT) / arm / f"seed{seed}"
-
-
-@app.function(image=rollout_image, gpu="H100", cpu=8, memory=65_536, timeout=43_200, volumes=ALL_VOLUMES)
-def projection_sample_shard(rank: int, world_size: int) -> str:
-    """One partition of the recipient's samples, with BFCL's decoder; a finished rank leaves a marker."""
-    data_volume.reload()
-    checkpoint_volume.reload()
-    recipient, revision = projection_recipient()
-    output = Path(PROJECTION["rollouts"])
-    marker = output / f"rank-{rank:05d}-of-{world_size:05d}.done"
-    if marker.exists():
-        return f"rank {rank}: existing"
-    output.mkdir(parents=True, exist_ok=True)
-    require_paths([PROMPT_DATA, agent_eff.ASSET_LOCK])
-    sampling = agent_eff.PROJECTION_SAMPLING
-    run(
-        [
-            "python", "data_curation/collect_direct_opd_rollouts.py",
-            "--model", recipient, "--model-revision", revision, "--asset-lock", agent_eff.ASSET_LOCK,
-            "--input", PROMPT_DATA, "--output-dir", str(output), "--label-key", "label", "--prompt-id-key", "prompt_id",
-            "--max-prompts", str(RECIPE.selected_prompts),
-            "--responses-per-prompt", str(sampling["responses_per_prompt"]),
-            "--max-prompt-length", str(RECIPE.max_prompt_tokens),
-            "--max-response-length", str(sampling["max_response_tokens"]),
-            "--top-k", str(RECIPE.top_k), "--temperature", str(sampling["temperature"]),
-            "--top-p", str(sampling["top_p"]), "--sampling-top-k", str(sampling["top_k"]),
-            "--seed", str(RECIPE.data_seed), "--batch-size", "64", "--tensor-parallel-size", "1",
-            "--gpu-memory-utilization", "0.90", "--dtype", "bfloat16", "--compilation-mode", "0",
-            "--cudagraph-mode", "NONE", "--max-num-seqs", "32",
-            "--shard-size", str(100 * sampling["responses_per_prompt"]),
-            "--rank", str(rank), "--world-size", str(world_size), "--enable-thinking", "--overwrite",
-        ]
-    )
-    marker.write_text(json.dumps({"recipient": recipient, "revision": revision}) + "\n", encoding="utf-8")
-    data_volume.commit()
-    return f"rank {rank}: complete"
-
-
-@app.function(
-    image=runtime_image, gpu="H100", cpu=8, memory=98_304, timeout=43_200, volumes=DATA_AND_MODELS, retries=2
-)
-def projection_score_shard(rank: int, world_size: int) -> str:
-    """Reasoning-only DOPD scores of one partition of the recipient's samples (written atomically)."""
-    data_volume.reload()
-    model_volume.reload()
-    donor = DONORS[agent_eff.PROJECTION_DONOR]
-    output = Path(PROJECTION["scores"]) / f"scores-r{rank:05d}-of-{world_size:05d}.parquet"
-    if output.exists():
-        return f"rank {rank}: existing"
-    require_paths([donor.post.path, donor.pre.path, PROJECTION["rollouts"]])
-    output.parent.mkdir(parents=True, exist_ok=True)
-    run(
-        [
-            "python", "data_curation/score_reasoning.py", "--rollouts", PROJECTION["rollouts"],
-            "--post", donor.post.path, "--post-revision", donor.post.revision,
-            "--pre", donor.pre.path, "--pre-revision", donor.pre.revision,
-            "--output", str(output), "--dtype", "float32", "--attn-implementation", "sdpa", "--device", "cuda",
-            "--rank", str(rank), "--world-size", str(world_size),
-        ]
-    )
-    data_volume.commit()
-    return f"rank {rank}: complete"
-
-
-@app.function(image=cpu_image, cpu=8, memory=65_536, timeout=21_600, volumes=ALL_VOLUMES)
-def projection_weights(world_size: int) -> dict:
-    """Diagnostics, the one α (calibrated on the projected arm), and every arm's weights; reused once written."""
-    data_volume.reload()
-    analysis = Path(PROJECTION["analysis"])
-    report, weights = analysis / "diagnostics.json", analysis / "weights.parquet"
-    if weights.exists():
-        return json.loads(report.read_text(encoding="utf-8"))
-    rollouts, scores = Path(PROJECTION["rollouts"]), Path(PROJECTION["scores"])
-    require_paths([rollouts / f"rank-{rank:05d}-of-{world_size:05d}.done" for rank in range(world_size)])
-    require_paths([scores / f"scores-r{rank:05d}-of-{world_size:05d}.parquet" for rank in range(world_size)])
-    analysis.mkdir(parents=True, exist_ok=True)
-    common = ["--rollouts", str(rollouts), "--scores", str(scores), "--eta", str(agent_eff.PROJECTION_MIXTURE_ETA)]
-    targets = [agent_eff.PROJECTION_TARGET_SAVINGS, agent_eff.PROJECTION_FALLBACK_TARGET_SAVINGS]
-    attempts = []
-    for target in targets:
-        attempt = analysis / f"diagnostics-target-{target:g}.json"
-        try:
-            run(
-                [
-                    "python", "data_curation/decision_projection.py", "diagnose", *common,
-                    "--target-savings", str(target), "--calibrate-arm", "projected", "--output", str(attempt),
-                ]
-            )
-        except subprocess.CalledProcessError:
-            attempts.append({"target": target, "diagnostics": str(attempt), "reached": False})
-            continue
-        finally:
-            data_volume.commit()  # the diagnostics are kept even when calibration fails
-        attempts.append({"target": target, "diagnostics": str(attempt), "reached": True})
-        break
-    else:
-        raise RuntimeError(f"no pre-registered target is reachable: {attempts}")
-    diagnostics = json.loads(Path(attempts[-1]["diagnostics"]).read_text(encoding="utf-8"))
-    diagnostics["target_plan"] = {"primary": targets[0], "fallback": targets[1], "attempts": attempts}
-    report.write_text(json.dumps(diagnostics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    alpha = diagnostics["calibration"]["alpha"]
-    run(["python", "data_curation/decision_projection.py", "weights", *common, "--alpha", repr(alpha),
-         "--output", str(weights)])
-    data_volume.commit()
-    return diagnostics
-
-
-@app.function(image=cpu_image, cpu=8, memory=65_536, timeout=21_600, volumes=ALL_VOLUMES)
-def projection_seal(arm: str) -> str:
-    """The arm's sealed training data: the recipient's rows, each with this arm's weight."""
-    data_volume.reload()
-    checkpoint_volume.reload()
-    output = Path(PROJECTION["targets"]) / arm
-    if (output / "manifest.json").exists():
-        return str(output)
-    recipient, revision = projection_recipient()
-    analysis = Path(PROJECTION["analysis"])
-    require_paths([analysis / "weights.parquet", agent_eff.ASSET_LOCK, PROMPT_DATA])
-    run(
-        [
-            "python", "data_curation/build_projection_target.py", "--rollouts", PROJECTION["rollouts"],
-            "--weights", str(analysis / "weights.parquet"), "--arm", arm,
-            "--recipient", recipient, "--recipient-revision", revision, "--asset-lock", agent_eff.ASSET_LOCK,
-            "--source-dataset", PROMPT_DATA, "--provenance", str(analysis / "diagnostics.json"),
-            "--output-dir", str(output),
-        ]
-    )
-    data_volume.commit()
-    return str(output)
-
-
-@app.function(image=runtime_image, gpu="H100:8", cpu=32, memory=131_072, timeout=14_400, volumes=ALL_VOLUMES)
-def projection_convert_recipient() -> str:
-    """The recipient's exported weights in Megatron format: every arm's initial checkpoint."""
-    checkpoint_volume.reload()
-    recipient, revision = projection_recipient()
-    output = Path(PROJECTION["recipient_megatron"])
-    marker = output / "modal_conversion.json"
-    if marker.exists():
-        return str(output)
-    if output.exists():
-        print(f"removing the incomplete conversion at {output}", flush=True)
-        shutil.rmtree(output)
-    environment = os.environ.copy()
-    environment.update(
-        {"STUDENT_MODEL": recipient, "OUTPUT_DIR": str(output), "MODEL_TYPE": "qwen3-4B", "NUM_GPUS": "8",
-         "MEGATRON_PATH": "/root/Megatron-LM"}
-    )
-    run(["bash", "scripts/convert_checkpoint.sh", "to-megatron"], env=environment)
-    marker.write_text(json.dumps({"recipient": recipient, "revision": revision}, sort_keys=True) + "\n")
-    checkpoint_volume.commit()
-    return str(output)
-
-
-@app.function(
-    image=runtime_image,
-    gpu="H100:8",
-    cpu=32,
-    memory=131_072,
-    timeout=86_400,
-    ephemeral_disk=1_048_576,
-    volumes=ALL_VOLUMES,
-    secrets=[modal.Secret.from_name("wandb-secret")],
-)
-def projection_train(arm: str, seed: int) -> str:
-    """Weighted, summed log-likelihood of the recipient's own samples, from the recipient (one pass).
-
-    As in ``train``, the recipe seed reads the rows in stored order and any other seed permutes them; only the final
-    checkpoint is saved, a completed run is reused only for the same sealed target, and an interrupted one restarts.
-    """
-    data_volume.reload()
-    checkpoint_volume.reload()
-    recipient, revision = projection_recipient()
-    data = Path(PROJECTION["targets"]) / arm
-    initial = Path(PROJECTION["recipient_megatron"])
-    require_paths([data / "manifest.json", initial / "modal_conversion.json"])
-    manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
-    target_revision = manifest["post_teacher_model"]["revision"]
-    plan = agent_eff.projection_training_plan(manifest["total_rows"])
-    root = projection_root(arm, seed)
-    save = root / "train"
-    if (root / "COMPLETE.json").exists():
-        done = json.loads((root / "COMPLETE.json").read_text())
-        if done["target_revision"] != target_revision:
-            raise RuntimeError(f"{root} was trained on another target; remove it to retrain")
-        return str(save)
-    if save.exists():
-        print(f"removing the incomplete attempt at {save}", flush=True)
-        shutil.rmtree(save)
-        checkpoint_volume.commit()
-    sampling = agent_eff.PROJECTION_SAMPLING
-    shuffle = seed != RECIPE.training_seed
-    order = ["--rollout-seed", str(seed), "--rollout-shuffle"] if shuffle else ["--rollout-seed", str(RECIPE.data_seed)]
-    run(
-        [
-            "python", "configs/lightning_weave/train.py",
-            "--model-type", "qwen3-4B", "--student", recipient,
-            "--data", str(data), "--manifest", str(data / "manifest.json"),
-            "--load", str(initial), "--save", str(save),
-            "--num-gpus", str(RECIPE.training_gpus), "--alpha", str(RECIPE.alpha), "--lr", str(plan["learning_rate"]),
-            "--rollout-batch-size", str(plan["rollout_batch_size"]),
-            "--global-batch-size", str(plan["global_batch_size"]),
-            "--num-rollout", str(plan["num_rollout"]), "--save-interval", str(plan["num_rollout"]),
-            "--max-tokens-per-gpu", str(RECIPE.sequence_tokens), "--top-k", str(RECIPE.top_k),
-            "--responses-per-prompt", str(sampling["responses_per_prompt"]),
-            "--max-prompt-length", str(RECIPE.max_prompt_tokens),
-            "--max-response-length", str(sampling["max_response_tokens"]),
-            "--temperature", str(sampling["temperature"]), "--top-p", str(sampling["top_p"]),
-            "--seed", str(seed), *order, "--loss-mode", "sequence_weighted",
-            "--wandb-project", "agent-eff-synthesis", "--wandb-group", f"projection-{arm}",
-        ]
-    )
-    latest = (save / "latest_checkpointed_iteration.txt").read_text().strip()
-    final = save / f"iter_{plan['final_iteration']:07d}"
-    if latest != str(plan["final_iteration"]) or not final.is_dir():
-        raise RuntimeError(f"training ended at iteration {latest}, expected {plan['final_iteration']}")
-    provenance = {
-        "variant": f"projection-{arm}",
-        "arm": arm,
-        "seed": seed,
-        "data_order": f"shuffled with seed {seed}" if shuffle else "stored",
-        "target": str(data),
-        "target_revision": target_revision,
-        "final_iteration": plan["final_iteration"],
-        "num_rollout": plan["num_rollout"],
-        "loss_mode": "sequence_weighted",
-        "recipient": {"path": recipient, "revision": revision},
-    }
-    (root / "COMPLETE.json").write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n")
-    checkpoint_volume.commit()
-    return str(save)
-
-
-@app.function(image=runtime_image, cpu=16, memory=65_536, timeout=14_400, volumes=ALL_VOLUMES)
-def projection_export(arm: str, seed: int) -> str:
-    return export_checkpoint(projection_root(arm, seed))
-
-
-@app.function(image=cpu_image, cpu=1, memory=2_048, timeout=86_400, nonpreemptible=True)
-def projection_prepare_chain(stages: list[str], workers: int) -> dict:
-    """Run the named stages in order (sample, score, weights); finished work is reused, and a failure stops the chain."""
-    report: dict = {}
-    for stage, function in (("sample", projection_sample_shard), ("score", projection_score_shard)):
-        if stage in stages:
-            report[stage] = list(function.starmap([(rank, workers) for rank in range(workers)]))
-    if "weights" in stages:
-        diagnostics = projection_weights.remote(workers)
-        report["calibration"] = diagnostics["calibration"]
-        report["targets"] = list(projection_seal.map(agent_eff.PROJECTION_ARMS))
-    return report
-
-
-@app.function(image=cpu_image, cpu=1, memory=2_048, timeout=86_400, nonpreemptible=True)
-def projection_train_chain(seeds: list[int]) -> dict:
-    """Convert the recipient once, then train and export every arm at every seed; one failure does not stop the rest."""
-    print(f"recipient converted at {projection_convert_recipient.remote()}", flush=True)
-    pairs = [(arm, seed) for arm in agent_eff.PROJECTION_ARMS for seed in seeds]
-    report = {}
-    for (arm, seed), result in zip(pairs, projection_train.starmap(pairs, return_exceptions=True), strict=True):
-        report[f"{arm} seed{seed}"] = (
-            f"train failed: {result}" if isinstance(result, BaseException) else projection_export.remote(arm, seed)
-        )
-    return report
-
-
-# Decision drift on fixed histories (evaluation/decision_drift.py): requests from one BFCL run of the recipient made
-# with --log-requests, frozen before any arm is replayed, then replayed to the recipient (twice, for the sampling
-# floor) and to every trained arm, with BFCL's serving settings and disjoint seed blocks.
-BFCL_RESULTS = "/results"
-bfcl_results_volume = modal.Volume.from_name(BFCL_RESULTS_VOLUME)
-DRIFT = agent_eff.PROJECTION_DRIFT
-
-
-@app.function(image=cpu_image, cpu=4, memory=32_768, timeout=7_200,
-              volumes={**DATA_AND_MODELS, BFCL_RESULTS: bfcl_results_volume.read_only()})
-def projection_drift_histories(logged_run: str) -> dict:
-    """Choose and freeze the histories from ``<run id>/<tag>`` of the BFCL results volume; a frozen choice is kept."""
-    data_volume.reload()
-    output = Path(PROJECTION["drift"]) / "histories.jsonl"
-    if not output.exists():
-        requests = Path(BFCL_RESULTS) / logged_run / "requests"
-        require_paths([requests])
-        run(["python", "evaluation/decision_drift.py", "histories", "--requests", str(requests),
-             "--per-kind", str(DRIFT["per_kind"]), "--output", str(output)])
-        data_volume.commit()
-    return json.loads(output.with_suffix(".frozen.json").read_text(encoding="utf-8"))
-
-
-@app.function(image=rollout_image, gpu="H100", cpu=8, memory=65_536, timeout=43_200, volumes=ALL_VOLUMES)
-def projection_drift_sample(label: str, model: str, seed: int) -> str:
-    data_volume.reload()
-    checkpoint_volume.reload()
-    drift = Path(PROJECTION["drift"])
-    output = drift / "samples" / f"{label}.jsonl"
-    if output.exists():
-        return str(output)
-    require_paths([drift / "histories.frozen.json", Path(model) / "config.json"])
-    run(["python", "evaluation/decision_drift.py", "sample", "--histories", str(drift / "histories.jsonl"),
-         "--model", model, "--output", str(output), "--responses", str(DRIFT["responses"]), "--seed", str(seed)])
-    data_volume.commit()
-    return str(output)
-
-
-@app.function(image=cpu_image, cpu=4, memory=16_384, timeout=3_600, volumes=DATA_AND_MODELS)
-def projection_drift_compare(arms: list[str]) -> dict:
-    data_volume.reload()
-    drift = Path(PROJECTION["drift"])
-    samples, output = drift / "samples", drift / "report.json"
-    run(["python", "evaluation/decision_drift.py", "compare", "--reference", str(samples / "recipient.jsonl"),
-         "--null", str(samples / "recipient-null.jsonl"),
-         *(item for arm in arms for item in ("--arm", f"{arm}={samples / f'{arm}.jsonl'}")),
-         "--histories", str(drift / "histories.jsonl"), "--output", str(output)])
-    data_volume.commit()
-    return json.loads(output.read_text(encoding="utf-8"))
-
-
-def drift_jobs(seeds: list[int]) -> list[tuple[str, str, int]]:
-    """(label, model, first seed) for every replay: the recipient twice, then each arm, in disjoint seed blocks."""
-    blocks = DRIFT["seeds"]
-    recipient = PROJECTION["recipient_hf"]
-    arms = [(f"{arm}-seed{seed}", str(projection_root(arm, seed) / "hf"), blocks["arms"])
-            for arm in agent_eff.PROJECTION_ARMS for seed in seeds]
-    return [("recipient", recipient, blocks["reference"]), ("recipient-null", recipient, blocks["null"]), *arms]
-
-
-@app.function(image=cpu_image, cpu=1, memory=2_048, timeout=86_400, nonpreemptible=True)
-def projection_drift_chain(seeds: list[int]) -> dict:
-    jobs = drift_jobs(seeds)
-    list(projection_drift_sample.starmap(jobs))
-    return projection_drift_compare.remote([label for label, _, _ in jobs[2:]])
-
-
-# The probe of the trained students on LoopTool prompts (evaluation/projection_probe.py): fresh responses from the
-# recipient (twice) and every student on training and held-out prompts, and teacher forcing of cached responses.
-PROBE = agent_eff.PROJECTION_PROBE
-
-
-@app.function(image=cpu_image, cpu=8, memory=65_536, timeout=7_200, volumes=DATA_AND_MODELS)
-def projection_probe_prompts() -> dict:
-    data_volume.reload()
-    output = Path(PROJECTION["probe"])
-    summary = output / "prompts.summary.json"
-    if not summary.exists():
-        weights = Path(PROJECTION["analysis"]) / "weights.parquet"
-        require_paths([PROJECTION["rollouts"], weights, PROBE["heldout_prompts"]])
-        run(["python", "evaluation/projection_probe.py", "prompts", "--rollouts", PROJECTION["rollouts"],
-             "--weights", str(weights), "--heldout", PROBE["heldout_prompts"],
-             "--train-prompts", str(PROBE["train_prompts"]), "--output", str(output)])
-        data_volume.commit()
-    return json.loads(summary.read_text(encoding="utf-8"))
-
-
-@app.function(image=rollout_image, gpu="H100", cpu=8, memory=65_536, timeout=21_600, volumes=ALL_VOLUMES)
-def projection_probe_sample(label: str, model: str, seed: int, teacher_force: bool) -> str:
-    data_volume.reload()
-    checkpoint_volume.reload()
-    probe = Path(PROJECTION["probe"])
-    output = probe / "samples" / f"{label}.jsonl"
-    fit = output.with_name(f"{label}.fit.jsonl")
-    require_paths([probe / "prompts.summary.json", Path(model) / "config.json"])
-    if not output.exists():  # written atomically, so an existing file is complete
-        run(["python", "evaluation/projection_probe.py", "sample", "--probe", str(probe), "--model", model,
-             "--seed", str(seed), "--output", str(output), "--responses", str(PROBE["responses"])])
-        data_volume.commit()
-    if teacher_force and not fit.exists():  # its own process, so the sampling engine's memory is released
-        run(["python", "evaluation/projection_probe.py", "fit", "--probe", str(probe), "--model", model,
-             "--output", str(fit)])
-        data_volume.commit()
-    return str(output)
-
-
-@app.function(image=cpu_image, cpu=4, memory=32_768, timeout=7_200, volumes=DATA_AND_MODELS)
-def projection_probe_compare() -> dict:
-    data_volume.reload()
-    probe = Path(PROJECTION["probe"])
-    run(["python", "evaluation/projection_probe.py", "compare", "--probe", str(probe),
-         "--samples", str(probe / "samples"), "--settings", json.dumps(PROBE), "--output", str(probe / "report.json")])
-    data_volume.commit()
-    return json.loads((probe / "report.json").read_text(encoding="utf-8"))
-
-
-def probe_jobs(seeds: list[int]) -> list[tuple[str, str, int, bool]]:
-    """(label, model, first seed, teacher force): the recipient twice in disjoint blocks, then every student."""
-    blocks = PROBE["seeds"]
-    recipient = PROJECTION["recipient_hf"]
-    students = [(f"{arm}-seed{seed}", str(projection_root(arm, seed) / "hf"), blocks["students"], True)
-                for arm in agent_eff.PROJECTION_ARMS for seed in seeds]
-    return [("recipient", recipient, blocks["reference"], True), ("recipient-null", recipient, blocks["null"], False),
-            *students]
-
-
-@app.function(image=cpu_image, cpu=1, memory=2_048, timeout=86_400, nonpreemptible=True)
-def projection_probe_chain(seeds: list[int]) -> dict:
-    print(f"probe prompts: {projection_probe_prompts.remote()}", flush=True)
-    list(projection_probe_sample.starmap(probe_jobs(seeds)))
-    return projection_probe_compare.remote()
-
-
 def score_pairs(names: list[str], workers: int) -> tuple[dict, dict]:
     """post -> pre -> verify for each pair; a failure stops only its own pair.
 
@@ -1193,13 +547,9 @@ def main(
     action: str = "plan",
     donors: str = "",
     variant: str = "",
-    tag: str = "",
     workers: int = 8,
-    max_rows: int = 0,
     seed: int = RECIPE.training_seed,
     seeds: str = "",
-    stages: str = "",
-    logged_run: str = "",
 ) -> None:
     names = [name for name in donors.split(",") if name] or [name for name, item in DONORS.items() if item.core]
     scored = [name for name in names if name != AGENT_ACC.name]
@@ -1213,23 +563,13 @@ def main(
         call = score_chain.spawn(scored, workers)
         print(f"score chain running server-side: {call.object_id}")
     elif action == "onboard":
-        call = onboard_chain.spawn(scored, workers, tag or "census")
+        call = onboard_chain.spawn(scored, workers)
         print(f"onboard chain running server-side: {call.object_id}")
-    elif action == "precision":
-        print(json.dumps(dict(zip(scored, precision_score.map(scored))), indent=2))
     elif action == "verify":
         print(json.dumps(dict(zip(scored, verify.map(scored))), indent=2))
-    elif action == "analyze":
-        print(analyze.remote(tag or "-".join(scored), scored, max_rows))
-    elif action == "probe":
-        call = probe_chain.spawn(tag or "core", scored, workers)
-        print(f"probe chain running server-side: {call.object_id}")
     elif action == "compose":
         variants = [name for name in variant.split(",") if name]
         print(json.dumps(dict(zip(variants, compose.map(variants))), indent=2))
-    elif action == "review":
-        variants = [name for name in variant.split(",") if name]
-        print(review.remote(variants, tag or "targets"))
     elif action == "train":
         for name in (item for item in variant.split(",") if item):
             print(f"{name}: training running server-side as {train.spawn(name, seed).object_id}", flush=True)
@@ -1237,35 +577,6 @@ def main(
         variants = [name for name in variant.split(",") if name]
         for result in export.starmap([(name, seed) for name in variants], order_outputs=False):
             print(result, flush=True)
-    elif action == "projection":
-        # --stages sample | score | weights (comma-separated, run in that order); then --stages train. After BFCL:
-        # --stages histories --logged-run <run id>/<tag> (the recipient's logged run), then --stages drift.
-        stage_list = [item for item in (stages or "sample").split(",") if item]
-        unknown = sorted(set(stage_list) - {"sample", "score", "weights", "convert", "train", "histories", "drift",
-                                             "probe"})
-        if unknown:
-            raise ValueError(f"unknown projection stages {unknown}")
-        seed_list = [int(item) for item in seeds.split(",") if item] or list(agent_eff.PROJECTION_SEEDS)
-        if {"convert", "train", "histories", "drift", "probe"} & set(stage_list) and len(stage_list) > 1:
-            raise ValueError("run the convert, train, histories, drift and probe stages on their own")
-        if stage_list == ["convert"]:
-            call = projection_convert_recipient.spawn()
-            print(f"recipient conversion running server-side: {call.object_id}")
-            return
-        if stage_list == ["histories"]:
-            if not logged_run:
-                raise ValueError("--stages histories needs --logged-run <run id>/<tag> of a run made with --log-requests")
-            print(json.dumps(projection_drift_histories.remote(logged_run), indent=2, sort_keys=True))
-            return
-        if stage_list == ["train"]:
-            call = projection_train_chain.spawn(seed_list)
-        elif stage_list == ["drift"]:
-            call = projection_drift_chain.spawn(seed_list)
-        elif stage_list == ["probe"]:
-            call = projection_probe_chain.spawn(seed_list)
-        else:
-            call = projection_prepare_chain.spawn(stage_list, workers)
-        print(f"projection stages {stage_list} running server-side: {call.object_id}")
     elif action == "build":
         variants = [name for name in variant.split(",") if name]
         unknown = sorted(set(variants) - set(variant_specs()))

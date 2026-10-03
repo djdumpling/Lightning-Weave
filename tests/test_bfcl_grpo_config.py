@@ -3,7 +3,6 @@ import inspect
 import json
 import sys
 import types
-from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -26,37 +25,7 @@ ADAPTER = load("bfcl_adapter", CONFIG_DIR / "bfcl_adapter.py")
 TRAIN = load("bfcl_grpo_train", CONFIG_DIR / "train.py")
 
 
-class FakeConfig:
-    def __init__(self, *args, **kwargs):
-        self.args = args
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-
-@pytest.fixture
-def fake_gym(monkeypatch):
-    module = types.ModuleType("modal_training_gym")
-
-    @dataclass
-    class ModelArchitecture:
-        rotary_base: int = 1_000_000
-
-    class Qwen3_4B(FakeConfig):
-        architecture = ModelArchitecture()
-
-    for name, value in {
-        "DatasetConfig": type("DatasetConfig", (FakeConfig,), {}),
-        "Qwen3_4B": Qwen3_4B,
-        "Qwen3_4B_Recipe": type("Qwen3_4B_Recipe", (FakeConfig,), {}),
-        "TrainConfig": type("TrainConfig", (FakeConfig,), {}),
-        "WandbConfig": type("WandbConfig", (FakeConfig,), {}),
-    }.items():
-        setattr(module, name, value)
-    monkeypatch.setitem(sys.modules, "modal_training_gym", module)
-    return module
-
-
-def test_recipe_uses_requested_model_context_and_modal_shape(fake_gym):
+def test_recipe_uses_requested_model_context_and_modal_shape(fake_training_gym):
     config = TRAIN.build_config(TRAIN.parser().parse_args([]))
     recipe = config.recipe
 
@@ -76,7 +45,7 @@ def test_recipe_uses_requested_model_context_and_modal_shape(fake_gym):
     assert recipe.metrics.modal_wandb_secret_name == "wandb-secret"
 
 
-def test_smoke_shape_and_dataset_limit(fake_gym):
+def test_smoke_shape_and_dataset_limit(fake_training_gym):
     config = TRAIN.build_config(TRAIN.parser().parse_args(["--smoke-test"]))
     assert config.recipe.num_rollout == 1
     assert config.recipe.rollout_batch_size == 4
@@ -85,7 +54,7 @@ def test_smoke_shape_and_dataset_limit(fake_gym):
     assert config.dataset.task_limit == 4
 
 
-def test_context_length_override_is_applied_consistently(fake_gym):
+def test_context_length_override_is_applied_consistently(fake_training_gym):
     args = TRAIN.parser().parse_args(["--max-model-tokens", "65536"])
     config = TRAIN.build_config(args)
     recipe = config.recipe

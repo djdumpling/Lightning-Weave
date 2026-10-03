@@ -288,7 +288,6 @@ class RolloutManager:
             "post_teacher_log_probs",
             "pre_teacher_log_probs",
             "student_ref_sampled_log_probs",
-            "sequence_weights",
         ]:
             if all(getattr(sample, key, None) is not None for sample in samples):
                 train_data[key] = [getattr(sample, key) for sample in samples]
@@ -342,7 +341,6 @@ class RolloutManager:
                 "post_teacher_log_probs",
                 "pre_teacher_log_probs",
                 "student_ref_sampled_log_probs",
-                "sequence_weights",
                 "verifiable_rewards",
             ]:
                 if key not in data:

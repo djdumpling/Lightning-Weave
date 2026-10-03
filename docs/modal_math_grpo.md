@@ -7,7 +7,7 @@ and Slime performs GRPO updates. It uses the repository's DAPO-style prompt
 wrapper and answer extraction, but does not use Lightning Weave anchors,
 cached targets, or Offline Direct-OPD.
 
-The launcher now uses Modal's Training Gym for image construction, model and
+The launcher uses Modal's Training Gym for image construction, model and
 dataset downloads, checkpoint conversion, Ray/NCCL startup, persistent
 Volumes, detached execution, status reporting, and W&B secret injection. The
 Training Gym dependency is pinned in `configs/math_grpo/train.py` to commit
@@ -202,14 +202,6 @@ For a cheap end-to-end smoke test:
 MODAL_ENVIRONMENT=alex-dev-2 bash scripts/eval_math_aime25.sh \
   --iterations 19 --no-base --max-problems 1 --samples-per-problem 1
 ```
-
-## Why this replaces the first Modal launcher
-
-The previous `modal_qwen3_4b_math_grpo.py` duplicated Training Gym's container,
-Ray, rank, checkpoint conversion, retry, and Volume logic. That made the job
-sensitive to mutually incompatible Slime, Megatron, and SGLang versions. The
-new launcher selects a pinned, tested Training Gym stack and expresses only the
-experiment configuration. No Lightning Weave training code was changed.
 
 ## References
 

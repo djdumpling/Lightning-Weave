@@ -1,28 +1,13 @@
-import importlib.util
 import random
-import sys
 from dataclasses import replace
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def load(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-CONFIG = load("tau_eval_config", ROOT / "configs/tau_bench_eval/config.py")
-HARNESS = load("tau_eval_harness", ROOT / "configs/tau_bench_eval/harness.py")
-BFCL = load("bfcl_eval_config_for_tau", ROOT / "configs/bfcl_eval/config.py")
-OPD = load("looptool_opd_config_for_tau", ROOT / "configs/looptool_opd/config.py")
+from configs.bfcl_eval import config as BFCL
+from configs.looptool_opd import config as OPD
+from configs.tau_bench_eval import config as CONFIG
+from configs.tau_bench_eval import harness as HARNESS
 
 YARN_64K = {"rope_type": "yarn", "factor": 2.0, "original_max_position_embeddings": 32_768}
 

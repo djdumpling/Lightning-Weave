@@ -34,9 +34,6 @@ def parse_args():
     parser.add_argument("--top-k", type=int, default=16)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top-p", type=float, default=1.0)
-    # Sampling truncation, separate from --top-k (the number of cached candidates per position). Unset, vLLM samples
-    # from the full nucleus, as every cache before the decision-projection round did.
-    parser.add_argument("--sampling-top-k", type=int)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.85)
@@ -163,8 +160,6 @@ def main():
         )
     }
     config.update(parallel_world_size=args.world_size, vllm_version=vllm.__version__)
-    if args.sampling_top_k is not None:  # recorded only when set, so earlier caches keep their config hashes
-        config["sampling_top_k"] = args.sampling_top_k
     common = {
         "is_offline_direct_opd": False,
         "offline_direct_opd_stage": "rollout_collected",
@@ -208,7 +203,6 @@ def main():
         max_tokens=args.max_response_length,
         logprobs=args.top_k,
         seed=args.seed,
-        **({"top_k": args.sampling_top_k} if args.sampling_top_k is not None else {}),
     )
     buffer = []
     shard_index = 0

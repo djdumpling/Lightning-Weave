@@ -69,11 +69,6 @@ def parse_args():
     parser.add_argument("--score-field", required=True, choices=tuple(SCORE_FIELDS))
     parser.add_argument("--device")
     parser.add_argument("--dtype", choices=["float32", "bfloat16", "float16"], default="float32")
-    parser.add_argument(
-        "--compute-dtype",
-        choices=["float32", "bfloat16", "float16"],
-        help="cast the model to this dtype after loading it at --dtype (e.g. bfloat16 weights computed in float32)",
-    )
     parser.add_argument("--chunk-size", type=int, default=4096)
     parser.add_argument("--row-batch-size", type=int, default=8)
     parser.add_argument("--attn-implementation")
@@ -348,11 +343,7 @@ def main():
     if args.attn_implementation:
         model_kwargs["attn_implementation"] = args.attn_implementation
     model = AutoModelForCausalLM.from_pretrained(args.model, **model_kwargs)
-    if args.compute_dtype:
-        # Weights are first rounded to --dtype, so only the arithmetic changes (each tensor is cast as it moves).
-        model.to(device=args.device, dtype=getattr(torch, args.compute_dtype))
-    else:
-        model.to(args.device)
+    model.to(args.device)
     model.eval()
 
     def score_rows(rows, first_row_index):

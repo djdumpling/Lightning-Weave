@@ -1,40 +1,11 @@
 import asyncio
-import importlib.util
 import sys
 import types
 from pathlib import Path
 
-import pytest
+from configs.math_grpo import train as MODULE
 
 ROOT = Path(__file__).resolve().parents[1]
-TRAIN_SCRIPT = ROOT / "configs/math_grpo/train.py"
-SPEC = importlib.util.spec_from_file_location("math_grpo_train", TRAIN_SCRIPT)
-MODULE = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
-sys.modules[SPEC.name] = MODULE
-SPEC.loader.exec_module(MODULE)
-
-
-class FakeConfig:
-    def __init__(self, *args, **kwargs):
-        self.args = args
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-
-@pytest.fixture
-def fake_training_gym(monkeypatch):
-    module = types.ModuleType("modal_training_gym")
-    for name in (
-        "HuggingFaceDataset",
-        "Qwen3_4B",
-        "Qwen3_4B_Recipe",
-        "TrainConfig",
-        "WandbConfig",
-    ):
-        setattr(module, name, type(name, (FakeConfig,), {}))
-    monkeypatch.setitem(sys.modules, "modal_training_gym", module)
-    return module
 
 
 def test_training_gym_config_preserves_math_recipe(fake_training_gym):
@@ -186,7 +157,7 @@ def test_smoke_test_is_small_but_parallelism_safe(fake_training_gym):
 
 
 def test_launcher_is_pinned_and_contains_no_hand_rolled_modal_stack():
-    source = TRAIN_SCRIPT.read_text(encoding="utf-8")
+    source = Path(MODULE.__file__).read_text(encoding="utf-8")
     wrapper = (ROOT / "scripts/train_math_grpo.sh").read_text(encoding="utf-8")
 
     assert MODULE.TRAINING_GYM_COMMIT in source

@@ -1,6 +1,7 @@
 # Agent-efficiency synthesis: the decision-preserving projection
 
-Pre-registration and method: docs/agent_efficiency_synthesis.md, "Decision-preserving projection". Three arms train
+Pre-registration and method: docs/agent_efficiency_synthesis.md, "Decision-preserving projection", at commit
+`6f73aa2` (the round's code was removed afterwards; `git show 6f73aa2:path`). Three arms train
 on the same samples of the recipient (acc-legacy, training seed 1234) and differ only in their weights: uniform,
 ordinary tilt, and projected tilt (the ordinary tilt with each decision's probability held fixed).
 

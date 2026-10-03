@@ -18,7 +18,7 @@ import pyarrow.parquet as pq
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from data_curation.common import canonical_hash, read_manifest, staged_directory, write_json
+from data_curation.common import read_manifest, staged_directory, write_json
 from data_curation.composition import trainable_tokens
 
 
@@ -44,6 +44,8 @@ def repeated_shard_plan(shards, *, total_rows):
 def main() -> None:
     args = parse_args()
     manifest = read_manifest(args.manifest)
+    if any(manifest[f"{role}_teacher_model"].get("model_type") == "mixture" for role in ("pre", "post")):
+        raise ValueError("mixture-teacher targets are not supported; repeat a single-teacher target")
     place = shutil.copyfile if args.copy else os.link
     output_shards = []
     total_tokens = 0
@@ -65,21 +67,6 @@ def main() -> None:
         manifest["shards"] = output_shards
         if args.student_model_path is not None:
             manifest["student_model"]["path"] = str(args.student_model_path.resolve())
-        for role in ("pre", "post"):
-            model = manifest[f"{role}_teacher_model"]
-            if model.get("model_type") == "mixture":
-                rows = manifest["total_rows"] // len(model["components"])
-                for component in model["components"]:
-                    component["rows"] = rows
-                    component["groups"] = rows // model["selection"]["group_size"]
-                model["selection"]["duplicate_trajectories"] = True
-                model["revision"] = canonical_hash(
-                    {
-                        "teacher_role": role,
-                        "components": model["components"],
-                        "selection": model["selection"],
-                    }
-                )
         write_json(manifest, temporary / "manifest.json")
     print(f"REPEATED {args.output_dir} rows={manifest['total_rows']} tokens={total_tokens}")
 

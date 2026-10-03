@@ -1,6 +1,5 @@
 """CPU-only tests for the release launcher, without loading training backends."""
 
-import importlib.util
 import json
 from pathlib import Path
 import shlex
@@ -9,13 +8,9 @@ import sys
 
 import pytest
 
+from configs.lightning_weave import train as MODULE
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location(
-    "lightning_weave_train", ROOT / "configs/lightning_weave/train.py"
-)
-MODULE = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(MODULE)
 
 
 def arguments(*extra):

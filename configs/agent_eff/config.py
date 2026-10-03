@@ -35,7 +35,6 @@ LOOPTOOL_CHECKPOINT_ROOT = looptool.REMOTE_CHECKPOINT_ROOT
 REMOTE_DATA_ROOT = looptool.REMOTE_DATA_ROOT
 REMOTE_MODEL_ROOT = looptool.REMOTE_MODEL_ROOT
 REMOTE_REPO = looptool.REMOTE_REPO
-ROLLOUT_IMAGE = looptool.ROLLOUT_IMAGE
 RUNTIME_IMAGE = looptool.RUNTIME_IMAGE
 STUDENT_MODEL = looptool.STUDENT_MODEL
 STUDENT_REVISION = looptool.STUDENT_REVISION
@@ -47,7 +46,6 @@ PROMPT_DATA = f"{REMOTE_DATA_ROOT}/prompts.parquet"
 CANONICAL_DATA = f"{REMOTE_DATA_ROOT}/curation/looptool_rl_canonical.jsonl"
 DONOR_ROOT = f"{REMOTE_DATA_ROOT}/donors"
 ANALYSIS_ROOT = f"{REMOTE_DATA_ROOT}/analysis"
-PROBE_ROOT = f"{REMOTE_DATA_ROOT}/probes"
 SYNTHETIC_ROOT = f"{REMOTE_DATA_ROOT}/synthetic"
 # Turn positions of the cached prompts and the weight files derived from them (data_curation/turn_positions.py).
 TURN_POSITION_ROOT = f"{ANALYSIS_ROOT}/turn_positions"
@@ -168,24 +166,6 @@ DONORS = {
             R1_ALIASES,
         ),
         Pair(
-            "dler",
-            "efficiency",
-            R1D_1P5B,
-            Model("nvidia/DLER-R1-1.5B-Research", "d0523143ce164e59a1161884398da4c00238d846"),
-            "math",
-            "truncation length penalty from R1-Distill-1.5B, combined with correctness learning",
-            R1_ALIASES,
-        ),
-        Pair(
-            "adaptthink",
-            "efficiency",
-            R1D_1P5B,
-            Model("THU-KEG/AdaptThink-1.5B-delta0.05", "663ced267869ec671d781c47cabf865fe9c2b2a5"),
-            "math",
-            "learns when to skip thinking, combined with correctness learning",
-            R1_ALIASES,
-        ),
-        Pair(
             "nemotron",
             "efficiency",
             NEMOTRON_V1,
@@ -195,30 +175,12 @@ DONORS = {
             R1_ALIASES,
         ),
         Pair(
-            "deepcoder",
-            "accuracy",
-            R1D_1P5B,
-            Model("agentica-org/DeepCoder-1.5B-Preview", "103033da54f104b0d0a3570547fb3721fba99962"),
-            "code",
-            "code accuracy RL from R1-Distill-1.5B (per its model card)",
-            R1_ALIASES,
-        ),
-        Pair(
             "decs7b",
             "efficiency",
             R1D_7B,
             Model("pixas/DECS_7B", "0e9d916a4b4063a2466fb9d2dcbe1a4f1e3a1f09"),
             "math",
             "DECS at 7B",
-            R1_ALIASES,
-        ),
-        Pair(
-            "skywork7b",
-            "accuracy",
-            R1D_7B,
-            Model("Skywork/Skywork-OR1-7B", "5bd323a9cdea40b9412cb2a200ee284201e930ae"),
-            "math+code",
-            "same base as DECS-7B but a different data mixture and procedure: a weak control",
             R1_ALIASES,
         ),
         Pair(
@@ -358,41 +320,8 @@ EQUALIZE_MAX_RATIO = 2.0
 # E1-Code trained for 30 steps, so the budget may need a larger multiplier than DECS's 3.1 (recorded, not gated).
 CODE_ROUND_MAX_MULTIPLIER = 50.0
 CODE_ROUND_PAIRS = ("e1code", "e1math")
-# Training seeds per arm, fixed before any result: the code arm is replicated whatever its first seed shows.
-# 5678 is the replicate seed of the DECS and protect-first arms, which these are compared with.
+# The second training seed of every replicated arm (BFCL tags end in .s5678).
 REPLICATE_SEED = 5678
-CODE_ROUND_SEEDS = {
-    "acc-legacy+e1code": (RECIPE.training_seed, REPLICATE_SEED),
-    "acc-legacy+e1math": (RECIPE.training_seed,),
-    "acc-legacy+e1math+e1code": (RECIPE.training_seed,),
-    "acc-legacy+decs+e1code": (RECIPE.training_seed,),
-}
-# Pre-training checks on each pair (set so that only a real mismatch fails; every donor so far clears them):
-# evidence and the pair's own support mass at reasoning states (from ``verify``), and whether the shift survives
-# re-scoring the same rows in float32 with another attention kernel (``precision``).
-# The act-vs-talk bound keeps a pair silent at the call-or-reply decision, as DECS is (0.008): R1-family anchors never
-# trained <tool_call>, so any log-ratio there is arbitrary (``audit_donor_tokens.py`` must flag those rows).
-PAIR_GATES = {
-    "state": "think_body",
-    "min_evidence": 0.9,
-    "min_support_median": 0.7,
-    "min_support_p10": 0.2,
-    "min_precision_correlation": 0.8,
-    "max_act_vs_talk_evidence": 0.05,
-}
-# The numerical check: this many rows of the first cache shard, re-scored with the main run's bfloat16 weights but
-# float32 arithmetic and SDPA attention, so only the numerics differ. DECS is re-scored the same way as the reference,
-# but gates nothing.
-PRECISION_CHECK = {
-    "rows": 64,
-    "weights_dtype": "bfloat16",
-    "compute_dtype": "float32",
-    "attn_implementation": "sdpa",
-    "reference_pairs": ("decs",),
-    "timeout_hours": 4.0,
-}
-# A composed target fails when its per-token KL at this quantile exceeds this multiple of the reference target's.
-TAIL_GATE = {"quantile": "99", "max_ratio": 4.0, "reference": "acc-legacy+decs"}
 
 
 def code_round_specs() -> dict[str, dict]:
@@ -417,10 +346,6 @@ PROTOCOL_STATES = ("act_vs_talk", "call_boundary")
 # acc-legacy+e1math's calibrated coefficient (sealed manifest). The protected arm keeps it fixed, so removing the push
 # at the protocol states is its only change from acc-legacy+e1math (recalibrating would strengthen the rest).
 E1MATH_MID_COEF = 7.9454246558728014
-FOLLOWUP_SEEDS = {
-    "acc-legacy+e1math-protected": (RECIPE.training_seed, REPLICATE_SEED),
-    "acc-legacy+e1math@low": (RECIPE.training_seed, REPLICATE_SEED),
-}
 
 
 def followup_specs() -> dict[str, dict]:
@@ -480,179 +405,6 @@ def turn_start_specs() -> dict[str, dict]:
     }
 
 
-NEXT_SEEDS = {variant: (RECIPE.training_seed, REPLICATE_SEED) for variant in (*paper_specs(), *turn_start_specs())}
-# BFCL decoding seeds beyond the default 0, for the turn-start arms and their references. With one decode per
-# checkpoint, the pooled multi-turn interval (about +-2.2 points) is wider than the effect under test. The
-# pre-registered pairs are in configs/agent_eff/next_comparisons.json.
-EXTRA_DECODING_SEEDS = (1, 2)
-DECODING_REPLICATES = ("acc-legacy", "acc-legacy+decs", *turn_start_specs())
-
-
-# --- Decision-preserving projection (pre-registered 2026-10-01; docs/agent_efficiency_synthesis.md) -----------------
-# The ordinary tilt q ∝ p0(z, a | h) · exp(s(z) / α) also reweights each decision a by Z(h, a) = E[exp(s / α) | h, a],
-# so it favors decisions whose reasoning is short. The projection keeps the recipient's decision frequencies and tilts
-# only the reasoning that reaches each decision: q*(z, a | h) = p0(a | h) · q(z | h, a). A decision is a response's
-# complete visible output (calls with arguments, in order, and any visible text). Every arm fits the same recipient
-# samples with weighted, summed log-likelihood; only the weights differ (data_curation/decision_projection.py):
-#   uniform 1;   ordinary N · e^{s/α} / Σ_prompt e^{s/α};   projected n_g · e^{s/α} / Σ_group e^{s/α}.
-PROJECTION_RECIPIENT = "acc-legacy"  # training seed 1234; its own samples are the empirical reference p0
-PROJECTION_ARMS = ("uniform", "ordinary", "projected")
-PROJECTION_SEEDS = (RECIPE.training_seed, REPLICATE_SEED)  # both start from the same recipient
-# The recipient is sampled with BFCL's decoder, so the reference is the policy that BFCL evaluates; training then fits
-# temperature-scaled log-probabilities (the generation-config lock requires the same temperature and top-p).
-PROJECTION_SAMPLING = {
-    "responses_per_prompt": 8,
-    "temperature": 0.6,
-    "top_p": 0.95,
-    "top_k": 20,
-    "max_response_tokens": RECIPE.max_response_tokens,
-}
-# Reasoning-only DOPD: s = log DECS(z | h) − log R1-Distill-1.5B(z | h), where z is the reasoning text with its closing
-# </think>, scored under the donors' own tokenizer after the recipient's exact prompt text. Decision tokens are not
-# scored, so s differs from the complete-response log-ratio.
-PROJECTION_DONOR = "decs"
-# One α for all arms, set once so that the projected target's implied cut in response tokens is this fraction.
-PROJECTION_TARGET_SAVINGS = 0.15
-# Plan change approved 2026-10-02, after sampling and before any donor score: the recipient's samples put the
-# projection's ceiling at 16.7% (results_3.md section 1), so if no alpha reaches 15%, the weights stage calibrates to
-# this target instead (and stops only if it too is out of reach). The change rests on the samples' structure alone.
-PROJECTION_FALLBACK_TARGET_SAVINGS = 0.10
-# Optional anchor w_η = (1 − η) · w + η, the same for every arm; it keeps each decision group's total weight n_g.
-PROJECTION_MIXTURE_ETA = 0.0
-# Decision rules, fixed before any result. Each arm is paired with the recipient at the same BFCL decoding seed.
-# "At matched savings" holds only if the two arms' realized total-token savings against the recipient (pooled point
-# estimates) differ by at most PROJECTION_SAVINGS_TOLERANCE percentage points.
-PROJECTION_NONINFERIORITY_MARGIN = 1.5  # multi-turn points against the recipient
-PROJECTION_SAVINGS_TOLERANCE = 3.0  # percentage points
-PROJECTION_RULES = {
-    **{
-        f"{arm} vs recipient": [
-            ["non_inferior", "multi_turn_accuracy", PROJECTION_NONINFERIORITY_MARGIN],
-            ["reduces", "total_tokens"],
-        ]
-        for arm in PROJECTION_ARMS
-    },
-    "projected vs ordinary": [["recovery", "multi_turn_accuracy", PROJECTION_NONINFERIORITY_MARGIN]],
-}
-PROJECTION_ROOT = f"{REMOTE_DATA_ROOT}/projection"
-PROJECTION_CHECKPOINT_ROOT = f"{CHECKPOINT_ROOT}/projection"
-ASSET_LOCK = f"{REMOTE_DATA_ROOT}/assets.json"  # the student tokenizer's record, shared by the recipient
-PROJECTION_WORKERS = RECIPE.cache_workers
-# One pass over every recipient sample at the recipe's batch sizes and learning rate: 3,200 prompts x 8 = 25,600 rows
-# in 100 batches of 256, 400 optimizer updates. (The joint arms read 12,800 rows in 200 updates; 400 updates did not
-# change the paper arms, results_2.md section 2.)
-PROJECTION_TRAINING = {
-    "passes": 1,
-    "rollout_batch_size": RECIPE.rollout_batch_size,
-    "global_batch_size": RECIPE.global_batch_size,
-    "learning_rate": RECIPE.learning_rate,
-}
-
-
-# Decision-drift replay (evaluation/decision_drift.py), with BFCL's serving settings, on histories frozen from one
-# logged recipient run at BFCL decoding seed 3 (kept apart from the accuracy comparisons at seeds 0-2). vLLM gives the
-# n samples of a request the seeds s, s + 1, ..., s + n - 1, so the recipient's reference draw, its second (null) draw
-# and the arms take disjoint blocks; the arms share one block, for paired comparisons between them.
-PROJECTION_DRIFT = {
-    "logged_decoding_seed": 3,
-    "responses": 4,
-    "per_kind": 500,
-    "seeds": {"reference": 0, "null": 1_000, "arms": 2_000},
-}
-
-
-# The probe of the trained students on LoopTool prompts (evaluation/projection_probe.py), fixed 2026-10-02 before any
-# probe result: 400 training prompts by a fixed hash and the 600 held-out prompts of the reasoning-value probe, 8
-# responses each with the collection settings; the recipient twice (disjoint seed blocks), every student once (one
-# shared block); teacher forcing of the cached training responses by the recipient and every student. Readings, each
-# with an inconclusive branch (heuristics, not proofs):
-# - realization = training-prompt savings / the arm's target-implied savings on the same 400 prompts: "substantially
-#   realized" if its lower bound >= 0.7, "weakly realized" if its upper bound <= 0.4;
-# - generalization: undefined unless training-prompt savings are shown positive; then "generalizes" if held-out savings
-#   >= 0.7 x training-prompt savings with confidence, "training-specific" if <= 0.4 x with confidence (contrasts, not a
-#   ratio of bootstrap draws);
-# - call-level decision movement (unbiased squared distance to the recipient), two flags that can both hold: detectable
-#   movement if the lower bound > 0; within the margin if the upper bound < half the ordinary target's own squared
-#   distance on the training prompts (a mechanism diagnostic, not a guarantee of preserved accuracy).
-PROJECTION_PROBE = {
-    "train_prompts": 400,
-    "heldout_prompts": f"{PROBE_ROOT}/reasoning-value/prompts.jsonl",
-    "responses": 8,
-    "seeds": {"reference": 0, "null": 1_000, "students": 2_000},
-    "thresholds": {"substantial": 0.7, "weak": 0.4},
-    "equivalence_fraction": 0.5,
-}
-
-
-def projection_paths() -> dict[str, str]:
-    return {
-        "rollouts": f"{PROJECTION_ROOT}/rollouts",
-        "scores": f"{PROJECTION_ROOT}/scores",
-        "analysis": f"{PROJECTION_ROOT}/analysis",
-        "targets": f"{PROJECTION_ROOT}/targets",
-        "drift": f"{PROJECTION_ROOT}/drift",
-        "probe": f"{PROJECTION_ROOT}/probe",
-        "recipient_hf": f"{CHECKPOINT_ROOT}/joint/{PROJECTION_RECIPIENT}/seed{RECIPE.training_seed}/hf",
-        "recipient_megatron": f"{PROJECTION_CHECKPOINT_ROOT}/recipient-megatron",
-    }
-
-
-def projection_training_plan(rows: int) -> dict:
-    """``rows`` sealed recipient samples, read once in stored order (seed 1234) or permuted (any other seed)."""
-    batch = PROJECTION_TRAINING["rollout_batch_size"]
-    if rows <= 0 or rows % batch:
-        raise ValueError(f"{rows} rows do not fill whole batches of {batch}")
-    rounds = rows // batch * PROJECTION_TRAINING["passes"]
-    return {
-        **PROJECTION_TRAINING,
-        "rows": rows,
-        "num_rollout": rounds,
-        "final_iteration": rounds - 1,
-        "optimizer_updates": rounds * batch // PROJECTION_TRAINING["global_batch_size"],
-    }
-
-
-# The new-harness BFCL run trees at decoding seeds 0, 1, 2 (results_2.md), where the recipient already has its runs.
-PROJECTION_BFCL_TREES = ("bfcl-v3-22b3e917da76-full", "bfcl-v3-a9dc3055c864-full", "bfcl-v3-3905dd869e16-full")
-
-
-def projection_comparisons() -> dict[str, dict]:
-    """``evaluation/bfcl_pooled.py`` comparisons: every pair shares its training seed (arms) and its decoding seed.
-
-    The pre-registered rules sit on "<arm> vs recipient" and "projected vs ordinary"; the comparisons with the uniform
-    arm are reported without a rule.
-    """
-    recipient = f"ae.joint.{PROJECTION_RECIPIENT}"
-
-    def tag(arm: str, seed: int) -> str:
-        return f"ae.projection.{arm}" + ("" if seed == RECIPE.training_seed else f".s{seed}")
-
-    def pairs(first, second):
-        return [[f"{tree}/{first(seed)}", f"{tree}/{second(seed)}"]
-                for seed in PROJECTION_SEEDS for tree in PROJECTION_BFCL_TREES]
-
-    comparisons = {
-        f"{arm} vs recipient": {"pairs": pairs(lambda seed, arm=arm: tag(arm, seed), lambda seed: recipient)}
-        for arm in PROJECTION_ARMS
-    }
-    for first, second in (("projected", "ordinary"), ("projected", "uniform"), ("ordinary", "uniform")):
-        comparisons[f"{first} vs {second}"] = {
-            "pairs": pairs(lambda seed, first=first: tag(first, seed), lambda seed, second=second: tag(second, seed))
-        }
-    for name, item in comparisons.items():
-        item["rules"] = PROJECTION_RULES.get(name, [])
-    return comparisons
-
-
-def projection_tags() -> list[str]:
-    """The BFCL tags of the projection students, every arm at every training seed."""
-    return [
-        f"ae.projection.{arm}" + ("" if seed == RECIPE.training_seed else f".s{seed}")
-        for arm in PROJECTION_ARMS
-        for seed in PROJECTION_SEEDS
-    ]
-
-
 def training_passes(variant: str) -> int:
     return TRAINING_PASSES.get(variant, 1)
 
@@ -685,38 +437,6 @@ def variant_sources(variant_spec: dict) -> set[str]:
     }
 
 
-def pair_gate(evidence: dict, precision: dict | None) -> dict:
-    """PAIR_GATES on one pair's ``verify`` evidence and precision report.
-
-    ``passed`` is False when any measured check fails. A precision re-score that could not run (``None``) is
-    recorded as unmeasured (``ok`` None) and holds nothing: a tooling failure is not evidence of noise.
-    """
-    state = evidence["by_state"][PAIR_GATES["state"]]
-    act = evidence["by_state"]["act_vs_talk"]["behavior_mass_evidence"]
-    checks = {
-        "evidence": (state["behavior_mass_evidence"], state["behavior_mass_evidence"] >= PAIR_GATES["min_evidence"]),
-        "support_median": (state["support_median"], state["support_median"] >= PAIR_GATES["min_support_median"]),
-        "support_p10": (state["support_p10"], state["support_p10"] >= PAIR_GATES["min_support_p10"]),
-        "act_vs_talk_evidence": (act, act <= PAIR_GATES["max_act_vs_talk_evidence"]),
-    }
-    correlation = None if precision is None else precision["fisher_correlation"]
-    checks["precision_correlation"] = (
-        correlation,
-        None if correlation is None else correlation >= PAIR_GATES["min_precision_correlation"],
-    )
-    return {
-        "passed": all(ok is not False for _, ok in checks.values()),
-        "checks": {name: {"value": value, "ok": ok} for name, (value, ok) in checks.items()},
-    }
-
-
-def tail_gate(calibration: dict, reference: dict) -> dict:
-    """TAIL_GATE: the composed target's KL tail relative to the reference target's (both ``calibration`` records)."""
-    quantile = TAIL_GATE["quantile"]
-    value, limit = calibration["kl_quantiles"][quantile], TAIL_GATE["max_ratio"] * reference["kl_quantiles"][quantile]
-    return {"passed": value <= limit, "value": value, "limit": limit, "quantile": quantile}
-
-
 def exploratory_specs() -> dict[str, dict]:
     """The two trained DECS budget-sweep arms."""
     return {
@@ -741,38 +461,6 @@ def variant_specs() -> dict[str, dict]:
     )
 
 
-GEOMETRY_DIRECTIONS = {
-    "agent_acc_legacy": {"terms": [{"source": "agent_acc", "coef": 1.0}], "keep_untrained": True},
-    "agent_acc": {"terms": [{"source": "agent_acc", "coef": 1.0}]},
-    "klear": {"terms": [{"source": "klear", "coef": 1.0}]},
-    "decs": {"terms": [{"source": "decs", "coef": 1.0}]},
-    "deepscaler": {"terms": [{"source": "deepscaler", "coef": 1.0}]},
-    "decs_minus_klear": {"terms": [{"source": "decs", "coef": 1.0}, {"source": "klear", "coef": -1.0}]},
-    "decs_minus_deepscaler": {"terms": [{"source": "decs", "coef": 1.0}, {"source": "deepscaler", "coef": -1.0}]},
-    "dler_minus_deepscaler": {"terms": [{"source": "dler", "coef": 1.0}, {"source": "deepscaler", "coef": -1.0}]},
-    "adaptthink_minus_deepscaler": {
-        "terms": [{"source": "adaptthink", "coef": 1.0}, {"source": "deepscaler", "coef": -1.0}]
-    },
-    "l1max": {"terms": [{"source": "l1max", "coef": 1.0}]},
-    "nemotron_v1_to_v2": {"terms": [{"source": "nemotron", "coef": 1.0}]},
-    "deepcoder": {"terms": [{"source": "deepcoder", "coef": 1.0}]},
-    "decs7b_minus_skywork7b": {"terms": [{"source": "decs7b", "coef": 1.0}, {"source": "skywork7b", "coef": -1.0}]},
-    "e1code": {"terms": [{"source": "e1code", "coef": 1.0}]},
-    "e1math": {"terms": [{"source": "e1math", "coef": 1.0}]},
-}
-
-
-def geometry_spec(donors: list[str]) -> dict:
-    """Directions whose every source is the agent anchor or a scored donor."""
-    available = {AGENT_ACC.name, *donors}
-    directions = {
-        name: item
-        for name, item in GEOMETRY_DIRECTIONS.items()
-        if all(term_["source"] in available for term_ in item["terms"])
-    }
-    return {"directions": directions}
-
-
 def resolved() -> dict:
     return {
         "app": MODAL_APP_NAME,
@@ -788,44 +476,16 @@ def resolved() -> dict:
         "gated_variants": sorted(gated_specs()),
         "code_round": {
             "pairs": list(CODE_ROUND_PAIRS),
-            "seeds": {variant: list(seeds) for variant, seeds in CODE_ROUND_SEEDS.items()},
             "specs": code_round_specs(),
-            "pair_gates": PAIR_GATES,
-            "precision_check": PRECISION_CHECK,
-            "tail_gate": TAIL_GATE,
             "equalize_max_ratio": EQUALIZE_MAX_RATIO,
         },
         "next": {
-            "seeds": {variant: list(seeds) for variant, seeds in NEXT_SEEDS.items()},
             "training_passes": TRAINING_PASSES,
-            "extra_decoding_seeds": list(EXTRA_DECODING_SEEDS),
-            "decoding_replicates": list(DECODING_REPLICATES),
             "specs": paper_specs() | turn_start_specs(),
         },
         "followups": {
             "protocol_states": list(PROTOCOL_STATES),
-            "seeds": {variant: list(seeds) for variant, seeds in FOLLOWUP_SEEDS.items()},
             "specs": followup_specs(),
-        },
-        "projection": {
-            "recipient": PROJECTION_RECIPIENT,
-            "arms": list(PROJECTION_ARMS),
-            "seeds": list(PROJECTION_SEEDS),
-            "sampling": PROJECTION_SAMPLING,
-            "donor": PROJECTION_DONOR,
-            "target_savings": PROJECTION_TARGET_SAVINGS,
-            "fallback_target_savings": PROJECTION_FALLBACK_TARGET_SAVINGS,
-            "mixture_eta": PROJECTION_MIXTURE_ETA,
-            "noninferiority_margin": PROJECTION_NONINFERIORITY_MARGIN,
-            "savings_tolerance": PROJECTION_SAVINGS_TOLERANCE,
-            "rules": PROJECTION_RULES,
-            "paths": projection_paths(),
-            "training": projection_training_plan(
-                RECIPE.selected_prompts * PROJECTION_SAMPLING["responses_per_prompt"]
-            ),
-            "bfcl_tags": projection_tags(),
-            "drift": PROJECTION_DRIFT,
-            "probe": PROJECTION_PROBE,
         },
         "exploratory_variants": sorted(exploratory_specs()),
         "training": {
@@ -839,7 +499,7 @@ def resolved() -> dict:
             "initial_checkpoint": INITIAL_MEGATRON,
             "checkpoint_root": CHECKPOINT_ROOT,
         },
-        "images": {"runtime": RUNTIME_IMAGE, "rollout": ROLLOUT_IMAGE},
+        "images": {"runtime": RUNTIME_IMAGE},
         "repo": REMOTE_REPO,
     }
 

@@ -148,13 +148,7 @@ def write_recipe_lock() -> None:
     path.write_text(json.dumps(expected, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-@app.function(
-    image=cpu_image,
-    cpu=4,
-    memory=8_192,
-    timeout=21_600,
-    volumes={REMOTE_MODEL_ROOT: model_volume},
-)
+@app.function(image=cpu_image, cpu=4, memory=8_192, timeout=21_600, volumes={REMOTE_MODEL_ROOT: model_volume})
 def download_models(full: bool = True) -> dict[str, str]:
     """Download immutable snapshots, or only CPU-stage tokenizer/config files."""
 
@@ -191,13 +185,7 @@ def download_models(full: bool = True) -> dict[str, str]:
     return resolved
 
 
-@app.function(
-    image=cpu_image,
-    cpu=8,
-    memory=32_768,
-    timeout=21_600,
-    volumes=DATA_AND_MODELS,
-)
+@app.function(image=cpu_image, cpu=8, memory=32_768, timeout=21_600, volumes=DATA_AND_MODELS)
 def prepare_dataset() -> dict[str, object]:
     """Run canonical curation, render with the student template, and select prompts."""
 
@@ -207,16 +195,8 @@ def prepare_dataset() -> dict[str, object]:
     if not Path(CANONICAL_DATA).exists():
         run(
             [
-                "python",
-                "data_curation/prepare_looptool_rl.py",
-                "--output-dir",
-                CURATION_DIR,
-                "--max-prompt-tokens",
-                str(RECIPE.max_prompt_tokens),
-                "--bfcl-audit",
-                "on",
-                "--workers",
-                "8",
+                "python", "data_curation/prepare_looptool_rl.py", "--output-dir", CURATION_DIR,
+                "--max-prompt-tokens", str(RECIPE.max_prompt_tokens), "--bfcl-audit", "on", "--workers", "8",
             ]
         )
     if not Path(PROMPT_DATA).exists() or not Path(PROMPT_SUMMARY).exists():
@@ -224,26 +204,12 @@ def prepare_dataset() -> dict[str, object]:
             raise RuntimeError("only one prompt artifact exists; use a new versioned REMOTE_DATA_ROOT")
         run(
             [
-                "python",
-                "data_curation/prepare_direct_opd_looptool.py",
-                "--input",
-                CANONICAL_DATA,
-                "--output",
-                PROMPT_DATA,
-                "--summary",
-                PROMPT_SUMMARY,
-                "--tokenizer",
-                snapshot_path(STUDENT_MODEL, STUDENT_REVISION),
-                "--tokenizer-revision",
-                STUDENT_REVISION,
-                "--max-prompt-length",
-                str(RECIPE.max_prompt_tokens),
-                "--num-prompts",
-                str(RECIPE.selected_prompts),
-                "--selection-seed",
-                str(RECIPE.data_seed),
-                "--expected-input-rows",
-                str(EXPECTED_CANONICAL_ROWS),
+                "python", "data_curation/prepare_direct_opd_looptool.py",
+                "--input", CANONICAL_DATA, "--output", PROMPT_DATA, "--summary", PROMPT_SUMMARY,
+                "--tokenizer", snapshot_path(STUDENT_MODEL, STUDENT_REVISION),
+                "--tokenizer-revision", STUDENT_REVISION,
+                "--max-prompt-length", str(RECIPE.max_prompt_tokens), "--num-prompts", str(RECIPE.selected_prompts),
+                "--selection-seed", str(RECIPE.data_seed), "--expected-input-rows", str(EXPECTED_CANONICAL_ROWS),
             ]
         )
     write_recipe_lock()
@@ -262,9 +228,7 @@ def prepare_asset_lock() -> str:
     model_volume.reload()
     require_paths(
         [
-            PROMPT_DATA,
-            RECIPE_LOCK,
-            snapshot_path(STUDENT_MODEL, STUDENT_REVISION),
+            PROMPT_DATA, RECIPE_LOCK, snapshot_path(STUDENT_MODEL, STUDENT_REVISION),
             snapshot_path(PRE_TEACHER_MODEL, PRE_TEACHER_REVISION),
             snapshot_path(POST_TEACHER_MODEL, POST_TEACHER_REVISION),
         ]
@@ -272,36 +236,20 @@ def prepare_asset_lock() -> str:
     if not Path(ASSET_LOCK).exists():
         run(
             [
-                "python",
-                "data_curation/prepare_direct_opd_assets.py",
-                "--student",
-                snapshot_path(STUDENT_MODEL, STUDENT_REVISION),
-                "--student-revision",
-                STUDENT_REVISION,
-                "--pre-teacher",
-                snapshot_path(PRE_TEACHER_MODEL, PRE_TEACHER_REVISION),
-                "--pre-teacher-revision",
-                PRE_TEACHER_REVISION,
-                "--post-teacher",
-                snapshot_path(POST_TEACHER_MODEL, POST_TEACHER_REVISION),
-                "--post-teacher-revision",
-                POST_TEACHER_REVISION,
-                "--output",
-                ASSET_LOCK,
+                "python", "data_curation/prepare_direct_opd_assets.py",
+                "--student", snapshot_path(STUDENT_MODEL, STUDENT_REVISION), "--student-revision", STUDENT_REVISION,
+                "--pre-teacher", snapshot_path(PRE_TEACHER_MODEL, PRE_TEACHER_REVISION),
+                "--pre-teacher-revision", PRE_TEACHER_REVISION,
+                "--post-teacher", snapshot_path(POST_TEACHER_MODEL, POST_TEACHER_REVISION),
+                "--post-teacher-revision", POST_TEACHER_REVISION,
+                "--output", ASSET_LOCK,
             ]
         )
     data_volume.commit()
     return ASSET_LOCK
 
 
-@app.function(
-    image=rollout_image,
-    gpu="H100",
-    cpu=8,
-    memory=32_768,
-    timeout=43_200,
-    volumes=DATA_AND_MODELS,
-)
+@app.function(image=rollout_image, gpu="H100", cpu=8, memory=32_768, timeout=43_200, volumes=DATA_AND_MODELS)
 def collect_rollout_shard(rank: int, world_size: int) -> str:
     """Generate one deterministic partition of the frozen Qwen3-4B cache."""
 
@@ -315,59 +263,18 @@ def collect_rollout_shard(rank: int, world_size: int) -> str:
         return f"rank {rank}: {len(existing)} existing shards"
     run(
         [
-            "python",
-            "data_curation/collect_direct_opd_rollouts.py",
-            "--model",
-            snapshot_path(STUDENT_MODEL, STUDENT_REVISION),
-            "--model-revision",
-            STUDENT_REVISION,
-            "--asset-lock",
-            ASSET_LOCK,
-            "--input",
-            PROMPT_DATA,
-            "--output-dir",
-            ROLLOUT_DIR,
-            "--label-key",
-            "label",
-            "--prompt-id-key",
-            "prompt_id",
-            "--max-prompts",
-            str(RECIPE.selected_prompts),
-            "--responses-per-prompt",
-            str(RECIPE.responses_per_prompt),
-            "--max-prompt-length",
-            str(RECIPE.max_prompt_tokens),
-            "--max-response-length",
-            str(RECIPE.max_response_tokens),
-            "--top-k",
-            str(RECIPE.top_k),
-            "--temperature",
-            str(RECIPE.temperature),
-            "--top-p",
-            str(RECIPE.top_p),
-            "--seed",
-            str(RECIPE.data_seed),
-            "--batch-size",
-            "64",
-            "--tensor-parallel-size",
-            "1",
-            "--gpu-memory-utilization",
-            "0.90",
-            "--dtype",
-            "bfloat16",
-            "--compilation-mode",
-            "0",
-            "--cudagraph-mode",
-            "NONE",
-            "--max-num-seqs",
-            "32",
-            "--shard-size",
-            "800",
-            "--rank",
-            str(rank),
-            "--world-size",
-            str(world_size),
-            "--enable-thinking",
+            "python", "data_curation/collect_direct_opd_rollouts.py",
+            "--model", snapshot_path(STUDENT_MODEL, STUDENT_REVISION), "--model-revision", STUDENT_REVISION,
+            "--asset-lock", ASSET_LOCK, "--input", PROMPT_DATA, "--output-dir", ROLLOUT_DIR,
+            "--label-key", "label", "--prompt-id-key", "prompt_id",
+            "--max-prompts", str(RECIPE.selected_prompts), "--responses-per-prompt", str(RECIPE.responses_per_prompt),
+            "--max-prompt-length", str(RECIPE.max_prompt_tokens),
+            "--max-response-length", str(RECIPE.max_response_tokens),
+            "--top-k", str(RECIPE.top_k), "--temperature", str(RECIPE.temperature), "--top-p", str(RECIPE.top_p),
+            "--seed", str(RECIPE.data_seed), "--batch-size", "64", "--tensor-parallel-size", "1",
+            "--gpu-memory-utilization", "0.90", "--dtype", "bfloat16", "--compilation-mode", "0",
+            "--cudagraph-mode", "NONE", "--max-num-seqs", "32", "--shard-size", "800",
+            "--rank", str(rank), "--world-size", str(world_size), "--enable-thinking",
         ]
     )
     data_volume.commit()
@@ -377,24 +284,11 @@ def collect_rollout_shard(rank: int, world_size: int) -> str:
 SCORE_STAGES = {
     "post": (POST_TEACHER_MODEL, POST_TEACHER_REVISION, "post_teacher_log_probs", ROLLOUT_DIR, POST_DIR),
     "pre": (PRE_TEACHER_MODEL, PRE_TEACHER_REVISION, "pre_teacher_log_probs", POST_DIR, PRE_DIR),
-    "reference": (
-        STUDENT_MODEL,
-        STUDENT_REVISION,
-        "student_ref_sampled_log_probs",
-        PRE_DIR,
-        FINAL_DIR,
-    ),
+    "reference": (STUDENT_MODEL, STUDENT_REVISION, "student_ref_sampled_log_probs", PRE_DIR, FINAL_DIR),
 }
 
 
-@app.function(
-    image=runtime_image,
-    gpu="H100",
-    cpu=8,
-    memory=32_768,
-    timeout=43_200,
-    volumes=DATA_AND_MODELS,
-)
+@app.function(image=runtime_image, gpu="H100", cpu=8, memory=32_768, timeout=43_200, volumes=DATA_AND_MODELS)
 def score_anchor_shard(stage: str, rank: int, world_size: int) -> str:
     """Score one shard partition; stages are run post -> pre -> reference."""
 
@@ -407,34 +301,12 @@ def score_anchor_shard(stage: str, rank: int, world_size: int) -> str:
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     run(
         [
-            "python",
-            "data_curation/precompute_direct_opd_scores.py",
-            "--model",
-            snapshot_path(repo, revision),
-            "--model-revision",
-            revision,
-            "--asset-lock",
-            ASSET_LOCK,
-            "--score-field",
-            field,
-            "--input",
-            input_dir,
-            "--output-dir",
-            output_dir,
-            "--dtype",
-            "bfloat16",
-            "--device",
-            "cuda:0",
-            "--row-batch-size",
-            "1",
-            "--chunk-size",
-            str(RECIPE.sequence_tokens),
-            "--attn-implementation",
-            "flash_attention_2",
-            "--rank",
-            str(rank),
-            "--world-size",
-            str(world_size),
+            "python", "data_curation/precompute_direct_opd_scores.py",
+            "--model", snapshot_path(repo, revision), "--model-revision", revision,
+            "--asset-lock", ASSET_LOCK, "--score-field", field, "--input", input_dir, "--output-dir", output_dir,
+            "--dtype", "bfloat16", "--device", "cuda:0", "--row-batch-size", "1",
+            "--chunk-size", str(RECIPE.sequence_tokens), "--attn-implementation", "flash_attention_2",
+            "--rank", str(rank), "--world-size", str(world_size),
         ]
     )
     data_volume.commit()
@@ -456,16 +328,8 @@ def seal_cache() -> dict[str, object]:
     if not Path(MANIFEST).exists():
         run(
             [
-                "python",
-                "data_curation/prepare_direct_opd_manifest.py",
-                "--input",
-                FINAL_DIR,
-                "--source-dataset",
-                PROMPT_DATA,
-                "--asset-lock",
-                ASSET_LOCK,
-                "--manifest-out",
-                MANIFEST,
+                "python", "data_curation/prepare_direct_opd_manifest.py", "--input", FINAL_DIR,
+                "--source-dataset", PROMPT_DATA, "--asset-lock", ASSET_LOCK, "--manifest-out", MANIFEST,
             ]
         )
     manifest = json.loads(Path(MANIFEST).read_text(encoding="utf-8"))
@@ -475,14 +339,7 @@ def seal_cache() -> dict[str, object]:
     return manifest
 
 
-@app.function(
-    image=runtime_image,
-    gpu="H100:8",
-    cpu=32,
-    memory=131_072,
-    timeout=14_400,
-    volumes=ALL_VOLUMES,
-)
+@app.function(image=runtime_image, gpu="H100:8", cpu=32, memory=131_072, timeout=14_400, volumes=ALL_VOLUMES)
 def convert_student_checkpoint() -> str:
     """Convert only the trainable Qwen3-4B student to Megatron format."""
 
@@ -516,16 +373,10 @@ def convert_student_checkpoint() -> str:
 
 
 @app.function(
-    image=runtime_image,
-    gpu="H100:8",
-    cpu=32,
-    memory=131_072,
-    timeout=86_400,
+    image=runtime_image, gpu="H100:8", cpu=32, memory=131_072, timeout=86_400,
     # Volume writes are staged on local disk until commit; ten ~45 GB torch_dist
     # checkpoints (weights + Adam state) exceed the default container disk.
-    ephemeral_disk=1_048_576,
-    volumes=ALL_VOLUMES,
-    secrets=[modal.Secret.from_name("wandb-secret")],
+    ephemeral_disk=1_048_576, volumes=ALL_VOLUMES, secrets=[modal.Secret.from_name("wandb-secret")],
 )
 def train_offline_dopd(resume: bool = False) -> str:
     """Run the 50-round actor-only Offline Direct-OPD training job."""
@@ -541,71 +392,27 @@ def train_offline_dopd(resume: bool = False) -> str:
     load = str(save if resume else Path(CONVERTED_CHECKPOINT))
     run(
         [
-            "python",
-            "configs/lightning_weave/train.py",
-            "--model-type",
-            "qwen3-4B",
-            "--student",
-            student,
-            "--data",
-            FINAL_DIR,
-            "--manifest",
-            MANIFEST,
-            "--load",
-            load,
-            "--save",
-            str(save),
-            "--num-gpus",
-            str(RECIPE.training_gpus),
-            "--alpha",
-            str(RECIPE.alpha),
-            "--lr",
-            str(RECIPE.learning_rate),
-            "--rollout-batch-size",
-            str(RECIPE.rollout_batch_size),
-            "--global-batch-size",
-            str(RECIPE.global_batch_size),
-            "--num-rollout",
-            str(RECIPE.replay_rounds),
-            "--save-interval",
-            "5",
-            "--max-tokens-per-gpu",
-            str(RECIPE.sequence_tokens),
-            "--top-k",
-            str(RECIPE.top_k),
-            "--responses-per-prompt",
-            str(RECIPE.responses_per_prompt),
-            "--max-prompt-length",
-            str(RECIPE.max_prompt_tokens),
-            "--max-response-length",
-            str(RECIPE.max_response_tokens),
-            "--temperature",
-            str(RECIPE.temperature),
-            "--top-p",
-            str(RECIPE.top_p),
-            "--seed",
-            str(RECIPE.training_seed),
-            "--rollout-seed",
-            str(RECIPE.data_seed),
-            "--loss-mode",
-            "tilted_target",
-            "--wandb-project",
-            "looptool-qwen3-4b-opd",
-            "--wandb-group",
-            MODAL_APP_NAME,
+            "python", "configs/lightning_weave/train.py", "--model-type", "qwen3-4B", "--student", student,
+            "--data", FINAL_DIR, "--manifest", MANIFEST, "--load", load, "--save", str(save),
+            "--num-gpus", str(RECIPE.training_gpus), "--alpha", str(RECIPE.alpha), "--lr", str(RECIPE.learning_rate),
+            "--rollout-batch-size", str(RECIPE.rollout_batch_size),
+            "--global-batch-size", str(RECIPE.global_batch_size),
+            "--num-rollout", str(RECIPE.replay_rounds), "--save-interval", "5",
+            "--max-tokens-per-gpu", str(RECIPE.sequence_tokens), "--top-k", str(RECIPE.top_k),
+            "--responses-per-prompt", str(RECIPE.responses_per_prompt),
+            "--max-prompt-length", str(RECIPE.max_prompt_tokens),
+            "--max-response-length", str(RECIPE.max_response_tokens),
+            "--temperature", str(RECIPE.temperature), "--top-p", str(RECIPE.top_p),
+            "--seed", str(RECIPE.training_seed), "--rollout-seed", str(RECIPE.data_seed),
+            "--loss-mode", "tilted_target", "--wandb-project", "looptool-qwen3-4b-opd",
+            "--wandb-group", MODAL_APP_NAME,
         ]
     )
     checkpoint_volume.commit()
     return str(save)
 
 
-@app.function(
-    image=runtime_image,
-    cpu=16,
-    memory=65_536,
-    timeout=14_400,
-    volumes=ALL_VOLUMES,
-)
+@app.function(image=runtime_image, cpu=16, memory=65_536, timeout=14_400, volumes=ALL_VOLUMES)
 def export_hf_checkpoint() -> str:
     """Export the latest completed Megatron iteration for downstream evaluation."""
 

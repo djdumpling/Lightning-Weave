@@ -289,7 +289,7 @@ Use multiple continuation seeds, the official grader, complete cost-to-go, and a
 
 This study can reveal that concise policies stop checking, that action candidates are missing, that both donors are unreliable, or that student fitting is poor. Each outcome has a different remedy. It also prevents attributing generic earlier failure-bin movement to initial underthinking without causal evidence.
 
-The current `data_curation/mc_advantage_probes.py:184` completes a single forced-token assistant response and scores call structure against a LoopTool target. It is useful for local compression validation but does not execute the call and measure future episode success/cost. It must be extended for this question. The existing BFCL GRPO adapter is also one user-turn, base-category scaffolding with a one-tool-per-step prompt and truncated observations; it is not already a matched full-conversation efficiency anchor.
+The `data_curation/mc_advantage_probes.py:184` of that time (removed; `git show 6f73aa2:data_curation/mc_advantage_probes.py`) completes a single forced-token assistant response and scores call structure against a LoopTool target. It is useful for local compression validation but does not execute the call and measure future episode success/cost. It must be extended for this question. The existing BFCL GRPO adapter is also one user-turn, base-category scaffolding with a one-tool-per-step prompt and truncated observations; it is not already a matched full-conversation efficiency anchor.
 
 ### Change the target using measured continuation value
 

@@ -13,7 +13,6 @@ import hashlib
 import json
 
 
-AGENTIC_EVAL_REPO = "https://github.com/djdumpling/agentic-eval.git"
 AGENTIC_EVAL_COMMIT = "36a183a054a5dceb42123feaf3df76cf2abed940"
 # The repository is private, so its BFCL files are copied from a local checkout
 # (verified clean at the pin before every launch) instead of cloned in the image.
@@ -441,71 +440,6 @@ def rewrite_request(body: dict, spec: ModelSpec) -> dict:
             messages.insert(0, {"role": "system", "content": spec.system_prompt})
         body["messages"] = messages
     return body
-
-
-# The optional replayable request log (``--log-requests``): one gzip JSONL file per proxy start, under this directory
-# of a model's results. It is not part of the protocol, so it never changes a run id.
-REQUEST_LOG_DIR = "requests"
-
-
-def request_log_record(lane: str, received: dict, sent: dict, response: dict, seen_tools: set[str]) -> dict:
-    """One replayable request: the body exactly as sent to vLLM (after any rewrite) and the full response.
-
-    The identity fields are computed on the request as the harness sent it, as in ``usage.jsonl``, so the two logs
-    join; the sent messages carry the reasoning the model saw. An entry's requests repeat its tool definitions, so
-    each distinct list is stored once per log file (``seen_tools``), with every record naming it by ``tools_digest``.
-    """
-    identity = request_identity(received)
-    record = {
-        "lane": lane,
-        **identity,
-        "request": {key: value for key, value in sent.items() if key != "tools"},
-        "choices": [
-            {"message": choice.get("message"), "finish_reason": choice.get("finish_reason")}
-            for choice in response.get("choices") or []
-        ],
-        "usage": response.get("usage"),
-    }
-    if identity["tools_digest"] not in seen_tools:
-        seen_tools.add(identity["tools_digest"])
-        record["tools"] = sent.get("tools") or []
-    return record
-
-
-def read_request_log(path) -> list[dict]:
-    """Every complete record of one log file, each with ``request["tools"]`` restored.
-
-    A file cut off by a preempted container keeps its complete lines.
-    """
-    import gzip
-    import zlib
-
-    tools: dict[str, list] = {}
-    lines: list[str] = []
-    with gzip.open(path, "rt", encoding="utf-8") as handle:
-        try:
-            for line in handle:
-                lines.append(line)
-        except (EOFError, zlib.error, OSError):
-            pass
-    records = []
-    for line in lines:
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue  # the partial last line of a truncated file
-        if "tools" in record:
-            tools[record["tools_digest"]] = record.pop("tools")
-        record["request"]["tools"] = tools.get(record["tools_digest"])
-        records.append(record)
-    return records
-
-
-def read_request_logs(directory) -> list[dict]:
-    """Every proxy start's records under a results directory's ``requests/``, in start order."""
-    from pathlib import Path
-
-    return [record for path in sorted(Path(directory).glob("*.jsonl.gz")) for record in read_request_log(path)]
 
 
 def main() -> None:

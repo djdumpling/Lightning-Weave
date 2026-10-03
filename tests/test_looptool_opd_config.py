@@ -1,21 +1,5 @@
-import importlib.util
-import sys
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def load(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-CONFIG = load("looptool_opd_config", ROOT / "configs/looptool_opd/config.py")
-PREPARE = load("prepare_direct_opd_looptool", ROOT / "data_curation/prepare_direct_opd_looptool.py")
+from configs.looptool_opd import config as CONFIG
+from data_curation import prepare_direct_opd_looptool as PREPARE
 
 
 class FakeTokenizer:

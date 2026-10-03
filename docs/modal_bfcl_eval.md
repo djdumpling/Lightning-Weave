@@ -1,20 +1,45 @@
 # BFCL evaluation on Modal
 
 This evaluates the LoopTool Offline Direct-OPD student
-(`/checkpoints/looptool-offline-dopd-qwen3-4b-v1/hf`) and its exact starting
-point (`Qwen/Qwen3-4B` at `1cfa9a72`) on **BFCL v3** (17 categories) under one
-protocol. The OPD-minus-base delta is the result; see
+(`/checkpoints/looptool-offline-dopd-qwen3-4b-v1/hf`), its exact starting point
+(`Qwen/Qwen3-4B` at `1cfa9a72`), their inference-time baselines and the
+agent-efficiency students on **BFCL v3** (17 categories) under one protocol.
+Deltas against a reference model are the result; see
 [Comparability](#comparability).
 
 ```bash
 bash scripts/run_bfcl_eval.sh plan              # resolved protocol, no Modal calls
-bash scripts/run_bfcl_eval.sh smoke             # 3 entries per category, both models
-bash scripts/run_bfcl_eval.sh run               # all 17 v3 categories, detached
+bash scripts/run_bfcl_eval.sh smoke             # 3 entries per category, base and opd
+bash scripts/run_bfcl_eval.sh run               # all 17 v3 categories, base and opd, detached
 bash scripts/run_bfcl_eval.sh run --models opd --categories multi_turn_base,live_simple
+bash scripts/run_bfcl_eval.sh run --models ae.joint.acc-legacy+decs --seed 1
+bash scripts/run_bfcl_eval.sh run --wait-for-checkpoints --max-wait-hours 10 --models ae.joint.paper-acc-legacy
 ```
 
 `run` is detached: the laptop can disconnect once the app is launched, and the
-results land in the Volume either way.
+results land in the Volume either way. With `--wait-for-checkpoints`, a
+server-side function starts each agent-efficiency model once its export is
+complete. In that mode a model whose results directory already holds a claim or
+a manifest is skipped, so a restarted launch never evaluates it twice.
+
+## Models
+
+`--models` takes comma-separated tags (default `base,opd`):
+
+| Tag | Model |
+| --- | --- |
+| `base`, `opd` | Qwen3-4B and the LoopTool OPD student (V0) |
+| `base-nothink`, `opd-nothink` | thinking disabled through the chat template's `enable_thinking` switch |
+| `base-cap4k`, `opd-cap4k` | a 4,096-token per-step cap |
+| `base-concise`, `opd-concise` | a system instruction to reason only as much as the task requires |
+| `opd-r20` | V0 after 20 of its 50 replay rounds (80 of 200 updates) |
+| `thinking2507` | Qwen3-4B-Thinking-2507, natively long-context (no YaRN), `deepseek_r1` reasoning parser |
+| `ae.<arm>.<variant>[.s<seed>][.concise]` | an agent-efficiency student at `/checkpoints/agent-eff/<arm>/<variant>/seed<seed>/hf` (training seed 1234 by default) |
+
+The cap and the system instruction are applied by the usage proxy (below). Each
+manifest records non-default serving settings as `serving_overrides`, and an
+agent-efficiency student's training provenance (variant, target revision, α,
+passes, seed and final iteration) as `training_provenance`.
 
 ## Protocol
 
@@ -26,6 +51,8 @@ results land in the Volume either way.
 | Sampling | temperature 0.6, top-p 0.95 per request; top-k 20 from `generation_config.json` |
 | Tool calls | native `tool_calls` (`++use_client_parsing=False`), hermes parser |
 | Reasoning | split from `content` by vLLM's qwen3 reasoning parser |
+| Earlier reasoning | kept for earlier steps of the current turn (interleaved thinking); dropped for earlier user turns |
+| Decoding seed | 0; `--seed N` runs a replicate in its own results tree |
 
 This matches the Qwen3 technical report, which sets a 32,768-token max output
 and evaluates BFCL multi-turn with YaRN at a 64k context
@@ -33,7 +60,8 @@ and evaluates BFCL multi-turn with YaRN at a 64k context
 mentor's runs (65,536 total, 32,768 response). YaRN applies to every category,
 as in the mentor's runs; the report enabled it for multi-turn. The Qwen3-4B
 model card recommends `factor` 2.0 for a 64k context and notes that static YaRN
-may slightly affect short texts, which applies to both models equally.
+may slightly affect short texts, which applies equally to every model served
+with YaRN.
 agentic-eval's v3 recipe allows 131,072 generated tokens; the recipe value is
 recorded as `recipe_tokens_to_generate` in every manifest.
 
@@ -49,6 +77,21 @@ limit would be 8,192, which a third of multi-turn smoke tasks exceeded. Each lan
 reports its `out_of_context` count, and the server refuses to start unless vLLM
 reports the 65,536 window and rejects an overflowing probe request with an error
 NeMo-Skills recognizes.
+
+**Interleaved thinking (from 2026-10-01).** The model sees its reasoning from
+earlier steps of the current turn, between tool calls, as the Qwen3 chat
+template intends. Earlier user turns' reasoning is still dropped, by design.
+NeMo-Skills always sent that reasoning back in `reasoning_content`, but vLLM
+0.11.0 drops the field before templating; 0.11.1 and later pass it through. The
+usage proxy therefore moves it into the message text as `<think>...</think>`,
+which the template renders byte-identically (`tests/test_bfcl_efficiency.py`).
+`--no-interleaved-thinking` reproduces the original protocol. Results from the
+two protocols cannot be mixed, and the LoopTool training caches also lack
+earlier reasoning in their histories.
+
+**Decoding seed.** NeMo-Skills sends `++inference.random_seed` as every
+request's sampling `seed`, so `--seed` passes it there as well as to vLLM's
+`--seed`; the engine seed alone would not change sampling.
 
 v4 remains available by setting `Protocol.bfcl_version = "v4"` and
 `tokens_to_generate = 8192`. Its two `web_search` categories are never run:
@@ -104,13 +147,15 @@ The build fails unless:
 ## Serving and scheduling
 
 ```text
-local entrypoint ─┬─ serve_and_evaluate(base) : 4×H100, vLLM DP=4 ─ modal.forward ─┐
-                  └─ serve_and_evaluate(opd)  : 4×H100, vLLM DP=4 ─ modal.forward ─┤
-                                                                            │
-                     run_category × 17 per model (CPU, one category each) ◄─┘
+local entrypoint ─┬─ serve_and_evaluate(model 1) : 4×H100, vLLM DP=4 ─ usage proxy ─ modal.forward ─┐
+                  └─ serve_and_evaluate(model N) : 4×H100, vLLM DP=4 ─ usage proxy ─ modal.forward ─┤
+                                                                                                    │
+                     run_category × 17 per model (CPU, one category each) ◄─────────────────────────┘
 ```
 
-- **Four H100s per model (a full node for the run), both models concurrently.**
+- **Four H100s per model, every model of a launch concurrently**, up to
+  `Serving.max_concurrent_models` (24) servers; further models queue. Each launch
+  is its own app, so concurrent launches add their caps.
   Modal falls back to four H200s when H100s are unavailable; the GPU type is
   recorded in `summary.json` and is not part of the protocol.
   One vLLM server per model runs `--data-parallel-size 4`, so each GPU holds a
@@ -134,6 +179,12 @@ local entrypoint ─┬─ serve_and_evaluate(base) : 4×H100, vLLM DP=4 ─ mod
   `--api-key`), a context overflow must return an error NeMo-Skills recognizes,
   reasoning must be split out of `content`, and a tool request must return
   native `tool_calls`.
+- **Usage proxy.** Lanes call `/lane/<category>/v1` on a proxy in front of
+  vLLM. It applies the interleaved-thinking rewrite and a baseline's cap or
+  system instruction, and logs every completion to `usage.jsonl`: the request's
+  user-message digests, tool-schema digest, body digest and history reasoning, as
+  the harness sent it, with prompt, completion and re-tokenized reasoning tokens,
+  the finish reason and the number of tool calls.
 - **One CPU container per category.** `bfcl_eval` hardcodes its result and score
   trees under `/opt/gorilla`, so isolation must be per container; one category
   per container also removes agentic-eval's category queueing inside a lane.
@@ -159,8 +210,9 @@ run id and can be retuned between runs.
 Everything lands in the `lightning-weave-bfcl-eval` Volume under
 `<run_id>/<model>/`:
 
-- `manifest.json`: model path, model identity hash, and resolved protocol. A
-  rerun with a different model or protocol under the same run id fails.
+- `manifest.json`: model path, model identity hash, resolved protocol, and any
+  serving overrides or training provenance. A rerun with a different model or
+  protocol under the same run id fails.
 - `bfcl_v3.<category>/output.jsonl`: NeMo-Skills generations, merged with
   per-entry `is_correct` after scoring.
 - `scores/BFCL_v4_<category>_score.json`: the `bfcl_eval` score file (it uses the
@@ -169,11 +221,46 @@ Everything lands in the `lightning-weave-bfcl-eval` Volume under
 - `aggregate.json` and `summary.json`: the leaderboard aggregate from
   agentic-eval's vendored v3 scorer (the unweighted mean of non-live, live, and
   multi-turn), and per-lane status including `out_of_context`.
+- `usage.jsonl` (the proxy's log) and `vllm_metrics.jsonl`.
 
 The run id is `bfcl-v3-<protocol hash>-full` (or `-smoke<N>`), so smoke results
-never mix with full ones. Rerunning resumes: a category with a score file is
+never mix with full ones. The decoding seed and the thinking protocol are part
+of the hash:
+
+| decoding seed | interleaved thinking | original protocol (every run before 2026-10-01) |
+| --- | --- | --- |
+| 0 | `bfcl-v3-22b3e917da76-full` | `bfcl-v3-3e6e955a00df-full` |
+| 1 | `bfcl-v3-a9dc3055c864-full` | `bfcl-v3-8b2ad2de30cd-full` |
+| 2 | `bfcl-v3-3905dd869e16-full` | `bfcl-v3-4743b22b979b-full` |
+
+Rerunning resumes: a category with a score file is
 skipped, and a partially generated category continues from its
 `output.jsonl-async`, committed every two minutes.
+
+## Cost analysis
+
+[`bfcl_efficiency.py`](../evaluation/bfcl_efficiency.py) takes a reference run
+directory and the runs to compare with it. It computes per-entry cost vectors
+(generated, reasoning and prompt tokens, steps, tool calls, duplicate calls,
+runaways, overflows), leaderboard-weighted aggregates, and paired,
+category-stratified bootstrap comparisons. These include cost on entries both
+models got right, outcome-transition strata, the multi-turn common horizon, and
+cost per success. Medians and quantiles use the leaderboard category weights.
+
+- **The join.** Logged requests are assigned to entries by their user-message
+  sequence, plus the tool schemas for single-turn entries, then by exact
+  per-step completion-token counts, which also separates retried attempts. Every
+  entry must reconcile exactly, its logged completion tokens equaling
+  `num_generated_tokens_list`, or the analysis fails (`--allow-partial-usage`
+  overrides).
+- Base and OPD in the original tree predate the proxy, so they have no usage
+  log; `--tokenizer` gives such runs a reasoning/visible split.
+
+[`bfcl_pooled.py`](../evaluation/bfcl_pooled.py) pools paired comparisons over
+replicate pairs (training and decoding seeds) and applies pre-registered decision
+rules. [`bfcl_multiturn_failures.py`](../evaluation/bfcl_multiturn_failures.py)
+classifies where multi-turn entries first fail. Commands are in the
+[agent-efficiency synthesis](agent_efficiency_synthesis.md#running).
 
 ## Comparability
 

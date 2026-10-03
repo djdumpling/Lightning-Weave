@@ -1,35 +1,14 @@
-import importlib.util
 import json
 import sys
 import types
 from pathlib import Path
 
+from configs.math_grpo import eval_aime25 as MODULE
+
 ROOT = Path(__file__).resolve().parents[1]
-EVAL_SCRIPT = ROOT / "configs/math_grpo/eval_aime25.py"
-SPEC = importlib.util.spec_from_file_location("math_grpo_eval_aime25", EVAL_SCRIPT)
-MODULE = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
-sys.modules[SPEC.name] = MODULE
-SPEC.loader.exec_module(MODULE)
 
 
-class FakeConfig:
-    def __init__(self, *args, **kwargs):
-        self.args = args
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-
-def install_fake_training_gym(monkeypatch):
-    module = types.ModuleType("modal_training_gym")
-    for name in ("Qwen3_4B_VllmRecipe",):
-        setattr(module, name, type(name, (FakeConfig,), {}))
-    monkeypatch.setitem(sys.modules, "modal_training_gym", module)
-    return module
-
-
-def test_protocol_matches_repo_aime25_with_requested_response_cap(monkeypatch):
-    install_fake_training_gym(monkeypatch)
+def test_protocol_matches_repo_aime25_with_requested_response_cap(fake_training_gym):
     args = MODULE.parser().parse_args([])
     recipe = MODULE.build_conversion_recipe("alex-dev-2")
 
@@ -261,7 +240,7 @@ def test_inprocess_evaluator_scores_and_persists_one_batch(tmp_path, monkeypatch
 
 
 def test_launcher_is_pinned_and_uses_inprocess_modal_gpu():
-    source = EVAL_SCRIPT.read_text(encoding="utf-8")
+    source = Path(MODULE.__file__).read_text(encoding="utf-8")
     wrapper = (ROOT / "scripts/eval_math_aime25.sh").read_text(encoding="utf-8")
 
     assert MODULE.TRAINING_GYM_COMMIT in source

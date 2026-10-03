@@ -33,8 +33,6 @@ class Sample:
     post_teacher_log_probs: list[list[float]] | None = None
     pre_teacher_log_probs: list[list[float]] | None = None
     student_ref_sampled_log_probs: list[float] | None = None
-    # A response's fitting weight, repeated per response token (``sequence_weighted`` Offline Direct-OPD).
-    sequence_weights: list[float] | None = None
     remove_sample: bool = False
 
     class Status(Enum):

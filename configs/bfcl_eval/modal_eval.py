@@ -66,10 +66,8 @@ from config import (  # noqa: E402 - after the sys.path setup above
     SERVING,
     SERVING_IMAGE,
     WEB_PREFIX,
-    REQUEST_LOG_DIR,
     ModelSpec,
     request_identity,
-    request_log_record,
     history_reasoning,
     inline_history_reasoning,
     rewrite_request,
@@ -640,21 +638,13 @@ UNFORWARDED_HEADERS = {"host", "content-length", "transfer-encoding", "connectio
 
 
 def start_usage_proxy(
-    log_path: Path,
-    tokenizer_path: str,
-    spec: ModelSpec,
-    protocol: Protocol,
-    stop: threading.Event,
-    requests_dir: Path | None = None,
+    log_path: Path, tokenizer_path: str, spec: ModelSpec, protocol: Protocol, stop: threading.Event
 ) -> threading.Thread:
     """Forward lane requests to vLLM; log each completion's identity and usage.
 
     Lanes call ``/lane/<category>/v1/...`` so every record carries its category. Under
     ``protocol.interleaved_thinking`` each request's history reasoning is moved into the message text, which vLLM
     0.11.0 would otherwise drop. The logged identity and history describe the request as the harness sent it.
-    With ``requests_dir``, each request is also logged in full, as sent to vLLM, with its response
-    (``request_log_record``), to a new gzip file per proxy start: appending to a file that a preempted container left
-    incomplete would make everything after it unreadable.
     """
 
     import asyncio
@@ -666,14 +656,6 @@ def start_usage_proxy(
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     handle = log_path.open("a", encoding="utf-8")
-    request_handle = None
-    if requests_dir is not None:
-        import gzip
-
-        requests_dir.mkdir(parents=True, exist_ok=True)
-        name = f"{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}-{secrets.token_hex(4)}.jsonl.gz"
-        request_handle = gzip.open(requests_dir / name, "wt", encoding="utf-8")
-    seen_tools: set[str] = set()
     lock = threading.Lock()
     ready = threading.Event()
 
@@ -696,12 +678,6 @@ def start_usage_proxy(
                 handle.write(json.dumps(line) + "\n")
                 handle.flush()
 
-    def log_request(lane: str, received: dict, sent: dict, response: dict) -> None:
-        entry = {**request_log_record(lane, received, sent, response, seen_tools), "time": time.time()}
-        with lock:
-            request_handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            request_handle.flush()
-
     async def serve() -> None:
         session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=None, sock_read=None), connector=aiohttp.TCPConnector(limit=0)
@@ -713,7 +689,7 @@ def start_usage_proxy(
                 lane, _, rest = path[len(LANE_PREFIX) :].partition("/")
                 path = "/" + rest
             body = await request.read()
-            identity = parsed = sent = None
+            identity = None
             if path.endswith("/chat/completions") and request.method == "POST":
                 parsed = json.loads(body)
                 identity = {**request_identity(parsed), **history_reasoning(parsed)}
@@ -734,10 +710,7 @@ def start_usage_proxy(
                 status = upstream.status
             if identity is not None and status == 200:
                 try:
-                    response = json.loads(payload)
-                    record(lane, identity, response)
-                    if request_handle is not None:
-                        log_request(lane, parsed, sent, response)
+                    record(lane, identity, json.loads(payload))
                 except Exception as error:  # noqa: BLE001 - logging must never fail a request
                     print(f"usage log failed: {error!r}", flush=True)
             return web.Response(body=payload, status=status, headers={"Content-Type": content_type})
@@ -753,8 +726,6 @@ def start_usage_proxy(
         await runner.cleanup()
         await session.close()
         handle.close()
-        if request_handle is not None:
-            request_handle.close()
 
     thread = threading.Thread(target=lambda: asyncio.run(serve()), daemon=True)
     thread.start()
@@ -840,9 +811,6 @@ def serve_and_evaluate(job: dict) -> dict:
         raise FileNotFoundError(f"{tag} checkpoint not found at {model_path}")
     results_volume.reload()
     root = Path(REMOTE_RESULTS_ROOT) / run / tag
-    if job.get("log_requests") and (root / "manifest.json").exists() and not (root / REQUEST_LOG_DIR).exists():
-        # An earlier launch evaluated without logging, and a relaunch skips the outputs it already wrote.
-        raise RuntimeError(f"{root} was evaluated without --log-requests; logging cannot backfill it, use a new run")
     manifest = {
         "tag": tag,
         "model_path": model_path,
@@ -856,8 +824,6 @@ def serve_and_evaluate(job: dict) -> dict:
     if provenance.exists():
         manifest["training_provenance"] = json.loads(provenance.read_text(encoding="utf-8"))
     write_or_check_manifest(root / "manifest.json", manifest)
-    if job.get("log_requests"):
-        (root / REQUEST_LOG_DIR).mkdir(exist_ok=True)  # with the manifest, so a relaunch knows this run logs
     results_volume.commit()
 
     # token_urlsafe can start with '-', which vllm's argument parser reads as a flag.
@@ -871,14 +837,7 @@ def serve_and_evaluate(job: dict) -> dict:
         check_serving_window(list(server.lines), yarn=spec.yarn)
         defaults = check_generation_defaults(list(server.lines))
         probe = probe_endpoint(server, api_key, thinking=spec.thinking)
-        proxy = start_usage_proxy(
-            root / "usage.jsonl",
-            model_path,
-            spec,
-            protocol,
-            stop,
-            requests_dir=root / REQUEST_LOG_DIR if job.get("log_requests") else None,
-        )
+        proxy = start_usage_proxy(root / "usage.jsonl", model_path, spec, protocol, stop)
         print(f"[{tag}] sampling defaults {defaults}; probe {probe}", flush=True)
         plan = plan_categories.remote(job["categories"], smoke_samples)
         with modal.forward(USAGE_PROXY_PORT) as tunnel:
@@ -1028,16 +987,11 @@ def main(
     wait_for_checkpoints: bool = False,
     max_wait_hours: float = 12.0,
     interleaved_thinking: bool = True,
-    log_requests: bool = False,
 ) -> None:
     """Evaluate each model on BFCL, concurrently; ``seed`` selects the decoding-seed replicate.
 
     ``--no-interleaved-thinking`` reproduces the runs made before 2026-10-01, in which vLLM dropped the reasoning
     of earlier steps within a turn (see ``Protocol.interleaved_thinking``).
-
-    ``--log-requests`` also writes every request in full, as sent to vLLM, with its response, under
-    ``<results>/<tag>/requests/`` (one file per launch); it does not change the run id. It must be on from a
-    model's first launch in a run tree: a relaunch skips outputs that already exist.
 
     ``--wait-for-checkpoints`` hands the run to a server-side function that starts each model once its
     agent-efficiency checkpoint is exported, and returns immediately; models whose checkpoints do not appear
@@ -1052,7 +1006,7 @@ def main(
     version = PROTOCOL.bfcl_version
     print(
         f"run {run}: models={tags} categories={selected or f'all {version}'} smoke_samples={smoke_samples} "
-        f"interleaved_thinking={interleaved_thinking} log_requests={log_requests}",
+        f"interleaved_thinking={interleaved_thinking}",
         flush=True,
     )
     job = {
@@ -1061,7 +1015,6 @@ def main(
         "smoke_samples": smoke_samples,
         "seed": seed,
         "interleaved_thinking": interleaved_thinking,
-        "log_requests": log_requests,
     }
     jobs = [{"tag": tag, **job} for tag in tags]
     if wait_for_checkpoints:

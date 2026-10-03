@@ -12,7 +12,6 @@ Applies to the inherited portions of:
   configs/models/qwen3-1.7B.sh
   configs/models/qwen3-4B.sh
   configs/models/qwen3.5-4B.sh
-  data_curation/build_direct_opd_mixture.py
   data_curation/collect_direct_opd_rollouts.py
   data_curation/precompute_direct_opd_scores.py
   data_curation/prepare_direct_opd_klear_code.py

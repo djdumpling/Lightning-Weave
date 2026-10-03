@@ -179,10 +179,7 @@ def build_problem_result(
 
 
 def _write_remote_payload(path: Path, payload: dict[str, Any], commit: Callable[[], None]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(f"{path.suffix}.tmp")
-    temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    write_json(path, payload)
     commit()
 
 

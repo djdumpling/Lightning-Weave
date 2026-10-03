@@ -8,7 +8,6 @@ import json
 
 DATASET_REPO = "zhangkangning/LoopTool-23k"
 DATASET_REVISION = "b6c572d442ed4f2177f23645d8e9a77522e712c3"
-EXPECTED_SOURCE_ROWS = 23_040
 EXPECTED_CANONICAL_ROWS = 23_000
 
 # The behavior policy and trainable student are the released post-trained

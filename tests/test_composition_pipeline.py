@@ -1,7 +1,6 @@
-"""Small real-parquet regressions for composition, mixing, repeating, and merging."""
+"""Small real-parquet regressions for composition and repeating."""
 
 from argparse import Namespace
-from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pyarrow as pa
@@ -9,8 +8,6 @@ import pyarrow.parquet as pq
 import pytest
 
 from data_curation import build_direct_opd_composed_target as compose
-from data_curation import build_direct_opd_mixture as mixture
-from data_curation import merge_direct_opd_score_columns as merge
 from data_curation import repeat_sealed_direct_opd as repeat
 from data_curation.common import file_sha256, write_json
 from data_curation.composition import flatten_metadata, replace_metadata_fields
@@ -174,58 +171,34 @@ def test_composition_discards_staged_shards_after_write_failure(tmp_path, monkey
     assert not list(tmp_path.glob(".composed.*"))
 
 
-def test_mixture_and_repetition_preserve_prompt_groups(tmp_path, monkeypatch):
-    left = sealed_source(tmp_path, "left", post_revision="left", post=-1.0)
-    right = sealed_source(tmp_path, "right", post_revision="right", post=-1.5)
-    output = tmp_path / "mixed"
-    monkeypatch.setattr(
-        mixture,
-        "parse_args",
-        lambda: Namespace(
-            left_manifest=left,
-            right_manifest=right,
-            left_name="left",
-            right_name="right",
-            output_dir=output,
-            rows=8,
-            rows_per_output_shard=4,
-            group_size=4,
-            rollout_batch_size=8,
-        ),
-    )
-    mixture.main()
-    manifest, metadata = read_output(output)
-    assert metadata.field("sample_id").to_pylist() == [f"s{index}" for index in range(8)]
-    assert metadata.field("post_teacher_revision").to_pylist() == ["left"] * 4 + ["right"] * 4
-    assert [item["rows"] for item in manifest["post_teacher_model"]["components"]] == [4, 4]
+def test_repetition_cycles_whole_shards_as_links_or_copies(tmp_path, monkeypatch):
+    source = sealed_source(tmp_path, "source")
+    output = source.parent
+    manifest, _ = read_output(output)
     repeated = tmp_path / "repeated"
     monkeypatch.setattr(
         repeat,
         "parse_args",
         lambda: Namespace(
-            manifest=output / "manifest.json",
+            manifest=source,
             output_dir=repeated,
-            total_rows=16,
+            total_rows=32,
             student_model_path=None,
             copy=False,
         ),
     )
     repeat.main()
     repeated_manifest, repeated_metadata = read_output(repeated)
-    assert repeated_manifest["total_trainable_tokens"] == 32
-    assert repeated_metadata.field("sample_id").to_pylist() == [f"s{index}" for index in range(8)] * 2
-    assert repeated_metadata.field("post_teacher_revision").to_pylist() == (["left"] * 4 + ["right"] * 4) * 2
-    assert [item["rows"] for item in repeated_manifest["post_teacher_model"]["components"]] == [8, 8]
+    assert repeated_manifest["total_trainable_tokens"] == 64
+    assert repeated_metadata.field("sample_id").to_pylist() == [f"s{index}" for index in range(16)] * 2
     for index, shard in enumerate(repeated_manifest["shards"]):
-        source = output / manifest["shards"][index % 2]["path"]
-        assert (repeated / shard["path"]).stat().st_ino == source.stat().st_ino
+        source_shard = output / manifest["shards"][index % 2]["path"]
+        assert (repeated / shard["path"]).stat().st_ino == source_shard.stat().st_ino
     copied = tmp_path / "copied"
     monkeypatch.setattr(
         repeat,
         "parse_args",
-        lambda: Namespace(
-            manifest=output / "manifest.json", output_dir=copied, total_rows=16, student_model_path=None, copy=True
-        ),
+        lambda: Namespace(manifest=source, output_dir=copied, total_rows=32, student_model_path=None, copy=True),
     )
     repeat.main()
     copied_manifest, copied_metadata = read_output(copied)
@@ -247,51 +220,6 @@ def test_chunking_streams_a_prefix_within_a_source_row_group(tmp_path):
     chunks = list(compose.table_chunks(path, manifest, rows=4, chunk_rows=4))
     assert len(chunks) == 1
     assert flatten_metadata(chunks[0]).field("sample_id").to_pylist() == ["s0", "s1", "s2", "s3"]
-
-
-def test_merge_updates_only_teacher_fields_and_preserves_order(tmp_path):
-    tables = [
-        source_table(rows=4, pre=-3, post=-4, post_revision="base"),
-        source_table(rows=4, pre=-2, post=-4, post_revision="base"),
-        source_table(rows=4, pre=-3, post=-1, post_revision="post"),
-    ]
-    paths = [tmp_path / f"{name}.parquet" for name in ("base", "pre", "post")]
-    for table, path in zip(tables, paths, strict=True):
-        pq.write_table(table, path)
-    output = tmp_path / "merged.parquet"
-    count = merge.merge_one_shard((*paths, output))
-    merged = pq.read_table(output)
-    metadata = flatten_metadata(merged)
-    assert count == 4
-    assert metadata.field("sample_id").to_pylist() == [f"s{index}" for index in range(4)]
-    for field in ("prompt", "label"):
-        assert merged[field].equals(tables[0][field])
-    for index, role in ((1, "pre"), (2, "post")):
-        field = f"{role}_teacher_log_probs"
-        assert metadata.field(field).equals(flatten_metadata(tables[index]).field(field))
-    assert metadata.field("loss_mask").equals(flatten_metadata(tables[0]).field("loss_mask"))
-
-
-def test_merge_main_preserves_shard_order(tmp_path, monkeypatch):
-    sources = [sealed_source(tmp_path, name) for name in ("base", "pre", "post")]
-    output = tmp_path / "merged"
-    monkeypatch.setattr(merge, "ProcessPoolExecutor", ThreadPoolExecutor)
-    monkeypatch.setattr(
-        merge,
-        "parse_args",
-        lambda: Namespace(
-            base=sources[0].parent,
-            pre_scores=sources[1].parent,
-            post_scores=sources[2].parent,
-            output_dir=output,
-            workers=1,
-        ),
-    )
-    merge.main()
-    shards = sorted(output.glob("*.parquet"))
-    assert [path.name for path in shards] == ["part-000.parquet", "part-001.parquet"]
-    metadata = flatten_metadata(pa.concat_tables([pq.read_table(path) for path in shards]))
-    assert metadata.field("sample_id").to_pylist() == [f"s{index}" for index in range(16)]
 
 
 def test_metadata_replacement_preserves_struct_nulls_and_field_metadata():

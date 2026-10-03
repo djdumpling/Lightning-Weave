@@ -883,13 +883,11 @@ def get_slime_extra_args_provider(add_custom_arguments=None):
             parser.add_argument(
                 "--offline-direct-opd-loss-mode",
                 type=str,
-                choices=["policy_gradient", "tilted_target", "sequence_weighted"],
+                choices=["policy_gradient", "tilted_target"],
                 default="tilted_target",
                 help=(
                     "Offline Direct-OPD objective (default: self-correcting tilted target q proportional "
-                    "to behavior * exp(delta / alpha)); use policy_gradient only for legacy reproduction. "
-                    "sequence_weighted fits weighted, summed log-likelihood of the cached responses, with "
-                    "each row's metadata.sequence_weight (Megatron only)."
+                    "to behavior * exp(delta / alpha)); use policy_gradient only for legacy reproduction."
                 ),
             )
             parser.add_argument(
@@ -1644,13 +1642,7 @@ def slime_validate_args(args):
             )
         if args.compute_advantages_and_returns:
             raise ValueError("--offline-direct-opd requires --disable-compute-advantages-and-returns")
-        if args.offline_direct_opd_loss_mode == "sequence_weighted":
-            if args.calculate_per_token_loss:
-                raise ValueError(
-                    "sequence-weighted Offline Direct-OPD normalizes by the global batch size; "
-                    "omit --calculate-per-token-loss"
-                )
-        elif not args.calculate_per_token_loss:
+        if not args.calculate_per_token_loss:
             raise ValueError("--offline-direct-opd requires --calculate-per-token-loss")
         if args.rollout_num_gpus != 0:
             raise ValueError("--offline-direct-opd requires --rollout-num-gpus 0 during training")
@@ -1668,11 +1660,6 @@ def slime_validate_args(args):
             raise ValueError("tilted-target Offline Direct-OPD requires --offline-direct-opd-kl-coef > 0")
         if args.offline_direct_opd_loss_mode == "tilted_target" and args.offline_direct_opd_adaptive_kl:
             raise ValueError("tilted-target Offline Direct-OPD does not yet support adaptive alpha")
-        if args.offline_direct_opd_loss_mode == "sequence_weighted":
-            if args.offline_direct_opd_adaptive_kl:
-                raise ValueError("sequence-weighted Offline Direct-OPD has no alpha to adapt")
-            if args.train_backend == "fsdp":
-                raise ValueError("sequence-weighted Offline Direct-OPD is implemented for the Megatron backend only")
         if args.offline_direct_opd_adaptive_kl:
             if (
                 args.tensor_model_parallel_size != 1

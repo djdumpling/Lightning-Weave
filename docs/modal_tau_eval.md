@@ -210,27 +210,15 @@ Everything lands in the `lightning-weave-tau-eval` Volume under
 - `summary.json`: per-lane metrics and the aggregate, rebuilt from every
   conversation record on disk by `summarize_run` whenever a launch finishes
   or `compare` runs. Launches of different domains (even concurrent ones)
-  therefore never overwrite each other's results.
+  therefore never overwrite each other's results. Each lane's `user_cost_usd`
+  is the user simulator's spend, from each call's tokens at OpenAI's list
+  prices (`USER_PRICES`); a self-hosted user costs nothing.
 - `<run_id>/comparison.json`: pass^k per domain per model, and paired deltas.
 
 The run id is `tau-<protocol hash>-full` (or `-smoke<N>`). Rerunning resumes
 at the conversation level. The trial count is not part of the run id: trial i
 uses the same tau2 seed at any trial count, so `--trials 8` later adds trials
 4-7 to the same tree.
-
-## Cost and time
-
-Prime bills OpenAI's list prices (gpt-4o $2.50/$10, gpt-4.1 $2/$8 per million
-input/output tokens) with no cache discount listed. Spend per lane is
-`user_cost_usd` in `summary.json`, computed from each call's tokens at those
-prices. Estimated user simulator cost, from tau2-bench's gpt-4.1 reference runs: about $0.013 per
-airline or retail conversation and $0.086 per telecom conversation; TAU1's
-gpt-4o user, estimated from tau-bench's historical gpt-4o trajectories, about
-$0.019. That is roughly $15 per model per trial (telecom is two thirds of it),
-so about $120 for a full run (4 trials, both models), more if Qwen3-4B's
-conversations run longer than gpt-4.1's. Expect about 1-2 hours of wall time
-with 8 H100s; the telecom lane and runaway 32k-token turns set the tail. The
-smoke run costs a few dollars.
 
 ## Comparability
 

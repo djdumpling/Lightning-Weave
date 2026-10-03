@@ -182,38 +182,3 @@ def test_rollout_main_keeps_prompt_groups_and_rank_order(tmp_path, monkeypatch):
     assert [row["prompt"] for row in rows] == ["3", "3", "4", "4", "5", "5"]
     assert [row["metadata"]["response_id"] for row in rows] == [0, 1, 0, 1, 0, 1]
     assert len(generated) == 3
-
-
-def test_sampling_top_k_reaches_vllm_and_the_recorded_config_only_when_set(tmp_path, monkeypatch):
-    source = prompt_args(tmp_path, [{"prompt": "0"}]).input
-    asset_path = tmp_path / "assets.json"
-    asset_path.write_text(json.dumps({"tokenizer_hash": "hash"}))
-    seen = []
-
-    class LLM:
-        def __init__(self, **kwargs):
-            pass
-
-        def generate(self, prompts, sampling, **kwargs):
-            seen.append(sampling)
-            return [SimpleNamespace(outputs=[completion() for _ in range(sampling.n)]) for _ in prompts]
-
-    monkeypatch.setitem(
-        sys.modules, "vllm", SimpleNamespace(__version__="test", LLM=LLM, SamplingParams=SimpleNamespace)
-    )
-    monkeypatch.setitem(sys.modules, "vllm.config", SimpleNamespace(CompilationConfig=SimpleNamespace(mode=None)))
-    monkeypatch.setitem(
-        sys.modules,
-        "transformers",
-        SimpleNamespace(AutoTokenizer=SimpleNamespace(from_pretrained=lambda *a, **kw: Tokenizer())),
-    )
-    configs = {}
-    for name, extra in (("unset", []), ("set", ["--sampling-top-k", "20"])):
-        output_dir = tmp_path / name
-        monkeypatch.setattr(sys, "argv", ["collect", "--model", "student", "--asset-lock", str(asset_path), "--input",
-                                          str(source), "--output-dir", str(output_dir), "--max-prompts", "1",
-                                          "--responses-per-prompt", "2", "--top-k", "2", *extra])
-        collect.main()
-        configs[name] = pq.read_table(next(output_dir.glob("*.parquet"))).to_pylist()[0]["metadata"]["generation_config"]
-    assert not hasattr(seen[0], "top_k") and seen[1].top_k == 20
-    assert "sampling_top_k" not in configs["unset"] and configs["set"]["sampling_top_k"] == 20

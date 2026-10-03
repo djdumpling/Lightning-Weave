@@ -107,12 +107,6 @@ roughly 22.8K prompts would be substantially more expensive while the locked
 50-round run could consume only 12,800 trajectory rows; that is deliberately not
 the default recipe.
 
-The earlier 22,849 figure used a 10,240-token prompt cap and the Thinking-2507
-template. This recipe must remeasure with the actual Qwen3-4B behavior tokenizer
-and the mentor-provided 8,192-token cap, so the eligible-pool count will be lower.
-The CPU summary makes that difference explicit rather than silently claiming all
-22,849 rows fit.
-
 ## Modal stages
 
 The wrapper defaults to the existing `alex-dev-2` Modal environment; override it
@@ -135,11 +129,7 @@ bash scripts/run_looptool_opd.sh train
 bash scripts/run_looptool_opd.sh export
 ```
 
-`all` executes the full prepare/cache/convert/train/export pipeline in order. It
-is provided for later reproduction, but the explicit commands are preferable for
-the first run because
-they make it easy to inspect the prompt summary and sealed manifest before
-spending on training:
+`all` executes the full prepare/cache/convert/train/export pipeline in order:
 
 ```bash
 bash scripts/run_looptool_opd.sh all --workers 8
@@ -170,12 +160,7 @@ checking the checkpoint contents:
 bash scripts/run_looptool_opd.sh train --resume
 ```
 
-## Checks before the first full job
-
-After `prepare`, inspect `prompts_summary.json` in the data Volume. Confirm the
-eligible count, length percentiles, and selected distribution. After `cache`, the
-sealed manifest must report exactly 12,800 rows and four responses per prompt.
-Only then run conversion and training.
+## Scope
 
 This setup intentionally does not include BFCL training, reference-answer
 rewards, SFT, GRPO, multi-anchor composition, or a live tool environment. BFCL

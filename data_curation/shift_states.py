@@ -207,8 +207,3 @@ class StateLabeler:
             elif after_call and texts[position].strip():
                 after_call = False
         return codes
-
-
-def position_bins(length: int, bins: int) -> np.ndarray:
-    """LOPD-2.0 normalized-position bins floor(B * t / L) for t = 0..L-1."""
-    return np.minimum((np.arange(length) * bins) // max(length, 1), bins - 1).astype(np.int16)

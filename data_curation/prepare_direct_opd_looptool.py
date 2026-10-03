@@ -44,11 +44,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
-def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    with path.open(encoding="utf-8") as handle:
-        return [json.loads(line) for line in handle if line.strip()]
-
-
 def render_prompt(tokenizer: Any, row: dict[str, Any]) -> str:
     return tokenizer.apply_chat_template(
         row["messages"],
@@ -163,7 +158,8 @@ def main() -> None:
     for path in (args.output, args.summary):
         if path.exists() and not args.overwrite:
             raise FileExistsError(f"Output exists; pass --overwrite to replace it: {path}")
-    source = read_jsonl(args.input)
+    with args.input.open(encoding="utf-8") as handle:
+        source = [json.loads(line) for line in handle if line.strip()]
     if args.expected_input_rows and len(source) != args.expected_input_rows:
         raise ValueError(f"canonical input has {len(source):,} rows; expected {args.expected_input_rows:,}")
 

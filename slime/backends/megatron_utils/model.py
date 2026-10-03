@@ -503,7 +503,6 @@ def train_one_step(
                 "post_teacher_log_probs",
                 "pre_teacher_log_probs",
                 "student_ref_sampled_log_probs",
-                "sequence_weights",  # sequence_weighted mode [response_length]
             ],
             args.data_pad_size_multiplier,
         )

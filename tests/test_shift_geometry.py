@@ -52,8 +52,6 @@ def test_fisher_inner_product_is_the_second_order_target_kl():
     kl = geometry.target_kl(probs, scale * u, scale * v, alpha)
     difference = geometry.center(scale * (u - v), probs)
     np.testing.assert_allclose(kl, (probs * difference**2).sum(-1) / (2 * alpha**2), rtol=1e-3)
-    gram = geometry.fisher_products(np.stack([geometry.center(u, probs), geometry.center(v, probs)], -1), probs)
-    np.testing.assert_allclose(gram[:, 0, 0], (probs * geometry.center(u, probs) ** 2).sum(-1))
 
 
 # --- cache fixtures ---------------------------------------------------------------------------------
@@ -96,15 +94,6 @@ def write_cache(root, rows, *, seed=0, sample_prefix="s", candidate_valid=None, 
     metadata = pa.StructArray.from_arrays([pa.array(v, type=types.get(n)) for n, v in values.items()], names=list(values))
     pq.write_table(pa.table({"metadata": metadata}), root / "shard-00000.parquet")
     return root
-
-
-def tiny_labeler():
-    return StateLabeler(
-        TokenTable.from_vocab(
-            {chr(97 + index): index for index in range(8)},
-            {"<think>": 8, "</think>": 9, "<tool_call>": 10, "</tool_call>": 11, "<|im_end|>": 12},
-        )
-    )
 
 
 def test_joined_rows_check_alignment_and_separate_mapped_from_trained(tmp_path):
@@ -155,21 +144,6 @@ def test_keep_untrained_restores_the_legacy_log_ratio(tmp_path):
     legacy = geometry.evidence_shift(row, "agent_acc", keep_untrained=True)
     np.testing.assert_array_equal(clean[:, 1], 0.0)
     np.testing.assert_array_equal(legacy[:, :-1], row.shifts["agent_acc"])
-
-
-def test_cosines_are_scale_free_and_signed_and_the_placebo_is_centered(tmp_path):
-    base = write_cache(tmp_path / "base", 40)
-    directions = [
-        geometry.Direction("acc", (("agent_acc", 1.0),)),
-        geometry.Direction("double", (("agent_acc", 2.0),)),
-        geometry.Direction("negated", (("agent_acc", -0.5),)),
-    ]
-    summary = geometry.analyze(geometry.iter_joined_rows(base, {}), directions, tiny_labeler())["raw"].summary(bootstrap=50)
-    section = summary["slices"]["all"]
-    np.testing.assert_allclose(np.asarray(section["cosine"])[0], [1.0, 1.0, -1.0], atol=1e-12)
-    low, high = np.asarray(section["placebo_cosine_ci95"])
-    assert low[0, 1] < 0 < high[0, 1]
-    assert {"supported", "unsupported", "position:0"} <= set(summary["slices"])
 
 
 def test_state_labels_follow_think_and_tool_call_structure():

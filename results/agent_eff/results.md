@@ -19,6 +19,11 @@ used. To rerun them, check out snapshot commit 543e6d0. That applies to:
 543e6d0 also registers the 23 exploratory arms that were never trained. Every trained arm is still registered,
 unchanged.
 
+**Code for earlier sections (2026-10-02).** The second cleanup removed more tools. To rerun them, check out snapshot
+commit 6f73aa2. That applies to:
+- section 4: the census geometry CLI in `data_curation/shift_geometry.py` and the census-only donors;
+- section 13: the precision re-score (`data_curation/check_score_precision.py`, `--compute-dtype`).
+
 **Note on direction (2026-10-01): stop adjusting DECS, and stop running redundant experiments.** From section 5
 on, about 15 arms varied the donor, its strength, the composition, or a gate. Every one landed on the same
 accuracy-per-token line. That is one finding confirmed many times, not many findings. Section 15 is the last
@@ -559,7 +564,8 @@ removed, not which donor removes it. That fits the diffuse per-step slip of sect
 
 ## 15. Paper recipe, turn-start allocation, and decoding replicates
 
-Pre-registered in docs/agent_efficiency_synthesis.md ("Next"). The turn-start arms and their references are
+Pre-registered in docs/agent_efficiency_synthesis.md, "Lightning Weave's published recipe and turn-start
+allocation" (full text at commit `6f73aa2`). The turn-start arms and their references are
 decoded at BFCL sampling seeds 0, 1 and 2. Comparisons pair runs at the same training and decoding seed and
 average over pairs (`evaluation/bfcl_pooled.py`).
 

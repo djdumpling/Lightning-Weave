@@ -364,7 +364,6 @@ def log_rollout_data(rollout_id: int, args: Namespace, rollout_data: RolloutBatc
                 "post_teacher_log_probs",
                 "pre_teacher_log_probs",
                 "student_ref_sampled_log_probs",
-                "sequence_weights",
             ]:
                 continue
             # Skip None values

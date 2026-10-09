@@ -1,0 +1,61 @@
+{
+  "scope": "Files at final delivery, excluding this inventory itself",
+  "files": {
+    "README.md": {
+      "bytes": 33564,
+      "sha256": "c5647295b9a5edd9121263f2370f250a32d0d44d43d211927d104ca105770820"
+    },
+    "artifacts/attention_probe.json": {
+      "bytes": 1548,
+      "sha256": "5b44a1ed828dbac399d3f8edc37e0ca29c5804a775392c130d7ba75447f1fbdd"
+    },
+    "artifacts/direct_opd_geometry.json": {
+      "bytes": 1088,
+      "sha256": "67efea84b73a0a9f2332611e17bad7cecb8abdc2cccbe27a2888f072d8b9fa46"
+    },
+    "artifacts/tau_airline_matched_trial0.json": {
+      "bytes": 72714,
+      "sha256": "ee20e74fddb967ce1f2f92dfab0cf8f96468c98c7c5add17e9aa82ca7dc831b8"
+    },
+    "artifacts/tau_base_summary.json": {
+      "bytes": 27116,
+      "sha256": "7378f74dec71030e7779aec6bf6002f377f55dc84d29d36d91172150002b7fcd"
+    },
+    "artifacts/tau_comparison.json": {
+      "bytes": 2767,
+      "sha256": "88e2d24fa556576359e411141b3f6a1a40b7fff3744cfbd0299a6543479fa3d1"
+    },
+    "artifacts/tau_opd_summary.json": {
+      "bytes": 26502,
+      "sha256": "2a46f651d4a626201a72cddd5ec9d581ebb35eb340567f73dc1d4c9f9761e351"
+    },
+    "artifacts/tau_thinking_prime_summary.json": {
+      "bytes": 21046,
+      "sha256": "6fe1a317e8ad896d60565644ec0c087450e442dca8aac668e6142b194ba9a095"
+    },
+    "artifacts/tau_thinking_user235b_summary.json": {
+      "bytes": 21384,
+      "sha256": "3c136ec97daba6b90a2c3f4020c22dc9d5ff2cfdd338610efe8f6215f3f87d9c"
+    },
+    "artifacts/tau_thinking_user30b_summary.json": {
+      "bytes": 21434,
+      "sha256": "76af7a30f6b7ea78ca196c2ee4ddde0adc518263f63a6d0dc2241460073874ab"
+    },
+    "artifacts/validation.json": {
+      "bytes": 2240,
+      "sha256": "cf9d119cce75c6fa6542912f78c5ae997addab519f718f65d3f3a38497333515"
+    },
+    "probes/analyze_tau.py": {
+      "bytes": 6367,
+      "sha256": "f62cb48204bd16e7525b071f6669d53d39ec2319695e044c66238fc1acb25866"
+    },
+    "probes/direct_opd_geometry.py": {
+      "bytes": 2294,
+      "sha256": "44c4497e19ed2105e25d124738cc25e0f0e8aedabe8a6e731854dedbf2b6e05a"
+    },
+    "probes/probe_attention.py": {
+      "bytes": 2963,
+      "sha256": "9196497549b8805be8f34bf958c543ef77e36c418b602860c4d6849080a80a0f"
+    }
+  }
+}

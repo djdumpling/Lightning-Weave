@@ -1,0 +1,212 @@
+{
+  "scope": "Finite mathematical witnesses, not empirical evidence of task gains.",
+  "projection": {
+    "original_action_mass": {
+      "read": 0.035325412426582235,
+      "stop": 0.9646745875734177
+    },
+    "naively_multiply_by_desired_action_mass": {
+      "read": 0.12776192195039718,
+      "stop": 0.8722380780496027
+    },
+    "exact_projected_action_mass": {
+      "read": 0.8,
+      "stop": 0.2
+    },
+    "projected_response_mass": [
+      0.4,
+      0.4,
+      0.19993292997390671,
+      6.707002609329561e-05
+    ],
+    "group_energy_shift_before_projection": {
+      "read": 3.339108474364181e-05,
+      "stop": 0.9999666089152565
+    },
+    "group_energy_shift_projection_error": 1.3552527156068805e-20,
+    "KL_pythagorean_error": 4.440892098500626e-16,
+    "doob_transform_error": 1.3552527156068805e-20
+  },
+  "composition_order": {
+    "base_action_mass": {
+      "good": 0.6666666666666666,
+      "bad": 0.3333333333333333
+    },
+    "each_donor_action_mass": {
+      "good": 0.951,
+      "bad": 0.049
+    },
+    "configurations": [
+      {
+        "weights": [
+          1.0,
+          1.0
+        ],
+        "alpha": 1.0,
+        "compose_responses_then_marginalize": {
+          "good": 0.44175773076028807,
+          "bad": 0.5582422692397119
+        },
+        "marginalize_then_compose_with_same_induced_base": {
+          "good": 0.9947184512149652,
+          "bad": 0.005281548785034805
+        }
+      },
+      {
+        "weights": [
+          1.0,
+          1.0
+        ],
+        "alpha": 2.0,
+        "compose_responses_then_marginalize": {
+          "good": 0.5571387695105084,
+          "bad": 0.4428612304894915
+        },
+        "marginalize_then_compose_with_same_induced_base": {
+          "good": 0.9510000000000001,
+          "bad": 0.049
+        }
+      },
+      {
+        "weights": [
+          0.5,
+          0.5
+        ],
+        "alpha": 2.0,
+        "compose_responses_then_marginalize": {
+          "good": 0.6133349842075825,
+          "bad": 0.38666501579241763
+        },
+        "marginalize_then_compose_with_same_induced_base": {
+          "good": 0.8616926741376193,
+          "bad": 0.13830732586238065
+        }
+      }
+    ]
+  },
+  "token_local_composition": {
+    "base_good_action": 0.6633333333333332,
+    "each_donor_good_action": 0.94198,
+    "all_models_good_action_conditioned_on_rationale": [
+      0.99,
+      0.99,
+      0.01
+    ],
+    "leaf_delta": "exactly zero for every represented token",
+    "support": "3 root children and 2 leaf children, all represented",
+    "configurations": [
+      {
+        "weights": [
+          1.0,
+          1.0
+        ],
+        "alpha": 1.0,
+        "local_target_rationale_distribution": [
+          0.22087886538014403,
+          0.22087886538014403,
+          0.5582422692397119
+        ],
+        "token_local_composition_good_action": 0.4429225761450823,
+        "action_marginal_first_good_action": 0.9925805866972514
+      },
+      {
+        "weights": [
+          1.0,
+          1.0
+        ],
+        "alpha": 2.0,
+        "local_target_rationale_distribution": [
+          0.2785693847552542,
+          0.2785693847552542,
+          0.4428612304894915
+        ],
+        "token_local_composition_good_action": 0.5559959941202982,
+        "action_marginal_first_good_action": 0.94198
+      },
+      {
+        "weights": [
+          0.5,
+          0.5
+        ],
+        "alpha": 2.0,
+        "local_target_rationale_distribution": [
+          0.30666749210379124,
+          0.30666749210379124,
+          0.38666501579241763
+        ],
+        "token_local_composition_good_action": 0.6110682845234309,
+        "action_marginal_first_good_action": 0.8497562139481211
+      }
+    ]
+  },
+  "complementary_constraints": {
+    "weights": [
+      1.0,
+      1.0
+    ],
+    "alpha": 1.0,
+    "donor1_action_marginal": {
+      "11": 0.45,
+      "10": 0.45,
+      "01": 0.05,
+      "00": 0.05
+    },
+    "donor2_action_marginal": {
+      "11": 0.45,
+      "10": 0.05,
+      "01": 0.45,
+      "00": 0.05
+    },
+    "arithmetic_donor_mixture": {
+      "11": 0.45,
+      "10": 0.25,
+      "01": 0.25,
+      "00": 0.05
+    },
+    "token_local_product": {
+      "11": 0.14443703957203843,
+      "10": 0.40526666546587653,
+      "01": 0.40526666546587653,
+      "00": 0.04502962949620852
+    },
+    "action_first_product": {
+      "11": 0.8099999999999999,
+      "10": 0.09000000000000002,
+      "01": 0.09000000000000002,
+      "00": 0.010000000000000004
+    },
+    "purpose": "A complementary-constraint witness where an action product can outperform a trivial donor mixture."
+  },
+  "reasoning_retention": {
+    "public_action_mass_both_policies": 1.0,
+    "baseline_success": 0.9,
+    "donor_conditional_success": 0.1,
+    "lesson": "Equal external action marginals do not preserve return when reasoning persists in the next policy state."
+  },
+  "information_acquisition": {
+    "world_values": {
+      "world_0": {
+        "guess_0": 1.0,
+        "guess_1": 0.0,
+        "read": 0.9
+      },
+      "world_1": {
+        "guess_0": 0.0,
+        "guess_1": 1.0,
+        "read": 0.9
+      }
+    },
+    "per_world_best_action": {
+      "world_0": "guess_0",
+      "world_1": "guess_1"
+    },
+    "values_conditioned_on_shared_public_history": {
+      "guess_0": 0.5,
+      "guess_1": 0.5,
+      "read": 0.9
+    },
+    "best_feasible_shared_action": "read",
+    "success_of_imitation_of_privileged_argmax": 0.5,
+    "success_of_read_then_observe": 0.9
+  }
+}

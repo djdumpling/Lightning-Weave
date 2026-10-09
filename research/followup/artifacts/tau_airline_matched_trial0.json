@@ -1,0 +1,2497 @@
+{
+  "base": {
+    "after_tool_fraction": 0.3973384030418251,
+    "all_tasks_with_tool_error": 9,
+    "assistant_messages": 526,
+    "assistant_messages_after_tool": 209,
+    "completion_tokens": 421892,
+    "failed_tasks": 39,
+    "failed_with_tool_error": 8,
+    "failed_without_tool_error": 31,
+    "natural_user_stop_failures": 39,
+    "success_percent": 22.0,
+    "successes": 11,
+    "successful_despite_tool_error": 1,
+    "tasks": 50,
+    "terminations": {
+      "user_stop": 50
+    },
+    "truncated_turns": 0
+  },
+  "limitations": [
+    "One matched trial, historical LoopTool student, not mentor latest students.",
+    "Paired bootstrap resamples 50 tasks; does not estimate training-seed variance.",
+    "A visible tool error is not necessarily a semantic mistake; absence is not correctness.",
+    "Tool error coverage alone is not coverage of the mentor union with WRITE states.",
+    "No new generation, tools, reward execution, or GPU training."
+  ],
+  "opd": {
+    "after_tool_fraction": 0.4033333333333333,
+    "all_tasks_with_tool_error": 6,
+    "assistant_messages": 600,
+    "assistant_messages_after_tool": 242,
+    "completion_tokens": 430676,
+    "failed_tasks": 31,
+    "failed_with_tool_error": 3,
+    "failed_without_tool_error": 28,
+    "natural_user_stop_failures": 30,
+    "success_percent": 38.0,
+    "successes": 19,
+    "successful_despite_tool_error": 3,
+    "tasks": 50,
+    "terminations": {
+      "max_steps": 1,
+      "user_stop": 49
+    },
+    "truncated_turns": 0
+  },
+  "paired_delta_pp": {
+    "delta": 16.0,
+    "high": 30.0,
+    "low": 2.0,
+    "tasks": 50
+  },
+  "paired_flips": {
+    "both_right": 7,
+    "both_wrong": 27,
+    "opd_gain": 12,
+    "opd_loss": 4
+  },
+  "per_task": {
+    "base": [
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 4303,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "0",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 1,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 6,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 2661,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "1",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_user_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 13,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 17852,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "10",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_flight_status": 1,
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 13,
+        "assistant_messages_after_tool": 6,
+        "completion_tokens": 10662,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "11",
+        "termination": "user_stop",
+        "tool_calls": 7,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 2,
+          "get_user_details": 1,
+          "search_direct_flight": 2,
+          "transfer_to_human_agents": 1,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 12,
+        "assistant_messages_after_tool": 5,
+        "completion_tokens": 13043,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "12",
+        "termination": "user_stop",
+        "tool_calls": 5,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "update_reservation_baggages": 2,
+          "update_reservation_flights": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 12,
+        "assistant_messages_after_tool": 5,
+        "completion_tokens": 10940,
+        "db_match": false,
+        "repeated_exact_tool_calls": 1,
+        "seed": 626729,
+        "success": false,
+        "task_id": "13",
+        "termination": "user_stop",
+        "tool_calls": 5,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 2,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 20,
+        "assistant_messages_after_tool": 8,
+        "completion_tokens": 19282,
+        "db_match": false,
+        "repeated_exact_tool_calls": 1,
+        "seed": 626729,
+        "success": false,
+        "task_id": "14",
+        "termination": "user_stop",
+        "tool_calls": 8,
+        "tool_errors": 3,
+        "tool_names": {
+          "book_reservation": 3,
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_onestop_flight": 2,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 16,
+        "assistant_messages_after_tool": 8,
+        "completion_tokens": 11433,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "15",
+        "termination": "user_stop",
+        "tool_calls": 11,
+        "tool_errors": 1,
+        "tool_names": {
+          "get_reservation_details": 3,
+          "get_user_details": 1,
+          "search_direct_flight": 4,
+          "search_onestop_flight": 2,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 13,
+        "assistant_messages_after_tool": 6,
+        "completion_tokens": 9970,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "16",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 1,
+        "tool_names": {
+          "get_reservation_details": 3,
+          "get_user_details": 1,
+          "search_onestop_flight": 1,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 16,
+        "assistant_messages_after_tool": 7,
+        "completion_tokens": 17652,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "17",
+        "termination": "user_stop",
+        "tool_calls": 7,
+        "tool_errors": 2,
+        "tool_names": {
+          "book_reservation": 2,
+          "cancel_reservation": 1,
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "update_reservation_baggages": 1,
+          "update_reservation_passengers": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 14,
+        "assistant_messages_after_tool": 7,
+        "completion_tokens": 17244,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "18",
+        "termination": "user_stop",
+        "tool_calls": 8,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 3,
+          "get_user_details": 1,
+          "search_direct_flight": 2,
+          "update_reservation_flights": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 5613,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "19",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "send_certificate": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 5,
+        "assistant_messages_after_tool": 1,
+        "completion_tokens": 1983,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "2",
+        "termination": "user_stop",
+        "tool_calls": 1,
+        "tool_errors": 0,
+        "tool_names": {
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 16,
+        "assistant_messages_after_tool": 6,
+        "completion_tokens": 13090,
+        "db_match": false,
+        "repeated_exact_tool_calls": 1,
+        "seed": 626729,
+        "success": false,
+        "task_id": "20",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 3,
+        "tool_names": {
+          "book_reservation": 3,
+          "get_user_details": 1,
+          "search_direct_flight": 1,
+          "search_onestop_flight": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 8,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 4657,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "21",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 9681,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "22",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "update_reservation_baggages": 1,
+          "update_reservation_passengers": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 5,
+        "completion_tokens": 11888,
+        "db_match": false,
+        "repeated_exact_tool_calls": 1,
+        "seed": 626729,
+        "success": false,
+        "task_id": "23",
+        "termination": "user_stop",
+        "tool_calls": 5,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_onestop_flight": 1,
+          "update_reservation_flights": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 5,
+        "completion_tokens": 12818,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "24",
+        "termination": "user_stop",
+        "tool_calls": 5,
+        "tool_errors": 0,
+        "tool_names": {
+          "book_reservation": 1,
+          "cancel_reservation": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 13,
+        "assistant_messages_after_tool": 5,
+        "completion_tokens": 18163,
+        "db_match": false,
+        "repeated_exact_tool_calls": 2,
+        "seed": 626729,
+        "success": false,
+        "task_id": "25",
+        "termination": "user_stop",
+        "tool_calls": 5,
+        "tool_errors": 3,
+        "tool_names": {
+          "book_reservation": 3,
+          "get_reservation_details": 1,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 3667,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "26",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 1,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 6,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 3064,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "27",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_flight_status": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 6747,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "28",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 7,
+        "assistant_messages_after_tool": 1,
+        "completion_tokens": 2880,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "29",
+        "termination": "user_stop",
+        "tool_calls": 1,
+        "tool_errors": 0,
+        "tool_names": {
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 7,
+        "assistant_messages_after_tool": 1,
+        "completion_tokens": 1650,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "3",
+        "termination": "user_stop",
+        "tool_calls": 1,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 6485,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "30",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "search_direct_flight": 1,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 7374,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "31",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 6626,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "32",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 10211,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "33",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "search_direct_flight": 2,
+          "update_reservation_baggages": 1,
+          "update_reservation_flights": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 12,
+        "assistant_messages_after_tool": 5,
+        "completion_tokens": 9903,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "34",
+        "termination": "user_stop",
+        "tool_calls": 5,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 2,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 18,
+        "assistant_messages_after_tool": 8,
+        "completion_tokens": 15347,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "35",
+        "termination": "user_stop",
+        "tool_calls": 8,
+        "tool_errors": 2,
+        "tool_names": {
+          "book_reservation": 3,
+          "cancel_reservation": 1,
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 1,
+          "search_onestop_flight": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 5,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 2203,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "36",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 7,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 4706,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "37",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 2,
+          "get_reservation_details": 3,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 3,
+        "assistant_messages_after_tool": 1,
+        "completion_tokens": 699,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "38",
+        "termination": "user_stop",
+        "tool_calls": 1,
+        "tool_errors": 0,
+        "tool_names": {
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 18,
+        "assistant_messages_after_tool": 10,
+        "completion_tokens": 15016,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "39",
+        "termination": "user_stop",
+        "tool_calls": 10,
+        "tool_errors": 1,
+        "tool_names": {
+          "cancel_reservation": 5,
+          "get_reservation_details": 4,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 6124,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "4",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "send_certificate": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 3755,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "40",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 2,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "update_reservation_passengers": 3
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 13,
+        "assistant_messages_after_tool": 8,
+        "completion_tokens": 9536,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "41",
+        "termination": "user_stop",
+        "tool_calls": 8,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 6,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 12,
+        "assistant_messages_after_tool": 6,
+        "completion_tokens": 7817,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "42",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 4,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 11,
+        "assistant_messages_after_tool": 6,
+        "completion_tokens": 6007,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "43",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 4,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 8,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 7931,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "44",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_flight_status": 1,
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 12,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 8575,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "45",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "search_onestop_flight": 1,
+          "transfer_to_human_agents": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 3,
+        "assistant_messages_after_tool": 1,
+        "completion_tokens": 1238,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "46",
+        "termination": "user_stop",
+        "tool_calls": 1,
+        "tool_errors": 0,
+        "tool_names": {
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 6354,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "47",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 5589,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "48",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 1,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 6,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 3193,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "49",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 16,
+        "assistant_messages_after_tool": 8,
+        "completion_tokens": 17325,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "5",
+        "termination": "user_stop",
+        "tool_calls": 8,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_flight_status": 1,
+          "get_reservation_details": 3,
+          "get_user_details": 1,
+          "send_certificate": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 13,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 7453,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "6",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 12,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 10251,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "7",
+        "termination": "user_stop",
+        "tool_calls": 5,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 2,
+          "get_user_details": 1,
+          "transfer_to_human_agents": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 6724,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "8",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 6,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 4507,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "9",
+        "termination": "user_stop",
+        "tool_calls": 11,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 2,
+          "get_flight_status": 4,
+          "get_reservation_details": 3,
+          "search_direct_flight": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      }
+    ],
+    "opd": [
+      {
+        "assistant_messages": 6,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 2201,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "0",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 13,
+        "assistant_messages_after_tool": 7,
+        "completion_tokens": 6367,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "1",
+        "termination": "user_stop",
+        "tool_calls": 7,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 5,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 5971,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "10",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_user_details": 1,
+          "search_onestop_flight": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 4424,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "11",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 8221,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "12",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "update_reservation_baggages": 1,
+          "update_reservation_flights": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 8218,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "13",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 1,
+        "tool_names": {
+          "get_reservation_details": 2,
+          "search_direct_flight": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 7,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 1917,
+        "db_match": false,
+        "repeated_exact_tool_calls": 3,
+        "seed": 626729,
+        "success": false,
+        "task_id": "14",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "transfer_to_human_agents": 4
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 13,
+        "assistant_messages_after_tool": 7,
+        "completion_tokens": 9559,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "15",
+        "termination": "user_stop",
+        "tool_calls": 7,
+        "tool_errors": 2,
+        "tool_names": {
+          "get_reservation_details": 2,
+          "get_user_details": 1,
+          "search_direct_flight": 1,
+          "search_onestop_flight": 1,
+          "update_reservation_flights": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 8371,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "16",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_onestop_flight": 1,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 12,
+        "assistant_messages_after_tool": 7,
+        "completion_tokens": 9994,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "17",
+        "termination": "user_stop",
+        "tool_calls": 7,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 3,
+          "get_user_details": 1,
+          "update_reservation_baggages": 1,
+          "update_reservation_flights": 1,
+          "update_reservation_passengers": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 16,
+        "assistant_messages_after_tool": 10,
+        "completion_tokens": 14291,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "18",
+        "termination": "user_stop",
+        "tool_calls": 10,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 6,
+          "get_user_details": 1,
+          "update_reservation_flights": 3
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 13,
+        "assistant_messages_after_tool": 5,
+        "completion_tokens": 8601,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "19",
+        "termination": "user_stop",
+        "tool_calls": 5,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 2,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 4,
+        "assistant_messages_after_tool": 1,
+        "completion_tokens": 2111,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "2",
+        "termination": "user_stop",
+        "tool_calls": 1,
+        "tool_errors": 0,
+        "tool_names": {
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 15,
+        "assistant_messages_after_tool": 6,
+        "completion_tokens": 19913,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "20",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 1,
+        "tool_names": {
+          "book_reservation": 3,
+          "get_user_details": 1,
+          "search_direct_flight": 1,
+          "search_onestop_flight": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 8,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 6124,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "21",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 14,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 6964,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "22",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_user_details": 1,
+          "search_direct_flight": 1,
+          "search_onestop_flight": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 4,
+        "assistant_messages_after_tool": 1,
+        "completion_tokens": 2048,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "23",
+        "termination": "user_stop",
+        "tool_calls": 1,
+        "tool_errors": 0,
+        "tool_names": {
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 3,
+        "assistant_messages_after_tool": 1,
+        "completion_tokens": 515,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "24",
+        "termination": "user_stop",
+        "tool_calls": 1,
+        "tool_errors": 0,
+        "tool_names": {
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 12,
+        "assistant_messages_after_tool": 6,
+        "completion_tokens": 15396,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "25",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 3,
+        "tool_names": {
+          "book_reservation": 3,
+          "get_reservation_details": 2,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 7,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 5310,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "26",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 5426,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "27",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_flight_status": 1,
+          "get_user_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 8,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 6043,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "28",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 13,
+        "assistant_messages_after_tool": 6,
+        "completion_tokens": 10414,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "29",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 2,
+          "update_reservation_baggages": 1,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 6,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 3114,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "3",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_user_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 11,
+        "assistant_messages_after_tool": 6,
+        "completion_tokens": 12547,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "30",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 0,
+        "tool_names": {
+          "calculate": 1,
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 1,
+          "update_reservation_baggages": 1,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 6733,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "31",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 6115,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "32",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 1,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 18,
+        "assistant_messages_after_tool": 11,
+        "completion_tokens": 23284,
+        "db_match": false,
+        "repeated_exact_tool_calls": 1,
+        "seed": 626729,
+        "success": false,
+        "task_id": "33",
+        "termination": "user_stop",
+        "tool_calls": 11,
+        "tool_errors": 0,
+        "tool_names": {
+          "calculate": 2,
+          "get_flight_status": 1,
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 3,
+          "transfer_to_human_agents": 1,
+          "update_reservation_flights": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 10,
+        "assistant_messages_after_tool": 7,
+        "completion_tokens": 15329,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "34",
+        "termination": "user_stop",
+        "tool_calls": 7,
+        "tool_errors": 1,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 2,
+          "transfer_to_human_agents": 1,
+          "update_reservation_baggages": 1,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 17,
+        "assistant_messages_after_tool": 6,
+        "completion_tokens": 13028,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "35",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 0,
+        "tool_names": {
+          "book_reservation": 1,
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "search_direct_flight": 1,
+          "transfer_to_human_agents": 1,
+          "update_reservation_flights": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 6,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 4052,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "36",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 7,
+        "assistant_messages_after_tool": 4,
+        "completion_tokens": 8223,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "37",
+        "termination": "user_stop",
+        "tool_calls": 4,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_flight_status": 1,
+          "get_reservation_details": 2,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 3,
+        "assistant_messages_after_tool": 1,
+        "completion_tokens": 684,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "38",
+        "termination": "user_stop",
+        "tool_calls": 1,
+        "tool_errors": 0,
+        "tool_names": {
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 20,
+        "assistant_messages_after_tool": 13,
+        "completion_tokens": 12968,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "39",
+        "termination": "user_stop",
+        "tool_calls": 13,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 5,
+          "get_reservation_details": 7,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 3,
+        "assistant_messages_after_tool": 1,
+        "completion_tokens": 2767,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "4",
+        "termination": "user_stop",
+        "tool_calls": 1,
+        "tool_errors": 0,
+        "tool_names": {
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 6,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 2889,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "40",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "update_reservation_passengers": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 13,
+        "assistant_messages_after_tool": 7,
+        "completion_tokens": 7676,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "41",
+        "termination": "user_stop",
+        "tool_calls": 7,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 5,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 17,
+        "assistant_messages_after_tool": 10,
+        "completion_tokens": 14238,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "42",
+        "termination": "user_stop",
+        "tool_calls": 10,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 3,
+          "get_reservation_details": 6,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 12,
+        "assistant_messages_after_tool": 6,
+        "completion_tokens": 7149,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "43",
+        "termination": "user_stop",
+        "tool_calls": 6,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 4,
+          "get_user_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 23,
+        "assistant_messages_after_tool": 16,
+        "completion_tokens": 33865,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "44",
+        "termination": "user_stop",
+        "tool_calls": 16,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_flight_status": 2,
+          "get_reservation_details": 5,
+          "get_user_details": 1,
+          "search_direct_flight": 4,
+          "update_reservation_flights": 3
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 7,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 2907,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "45",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 1,
+          "get_reservation_details": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 5,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 2965,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "46",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 1,
+        "tool_names": {
+          "get_user_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 14,
+        "assistant_messages_after_tool": 5,
+        "completion_tokens": 8907,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "47",
+        "termination": "user_stop",
+        "tool_calls": 5,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 4
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 9,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 5915,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "48",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 6,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 3287,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "49",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 7,
+        "assistant_messages_after_tool": 2,
+        "completion_tokens": 7977,
+        "db_match": true,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": true,
+        "task_id": "5",
+        "termination": "user_stop",
+        "tool_calls": 2,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_flight_status": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 101,
+        "assistant_messages_after_tool": 5,
+        "completion_tokens": 27144,
+        "db_match": null,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "6",
+        "termination": "max_steps",
+        "tool_calls": 5,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "transfer_to_human_agents": 4
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 7,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 7229,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "7",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 2,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 7,
+        "assistant_messages_after_tool": 3,
+        "completion_tokens": 6660,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "8",
+        "termination": "user_stop",
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "tool_names": {
+          "get_reservation_details": 1,
+          "get_user_details": 1,
+          "transfer_to_human_agents": 1
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      },
+      {
+        "assistant_messages": 23,
+        "assistant_messages_after_tool": 17,
+        "completion_tokens": 14625,
+        "db_match": false,
+        "repeated_exact_tool_calls": 0,
+        "seed": 626729,
+        "success": false,
+        "task_id": "9",
+        "termination": "user_stop",
+        "tool_calls": 17,
+        "tool_errors": 0,
+        "tool_names": {
+          "cancel_reservation": 2,
+          "get_reservation_details": 3,
+          "search_direct_flight": 10,
+          "transfer_to_human_agents": 2
+        },
+        "trial": 0,
+        "truncated_turns": 0
+      }
+    ]
+  },
+  "source": {
+    "domain": "tau2_airline",
+    "modal_environment": "alex-dev-2",
+    "run": "tau-b712b7c60edc-full",
+    "trial": 0,
+    "volume": "lightning-weave-tau-eval"
+  },
+  "source_receipts": {
+    "base": [
+      {
+        "file": "trial0/0-b6589fc6.json",
+        "sha256": "84b99d04f5b6d4c75e8fda190fabe8d9bb93a15447657a52205a61c15e4861a9"
+      },
+      {
+        "file": "trial0/1-356a192b.json",
+        "sha256": "2da4da24a7156c631729d9ebba0da552de163655b0577be03188ec2f09bae138"
+      },
+      {
+        "file": "trial0/10-b1d57811.json",
+        "sha256": "1aacfa3b6b6113ecb055bdbb9b59128dca100f06a5d2bbc65045cddd58f2c85a"
+      },
+      {
+        "file": "trial0/11-17ba0791.json",
+        "sha256": "919c2084690e5af5d12b64699fe2647759d83c91870057f2d4bec8593264e705"
+      },
+      {
+        "file": "trial0/12-7b52009b.json",
+        "sha256": "ad63edc41b71ec09489777bc56a83c17300e047a08af07f70f6c9fa7254301be"
+      },
+      {
+        "file": "trial0/13-bd307a3e.json",
+        "sha256": "bf040e84897deb06da45e538309372a563f73e11acb3fd1136aa97c35a74613d"
+      },
+      {
+        "file": "trial0/14-fa35e192.json",
+        "sha256": "3cb4fb57678f978cbb70d4c7827bffb14c8862f5b24b0458715afa2c2c8ad784"
+      },
+      {
+        "file": "trial0/15-f1abd670.json",
+        "sha256": "32a59d5279cb06592e851c3928163a715cacaa9f4993220d8bff6d7bd467140f"
+      },
+      {
+        "file": "trial0/16-1574bddb.json",
+        "sha256": "5bcb38db8714221dca2faf4d0597e9202b35c746a7e7ab94be6b1ce631fc24fb"
+      },
+      {
+        "file": "trial0/17-0716d970.json",
+        "sha256": "1988e3f4f5bc5bae3c39d525cd44496dd225ea5e501ab858c6158acef4ea62ad"
+      },
+      {
+        "file": "trial0/18-9e6a55b6.json",
+        "sha256": "8ec8712d8d078bebd8877475479f47081f7b768047101bbb46461ee5a8203d52"
+      },
+      {
+        "file": "trial0/19-b3f0c7f6.json",
+        "sha256": "4668edad9062f5f16046591681c10ea8bdd67285755d31a6d4e766571b2f1cdd"
+      },
+      {
+        "file": "trial0/2-da4b9237.json",
+        "sha256": "1ebe248039ad69bb63c1504a1d466135ca73a0400d1c9ef47bafe478db33193c"
+      },
+      {
+        "file": "trial0/20-91032ad7.json",
+        "sha256": "0538e5e9a3819b704b059688f163337716868eac9ed0bc943ba506e427279633"
+      },
+      {
+        "file": "trial0/21-472b07b9.json",
+        "sha256": "8ebb47c8a8f910f101b019594ea8b55acbc4549dade163c740c63f7b04afa97d"
+      },
+      {
+        "file": "trial0/22-12c6fc06.json",
+        "sha256": "d9babcba6b112a7095682f6048a2eca5b9e7694dad9a674f3d7706d11f748798"
+      },
+      {
+        "file": "trial0/23-d435a6cd.json",
+        "sha256": "1d7046ce24a8f822054a6dba49adc7368c3db8fa85bece58e4e0a383caef9208"
+      },
+      {
+        "file": "trial0/24-4d134bc0.json",
+        "sha256": "b0c4bcd615319824b3feb89b524a188ab9cdc083fed5e5919a0a96a9b7cc226f"
+      },
+      {
+        "file": "trial0/25-f6e1126c.json",
+        "sha256": "8eea6ab47229fea52dc1e1c4f6e9b89ebfd50d54a226825cfd57a7452b0b911d"
+      },
+      {
+        "file": "trial0/26-887309d0.json",
+        "sha256": "e148772807cef0f8b14795f3e823232872a1defe7d57ade330491510271fc32b"
+      },
+      {
+        "file": "trial0/27-bc33ea4e.json",
+        "sha256": "c6cc9ef3f08780fed99534b066f0948cf63f32b5e9616ac4d833dbbcb441a7b1"
+      },
+      {
+        "file": "trial0/28-0a57cb53.json",
+        "sha256": "c95ed7617f13c3a0e8c3342333d56945880ec2b685b472453b14c4d7e756665c"
+      },
+      {
+        "file": "trial0/29-7719a1c7.json",
+        "sha256": "6e03808070b3763d5f60697dd0e0b951701dc54000280ff4792742124b211ca8"
+      },
+      {
+        "file": "trial0/3-77de68da.json",
+        "sha256": "5238cf2cab749338960ff5c488a6ab303fdbf6794607859fca63ed421c606058"
+      },
+      {
+        "file": "trial0/30-22d200f8.json",
+        "sha256": "6f3e941b7e50d0eeb8cc76b090ff86f198c4e3c3ba7c451a4a36fc0577a622d5"
+      },
+      {
+        "file": "trial0/31-63266754.json",
+        "sha256": "27b43a8c5c7254e68fa8e371d54f1797f83b079cf358a45325318ad359fb0f02"
+      },
+      {
+        "file": "trial0/32-cb4e5208.json",
+        "sha256": "60a0b951e0c3a314b711729333138bece0be6cca76f9269b5b2985c4f9e78933"
+      },
+      {
+        "file": "trial0/33-b6692ea5.json",
+        "sha256": "f6df79f54e40a0df015f0e350dd2c03f2d1f9f29afeaf7db1b637afe3dcf0d98"
+      },
+      {
+        "file": "trial0/34-f1f836cb.json",
+        "sha256": "98491b68ed3c140384e70a62c801d7715a6eb763410cbf8f6b976ce5c8c26466"
+      },
+      {
+        "file": "trial0/35-972a67c4.json",
+        "sha256": "88aa79110b6f5ddd835029cff7a04cca7e706dd03bfb5587ea57444f79c72042"
+      },
+      {
+        "file": "trial0/36-fc074d50.json",
+        "sha256": "60ea390093c6978195742828924fc94571f131052772acf4ddf698a50c2767f7"
+      },
+      {
+        "file": "trial0/37-cb7a1d77.json",
+        "sha256": "f3f646f9c3d26f3e566cac5c989b4da0e7043dd83ae73f94e4c0e8584c906dcf"
+      },
+      {
+        "file": "trial0/38-5b384ce3.json",
+        "sha256": "75577941bc0c843f6d8db73ae0a11b59ad089ee4a5d1e3ff1acde009f165109a"
+      },
+      {
+        "file": "trial0/39-ca3512f4.json",
+        "sha256": "dc26feee7bf993a3eae85ab20b1649d516251aed87354a04ba4b35f414a8a76c"
+      },
+      {
+        "file": "trial0/4-1b645389.json",
+        "sha256": "8d5a77a8b88618b361199793310358bc61bd71b84078c5bf36e3842b6d0181fd"
+      },
+      {
+        "file": "trial0/40-af3e1334.json",
+        "sha256": "ad4b1fc5454902423514234818927572bc9080f0ff48f5963fffd18ccd2baee2"
+      },
+      {
+        "file": "trial0/41-761f22b2.json",
+        "sha256": "c3c37ff55a1aec00cdbcf628dc27e98132e8f66a7a50663f5c3d81872f7f9cc3"
+      },
+      {
+        "file": "trial0/42-92cfceb3.json",
+        "sha256": "4e19e6efb3b355b48f27304a46d0c5ff7ce3f6bf08096edd52c44f76c6078a2a"
+      },
+      {
+        "file": "trial0/43-0286dd55.json",
+        "sha256": "3b0eee7cd1e99b6514465f33762689da70f310333c8fd68cbe5e15bb6688a2b3"
+      },
+      {
+        "file": "trial0/44-98fbc42f.json",
+        "sha256": "8d7802dbe038cd3277fee336ee24e90f638481cb3ec4f9ffd5004367042f2de1"
+      },
+      {
+        "file": "trial0/45-fb644351.json",
+        "sha256": "2acbbf91b7cf89237912005cdd777b9928de1784b5e3508b83de4d73a619469b"
+      },
+      {
+        "file": "trial0/46-fe2ef495.json",
+        "sha256": "ba96c78c25764b6c5ca756914d0113a10c6a795ed66b94476d55a21b412fbace"
+      },
+      {
+        "file": "trial0/47-827bfc45.json",
+        "sha256": "a790e65e62f08250bb06cca8d96c2d944133172b6ab25946a2d0ab747333cdf3"
+      },
+      {
+        "file": "trial0/48-64e095fe.json",
+        "sha256": "96ba27bc051da86d5cdbc8617fee38a12b93cadc64d4bacd37e0254957ce1d35"
+      },
+      {
+        "file": "trial0/49-2e01e174.json",
+        "sha256": "665b31f5215f8f0dbf8437e15e6d5abed3ed703504cd8cc73ecb178592f6806c"
+      },
+      {
+        "file": "trial0/5-ac3478d6.json",
+        "sha256": "d79be2f735520265d9d4a9d427f1f912ab0de785e372913764e6def452fa2063"
+      },
+      {
+        "file": "trial0/6-c1dfd96e.json",
+        "sha256": "40ef550e6d50bf671e0823cb7af2858cee168e27fdbf13aba68490e6bca425a2"
+      },
+      {
+        "file": "trial0/7-902ba3cd.json",
+        "sha256": "cc9cb8051842edb58c9fcc9b97527f49f9de9908757d483f0754b61b1277aa81"
+      },
+      {
+        "file": "trial0/8-fe5dbbce.json",
+        "sha256": "aadf3c47db071ad9faa23dac7279b2b57486337b08898fec34c7b9335ce9eb93"
+      },
+      {
+        "file": "trial0/9-0ade7c2c.json",
+        "sha256": "553606fb44b1e3df5e7e09d393e20c2bdfc17f4dee4e84eb3fac0268a5909226"
+      }
+    ],
+    "opd": [
+      {
+        "file": "trial0/0-b6589fc6.json",
+        "sha256": "f8e509dedcbc2c9a6c4d8f6c57a8d8537afc121719fa6efd07f1415b16e52073"
+      },
+      {
+        "file": "trial0/1-356a192b.json",
+        "sha256": "96d3651a9d924f76c5befefb153032e472fc9149069e81105eaeb226d6746ff2"
+      },
+      {
+        "file": "trial0/10-b1d57811.json",
+        "sha256": "bbc0d198bd4518a81523ca11bcfaa2fc4949d77bedcdfc05b84d8dad1f8e44bf"
+      },
+      {
+        "file": "trial0/11-17ba0791.json",
+        "sha256": "e725ecd4d4956fd3e394375533b4eb6e584da540645ba672443d3c79c011c3d6"
+      },
+      {
+        "file": "trial0/12-7b52009b.json",
+        "sha256": "302d684e9f8dc539773646e5d7611a5865680a9ca1ae77ece34aa38c22d4176b"
+      },
+      {
+        "file": "trial0/13-bd307a3e.json",
+        "sha256": "a50051d457222871dcab7f4dc0d63102625c45dbfbef72eccd4aad3c2472723c"
+      },
+      {
+        "file": "trial0/14-fa35e192.json",
+        "sha256": "cad365fe9d79bba6ab09a4c0fef768f70c0c5c07ccff280fe9d2b3c87267d792"
+      },
+      {
+        "file": "trial0/15-f1abd670.json",
+        "sha256": "dcdf1da8d84c9711340eecff68ee40af224f3c106b4335e0b364896c01e20f26"
+      },
+      {
+        "file": "trial0/16-1574bddb.json",
+        "sha256": "78c32bf211f94b3e0a079381ff7d8b5e1a0a2264b847717e558743d30f06a90d"
+      },
+      {
+        "file": "trial0/17-0716d970.json",
+        "sha256": "cd951978f7f4d77588341637b7ad4104a5ec48795d90b844fdd7df1af356ae44"
+      },
+      {
+        "file": "trial0/18-9e6a55b6.json",
+        "sha256": "7800dd211f10e44ff9309c15a3bfe4a202fe10ecb25eb256783aa2c188fcd473"
+      },
+      {
+        "file": "trial0/19-b3f0c7f6.json",
+        "sha256": "86ff3cae4aa54a99922dbda475bdcf033292ff1cbcba5ff42ba6d310515882bb"
+      },
+      {
+        "file": "trial0/2-da4b9237.json",
+        "sha256": "653e283bec0ca4f57edd5d7379b67f42d3f2ad2c3ed098c81d421a1cf004f2fd"
+      },
+      {
+        "file": "trial0/20-91032ad7.json",
+        "sha256": "652e146bde088e4a86b741ec7121865b6058bef217e96c9b663c0eb7804921a5"
+      },
+      {
+        "file": "trial0/21-472b07b9.json",
+        "sha256": "7f5fbb9210cf415720dce65c484d2a6c0d92c0772a58e713f913f3c820ee0412"
+      },
+      {
+        "file": "trial0/22-12c6fc06.json",
+        "sha256": "bde50c53f94a2df7e6fd06191b28e4846d8f65767c56cabdd403b5349d790188"
+      },
+      {
+        "file": "trial0/23-d435a6cd.json",
+        "sha256": "1a2677891739b1df80d767689f3523dfbdfa211e863f9ba433961dd4bf096811"
+      },
+      {
+        "file": "trial0/24-4d134bc0.json",
+        "sha256": "25ca26d02c8359e38f7074c061bc2fb2598bb3c863f008c3aa0a37740a97cb5d"
+      },
+      {
+        "file": "trial0/25-f6e1126c.json",
+        "sha256": "77d5d3204a78f6a52c434dcf52a150d01c7402a75d55c5e67157eae4ab8b72ea"
+      },
+      {
+        "file": "trial0/26-887309d0.json",
+        "sha256": "f83c43f6afbd357c180ba225a32d5fa70873ec9a401d9726da5d632432b6d49a"
+      },
+      {
+        "file": "trial0/27-bc33ea4e.json",
+        "sha256": "5a5e2e25f60f7e32f33da32229144b8cf3255b7207900f028da4d7bf8fedda42"
+      },
+      {
+        "file": "trial0/28-0a57cb53.json",
+        "sha256": "54299cf8e937de162f8572273ebca809ed7aaa06197f04e45fca04d655a89317"
+      },
+      {
+        "file": "trial0/29-7719a1c7.json",
+        "sha256": "6fefd6f0f3775cf6dd491adca24f5aaf42ba5c1f8bde8c9bc82fcc529deccef5"
+      },
+      {
+        "file": "trial0/3-77de68da.json",
+        "sha256": "daa781fe1cbb615bdae3d967050d1b97077b9274511daefce1a3104fa07b3155"
+      },
+      {
+        "file": "trial0/30-22d200f8.json",
+        "sha256": "5a1805c43d1e7778310a15b20d1a18240255a3b07d2d6583710a798ab392d999"
+      },
+      {
+        "file": "trial0/31-63266754.json",
+        "sha256": "c981af4d4d80a82af629f5017a83ac7b0e700437c95862ca3a70815b3271d2ae"
+      },
+      {
+        "file": "trial0/32-cb4e5208.json",
+        "sha256": "4e80c99973ffbfc5bbcc074a7ac79a1a6e5c11506474e41bc47ea27ab3fe17cf"
+      },
+      {
+        "file": "trial0/33-b6692ea5.json",
+        "sha256": "9896b975c1c7e20c54724b50940ceb04ab2fb8b0f83cab1d76bd610f77d1739f"
+      },
+      {
+        "file": "trial0/34-f1f836cb.json",
+        "sha256": "32e878413954e0d9bc62ea27a22f0c9de2ca2ca09b89437323e663f54dda10ef"
+      },
+      {
+        "file": "trial0/35-972a67c4.json",
+        "sha256": "e5307edf830996cda5c6be5fd36ba18df80026608772f72f8eeb4c7cab73fa72"
+      },
+      {
+        "file": "trial0/36-fc074d50.json",
+        "sha256": "26d9711141ecc59970e98a046b65c1bb4a1d0229b8aaf8fdbd67afebc56e6107"
+      },
+      {
+        "file": "trial0/37-cb7a1d77.json",
+        "sha256": "d7d5e3e6692d77f0710b0b29c0a4240b935449d9e89a1e82d2a13526621f378a"
+      },
+      {
+        "file": "trial0/38-5b384ce3.json",
+        "sha256": "66db3db0163e06f21022c7640c748710057f60e0168f1e4192bd36e0c8ddb868"
+      },
+      {
+        "file": "trial0/39-ca3512f4.json",
+        "sha256": "fceab8bf18719e5f665b685b9cf1bb47e0a90d8b128bccaf3d7b5e0b006f1514"
+      },
+      {
+        "file": "trial0/4-1b645389.json",
+        "sha256": "1f792663b45ed3679bb2cfb42bb9a5d5532c26e237965dcda629cf91d7f748a1"
+      },
+      {
+        "file": "trial0/40-af3e1334.json",
+        "sha256": "08bc5d417879b3ad6fd4baa74e9c9d52f61849e9ed3678d976adcde2c190c352"
+      },
+      {
+        "file": "trial0/41-761f22b2.json",
+        "sha256": "28004566f8eb87bf402a129f4caf36065aaf794d9422b3811562151f2cd10afc"
+      },
+      {
+        "file": "trial0/42-92cfceb3.json",
+        "sha256": "2963fd52d0b4e0a139be722c4174e85c3aaf2fc2ac2ff393a0959260a2f0c9b8"
+      },
+      {
+        "file": "trial0/43-0286dd55.json",
+        "sha256": "bf8a516a918cb164dc97a84d2cd48fa51d59e47840e6241451ebca94e1e7034e"
+      },
+      {
+        "file": "trial0/44-98fbc42f.json",
+        "sha256": "b74e0f531a79d0440913d8f055869d8bde0ae4250031ea05505ac2928ee937ea"
+      },
+      {
+        "file": "trial0/45-fb644351.json",
+        "sha256": "c827f12f432e7ec1f34dccb61829548fb09149bc04923b2795dfc4f2fa0be0ac"
+      },
+      {
+        "file": "trial0/46-fe2ef495.json",
+        "sha256": "025762314c19d283e31a50631ede019205a0e56eb930bb1e4b855202b4675db9"
+      },
+      {
+        "file": "trial0/47-827bfc45.json",
+        "sha256": "1e31dc9d83c3c9a73b5d372e42b2737c76ecd9b264435d2b0bada812f6bf1f07"
+      },
+      {
+        "file": "trial0/48-64e095fe.json",
+        "sha256": "260f929ed224950c5c091abc084ff28481f3d64be85fae5b4143a4445802fe85"
+      },
+      {
+        "file": "trial0/49-2e01e174.json",
+        "sha256": "18ec6e5222bc1674d7d0d640a8cb7b27f87b2c19129fa938d1f833d4226fc522"
+      },
+      {
+        "file": "trial0/5-ac3478d6.json",
+        "sha256": "4a0cd5b8a8f7ad8cdecb3ab457c0a97957bcc2ae2d1a2f969c83d12a9070971b"
+      },
+      {
+        "file": "trial0/6-c1dfd96e.json",
+        "sha256": "8992fe122f2a60b911f99caf38cf75ed1629fecf1ec67b587304147fd1314cd6"
+      },
+      {
+        "file": "trial0/7-902ba3cd.json",
+        "sha256": "19ede47b8dd15ab5931bf86bc1c4adb2102f8355092a0d59b7893edb0893643a"
+      },
+      {
+        "file": "trial0/8-fe5dbbce.json",
+        "sha256": "2d82564d70e611a86e3bc1d730afc23d4982b23b00c5ef206bbc85ea42e1bd50"
+      },
+      {
+        "file": "trial0/9-0ade7c2c.json",
+        "sha256": "a086d68b90a17aba4a49305de2928b1f048c03534e3bbba4100bdfe06e921765"
+      }
+    ]
+  }
+}

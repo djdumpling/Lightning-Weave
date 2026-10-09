@@ -52,7 +52,7 @@ round-trip mismatches; 123 airline states (1%) exceed 16,384 tokens and are drop
 | prompt tokens p50 / p90 / max | 5,694 / 8,490 / 16,345 | | p50 4,548 / p90 6,801 / max 8,192 |
 
 Behavior responses (b0 = clean Qwen3-4B, K 4, T 1, top-p 1, Top-16, 2,048-token cap), whole caches (external audit,
-research/mentor_followup_20261008/artifacts/fresh_completion_full_cache_audit.json):
+research/followup/artifacts/fresh_completion_full_cache_audit.json):
 
 | 12,800 rows each | LoopTool cache | fresh tau2 states |
 |---|---|---|
@@ -75,7 +75,7 @@ Same functions, composed on the sealed fresh cache (12,800 rows): acc-legacy (ra
 | accuracy + DECS target vs behavior (whole cache) | 0.0439 | 0.0691 | 1.57 |
 | DECS increment, KL(q_acc+decs ‖ q_acc) (800-row samples) | 0.0145 | 0.0200 | 1.38 |
 
-Whole-cache values: research/mentor_followup_20261008/artifacts/fresh_training_audit.json. The fixed coefficient does not
+Whole-cache values: research/followup/artifacts/fresh_training_audit.json. The fixed coefficient does not
 fix strength: on multi-turn states both shifts push ~1.4–1.6x harder per token, on ~1.9x the tokens. Fresh-vs-cache
 contrasts therefore change the states and, with them, exposure and realized strength; the DECS contrast is read against
 its realized token savings.
@@ -141,7 +141,7 @@ What changed in behavior (per conversation, both seeds pooled):
 
 The LoopTool-trained students hand conversations to a human more often than base; training on tau2 states cuts
 escalation by about 10 points in both domains (and lengthens airline conversations). In a paired analysis (external
-review, research/mentor_followup_20261008/artifacts/fresh_run_audit.json), 37 of the 38 net additional successes are
+review, research/followup/artifacts/fresh_run_audit.json), 37 of the 38 net additional successes are
 in episode pairs whose transfer behavior changes. This is an association: transfers change along with everything else.
 The cause is open. AReaL's prohibition on transfers is not a sufficient explanation: it appears in 84 of the 600
 collected airline tasks and in none of the 563 retail tasks, yet retail escalation fell as much. None of the collected

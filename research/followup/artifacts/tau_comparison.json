@@ -1,0 +1,100 @@
+{
+  "aggregate": {
+    "base": {
+      "complete": true,
+      "overall_mean": 0.2742289092295957,
+      "pass^1": {
+        "tau1_airline": 0.3125,
+        "tau1_retail": 0.28152173913043477,
+        "tau2_airline": 0.228,
+        "tau2_retail": 0.35789473684210527,
+        "tau2_telecom": 0.1912280701754386
+      },
+      "tau1_mean": 0.2970108695652174,
+      "tau2_mean": 0.2590409356725146
+    }
+  },
+  "domains": {
+    "tau1_airline": {
+      "base": {
+        "complete": true,
+        "completion_tokens_per_conversation_mean": 6990.4375,
+        "completion_tokens_per_turn_mean": 785.221847795563,
+        "pass_hat_k": {
+          "1": 31.25,
+          "2": 21.785714285714292,
+          "3": 16.607142857142858,
+          "4": 13.314285714285711,
+          "5": 11.142857142857142,
+          "6": 9.714285714285714,
+          "7": 8.75,
+          "8": 8.0
+        }
+      },
+      "qwen_reported": 32.0
+    },
+    "tau1_retail": {
+      "base": {
+        "complete": true,
+        "completion_tokens_per_conversation_mean": 7956.442391304347,
+        "completion_tokens_per_turn_mean": 624.673749786653,
+        "pass_hat_k": {
+          "1": 28.152173913043477,
+          "2": 14.378881987577646,
+          "3": 9.67391304347826,
+          "4": 7.490683229813663,
+          "5": 6.242236024844719,
+          "6": 5.403726708074533,
+          "7": 4.782608695652174,
+          "8": 4.3478260869565215
+        }
+      },
+      "qwen_reported": 33.9
+    },
+    "tau2_airline": {
+      "base": {
+        "complete": true,
+        "completion_tokens_per_conversation_mean": 8474.076,
+        "completion_tokens_per_turn_mean": 805.826930391784,
+        "pass_hat_k": {
+          "1": 22.8,
+          "2": 13.199999999999998,
+          "3": 9.200000000000001,
+          "4": 7.200000000000001,
+          "5": 6.0
+        }
+      },
+      "qwen_reported": 28.0
+    },
+    "tau2_retail": {
+      "base": {
+        "complete": true,
+        "completion_tokens_per_conversation_mean": 8354.273684210526,
+        "completion_tokens_per_turn_mean": 680.957528957529,
+        "pass_hat_k": {
+          "1": 35.78947368421053,
+          "2": 19.73684210526318,
+          "3": 13.771929824561402,
+          "4": 10.701754385964907,
+          "5": 8.771929824561402
+        }
+      },
+      "qwen_reported": 38.6
+    },
+    "tau2_telecom": {
+      "base": {
+        "complete": true,
+        "completion_tokens_per_conversation_mean": 10990.21403508772,
+        "completion_tokens_per_turn_mean": 592.0444192420376,
+        "pass_hat_k": {
+          "1": 19.12280701754386,
+          "2": 11.929824561403507,
+          "3": 8.07017543859649,
+          "4": 5.438596491228072,
+          "5": 3.508771929824561
+        }
+      },
+      "qwen_reported": 17.5
+    }
+  }
+}

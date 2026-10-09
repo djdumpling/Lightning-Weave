@@ -1,0 +1,167 @@
+{
+  "experiment_kind": "exact hand-constructed finite-POMDP mechanism probes",
+  "not_evidence_of": [
+    "benchmark improvement",
+    "prevalence of failures",
+    "novelty",
+    "LLM training success"
+  ],
+  "information_acquisition": {
+    "world_prior": [
+      0.5,
+      0.5
+    ],
+    "actions": [
+      "WRITE_0",
+      "WRITE_1",
+      "READ_then_student"
+    ],
+    "behavior": [
+      0.45,
+      0.45,
+      0.1
+    ],
+    "student_continuation_values": [
+      0.5,
+      0.5,
+      0.8
+    ],
+    "clairvoyant_action_imitation_success": 0.5,
+    "behavior_success": 0.53,
+    "outcome_tilt_temperature": 0.1,
+    "outcome_tilt": [
+      0.15471607114849217,
+      0.15471607114849217,
+      0.6905678577030158
+    ],
+    "outcome_tilt_success": 0.7071703573109048
+  },
+  "evidence_sensitive_delta": {
+    "behavior_action_prior": [
+      0.5,
+      0.5
+    ],
+    "log_odds_delta_by_observation": [
+      5.0,
+      1.0
+    ],
+    "centered_log_odds_delta": [
+      2.0,
+      -2.0
+    ],
+    "raw_success": 0.6311242852228551,
+    "centered_success": 0.8807970779778823,
+    "assumption": "The common shift is nuisance, not legitimate task prior."
+  },
+  "useful_prior_removal_failure": {
+    "world_prior_one": 0.9,
+    "observation_accuracy": 0.6,
+    "bayesian_MAP_accuracy": 0.9000000000000001,
+    "accuracy_after_removing_common_prior": 0.6,
+    "outcomes": [
+      {
+        "hidden_world": 0,
+        "observation": 0,
+        "mass": 0.059999999999999984,
+        "bayes_action": 1,
+        "action_after_prior_removal": 0
+      },
+      {
+        "hidden_world": 0,
+        "observation": 1,
+        "mass": 0.039999999999999994,
+        "bayes_action": 1,
+        "action_after_prior_removal": 1
+      },
+      {
+        "hidden_world": 1,
+        "observation": 0,
+        "mass": 0.36000000000000004,
+        "bayes_action": 1,
+        "action_after_prior_removal": 0
+      },
+      {
+        "hidden_world": 1,
+        "observation": 1,
+        "mass": 0.54,
+        "bayes_action": 1,
+        "action_after_prior_removal": 1
+      }
+    ],
+    "lesson": "Matched-world centering is not universally beneficial; identify nuisance empirically."
+  },
+  "invalid_counterfactual_failure": {
+    "public_history": {
+      "reservation_id": "R0",
+      "refundable": false
+    },
+    "original_valid": true,
+    "changed_unobserved_fact_valid": true,
+    "changed_already_observed_fact_valid": false,
+    "lesson": "Reject twins inconsistent with any existing public evidence; labels and simulator must change together."
+  },
+  "current_policy_credit_can_suppress_prerequisite": {
+    "before_learning_to_use_observations": {
+      "world_prior": [
+        0.5,
+        0.5
+      ],
+      "actions": [
+        "WRITE_0",
+        "WRITE_1",
+        "READ_then_student"
+      ],
+      "behavior": [
+        0.45,
+        0.45,
+        0.1
+      ],
+      "student_continuation_values": [
+        0.5,
+        0.5,
+        0.3
+      ],
+      "clairvoyant_action_imitation_success": 0.5,
+      "behavior_success": 0.48,
+      "outcome_tilt_temperature": 0.1,
+      "outcome_tilt": [
+        0.492592757734631,
+        0.492592757734631,
+        0.014814484530737864
+      ],
+      "outcome_tilt_success": 0.49703710309385235
+    },
+    "after_learning_to_use_observations": {
+      "world_prior": [
+        0.5,
+        0.5
+      ],
+      "actions": [
+        "WRITE_0",
+        "WRITE_1",
+        "READ_then_student"
+      ],
+      "behavior": [
+        0.45,
+        0.45,
+        0.1
+      ],
+      "student_continuation_values": [
+        0.5,
+        0.5,
+        0.9
+      ],
+      "clairvoyant_action_imitation_success": 0.5,
+      "behavior_success": 0.54,
+      "outcome_tilt_temperature": 0.1,
+      "outcome_tilt": [
+        0.07075677512089297,
+        0.07075677512089297,
+        0.8584864497582141
+      ],
+      "outcome_tilt_success": 0.8433945799032857
+    },
+    "lesson": "Current-student branch Q measures exploitability now. Learn a useful suffix before penalizing its prerequisite action; backward curricula are established, not novel here."
+  },
+  "checks": "9 mathematical assertions passed"
+}

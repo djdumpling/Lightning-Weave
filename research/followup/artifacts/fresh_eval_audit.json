@@ -1,0 +1,1484 @@
+{
+  "audit_date": "2026-10-08",
+  "bfcl_completeness": {
+    "pooled_loader_verified_matching_entry_ids": true,
+    "rows_per_tree": 4441,
+    "runs": [
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 43,
+        "rows": 4441,
+        "run": "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 45,
+        "rows": 4441,
+        "run": "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy+decs-fixed"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 42,
+        "rows": 4441,
+        "run": "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy+decs-fixed.s5678"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 43,
+        "rows": 4441,
+        "run": "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy.s5678"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 45,
+        "rows": 4441,
+        "run": "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 43,
+        "rows": 4441,
+        "run": "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 44,
+        "rows": 4441,
+        "run": "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs.s5678"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 44,
+        "rows": 4441,
+        "run": "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy.s5678"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 47,
+        "rows": 4441,
+        "run": "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 43,
+        "rows": 4441,
+        "run": "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy+decs-fixed"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 44,
+        "rows": 4441,
+        "run": "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy+decs-fixed.s5678"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 42,
+        "rows": 4441,
+        "run": "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy.s5678"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 44,
+        "rows": 4441,
+        "run": "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 44,
+        "rows": 4441,
+        "run": "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 43,
+        "rows": 4441,
+        "run": "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs.s5678"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 44,
+        "rows": 4441,
+        "run": "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy.s5678"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 44,
+        "rows": 4441,
+        "run": "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 43,
+        "rows": 4441,
+        "run": "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy+decs-fixed"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 43,
+        "rows": 4441,
+        "run": "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy+decs-fixed.s5678"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 44,
+        "rows": 4441,
+        "run": "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy.s5678"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 46,
+        "rows": 4441,
+        "run": "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 43,
+        "rows": 4441,
+        "run": "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 44,
+        "rows": 4441,
+        "run": "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs.s5678"
+      },
+      {
+        "complete": true,
+        "infrastructure_errors": 0,
+        "out_of_context": 43,
+        "rows": 4441,
+        "run": "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy.s5678"
+      }
+    ],
+    "total_rows": 106584,
+    "trees": 24
+  },
+  "bfcl_contrasts": {
+    "DECS cost on fresh states (fresh DECS-fixed vs fresh acc-legacy)": {
+      "per_pair": [
+        {
+          "accuracy": -0.3093316550668801,
+          "multi_turn_accuracy": -1.250000000000001,
+          "multi_turn_tokens": -11.508786646228863,
+          "single_turn_accuracy": 0.16100251739967764,
+          "single_turn_tokens": -15.30509960542683,
+          "total_tokens": -12.667049678398945
+        },
+        {
+          "accuracy": -1.126077298978223,
+          "multi_turn_accuracy": -4.2500000000000036,
+          "multi_turn_tokens": -15.10166379678991,
+          "single_turn_accuracy": 0.4358840515326534,
+          "single_turn_tokens": -13.712043871435064,
+          "total_tokens": -14.679635976197291
+        },
+        {
+          "accuracy": -0.1334715435115208,
+          "multi_turn_accuracy": -0.9999999999999953,
+          "multi_turn_tokens": -14.477140030811098,
+          "single_turn_accuracy": 0.2997926847327137,
+          "single_turn_tokens": -15.008883579980846,
+          "total_tokens": -14.637830752606506
+        },
+        {
+          "accuracy": 0.45727577866627733,
+          "multi_turn_accuracy": 0.2500000000000058,
+          "multi_turn_tokens": -14.13607320662349,
+          "single_turn_accuracy": 0.5609136679994076,
+          "single_turn_tokens": -16.230130014173348,
+          "total_tokens": -14.773386691875734
+        },
+        {
+          "accuracy": -0.40929216644454147,
+          "multi_turn_accuracy": -2.0000000000000018,
+          "multi_turn_tokens": -16.678886499963376,
+          "single_turn_accuracy": 0.3860617503331776,
+          "single_turn_tokens": -15.102240864998272,
+          "total_tokens": -16.21111430641581
+        },
+        {
+          "accuracy": -1.3473011994668882,
+          "multi_turn_accuracy": -4.375000000000001,
+          "multi_turn_tokens": -11.583190190979554,
+          "single_turn_accuracy": 0.16654820079964328,
+          "single_turn_tokens": -15.731397945687464,
+          "total_tokens": -12.85921219413777
+        }
+      ],
+      "pooled": {
+        "accuracy": {
+          "ci95": [
+            -0.9729768302565106,
+            -0.029854005215787956
+          ],
+          "delta": -0.47803301413362936
+        },
+        "multi_turn_accuracy": {
+          "ci95": [
+            -3.3541666666666643,
+            -0.8744791666666666
+          ],
+          "delta": -2.104166666666666
+        },
+        "multi_turn_tokens": {
+          "ci95": [
+            -15.207125443708776,
+            -12.619803975900322
+          ],
+          "delta": -13.914290061899381
+        },
+        "single_turn_accuracy": {
+          "ci95": [
+            -0.0057054580680164,
+            0.6808393954538857
+          ],
+          "delta": 0.33503381213287886
+        },
+        "single_turn_tokens": {
+          "ci95": [
+            -16.30805571189119,
+            -13.999331338923932
+          ],
+          "delta": -15.181632646950305
+        },
+        "total_tokens": {
+          "ci95": [
+            -15.299205472913094,
+            -13.353159006385784
+          ],
+          "delta": -14.304704933272008
+        }
+      },
+      "verdicts": {}
+    },
+    "DECS cost on the cache (reference, reproduces -0.82 / -2.37)": {
+      "per_pair": [
+        {
+          "accuracy": -1.7230428451552315,
+          "multi_turn_accuracy": -4.374999999999996,
+          "multi_turn_tokens": -13.744251985489175,
+          "single_turn_accuracy": -0.39706426773286063,
+          "single_turn_tokens": -13.16697916567524,
+          "total_tokens": -13.56902133167306
+        },
+        {
+          "accuracy": -0.4944444444444529,
+          "multi_turn_accuracy": -1.5000000000000013,
+          "multi_turn_tokens": -15.351562370162563,
+          "single_turn_accuracy": 0.00833333333335462,
+          "single_turn_tokens": -16.132932100998822,
+          "total_tokens": -15.594324853032804
+        },
+        {
+          "accuracy": -0.8454032775556675,
+          "multi_turn_accuracy": -2.875,
+          "multi_turn_tokens": -15.279174813349595,
+          "single_turn_accuracy": 0.16939508366653477,
+          "single_turn_tokens": -15.337227063099013,
+          "total_tokens": -15.296751546129094
+        },
+        {
+          "accuracy": -0.8305752998667093,
+          "multi_turn_accuracy": -2.374999999999999,
+          "multi_turn_tokens": -13.886923350252045,
+          "single_turn_accuracy": -0.05836294980008372,
+          "single_turn_tokens": -17.312251111165256,
+          "total_tokens": -14.940124000688614
+        },
+        {
+          "accuracy": -0.10175971173305154,
+          "multi_turn_accuracy": -0.5000000000000004,
+          "multi_turn_tokens": -15.199742050884534,
+          "single_turn_accuracy": 0.09736043240041736,
+          "single_turn_tokens": -14.363709901280053,
+          "total_tokens": -14.947992980897961
+        },
+        {
+          "accuracy": -0.9138296559553782,
+          "multi_turn_accuracy": -2.624999999999994,
+          "multi_turn_tokens": -14.283014073600597,
+          "single_turn_accuracy": -0.05824448393307868,
+          "single_turn_tokens": -14.725767283616397,
+          "total_tokens": -14.417996224527851
+        }
+      ],
+      "pooled": {
+        "accuracy": {
+          "ci95": [
+            -1.3023124907448504,
+            -0.3365345905934849
+          ],
+          "delta": -0.8181758724517486
+        },
+        "multi_turn_accuracy": {
+          "ci95": [
+            -3.667187500000003,
+            -1.125
+          ],
+          "delta": -2.3749999999999982
+        },
+        "multi_turn_tokens": {
+          "ci95": [
+            -15.916651521120455,
+            -13.31377647540688
+          ],
+          "delta": -14.624111440623087
+        },
+        "single_turn_accuracy": {
+          "ci95": [
+            -0.3809321937163772,
+            0.3036382595389796
+          ],
+          "delta": -0.03976380867761938
+        },
+        "single_turn_tokens": {
+          "ci95": [
+            -16.388911379405712,
+            -13.843351706744361
+          ],
+          "delta": -15.17314443763913
+        },
+        "total_tokens": {
+          "ci95": [
+            -15.771275584555633,
+            -13.777438761552641
+          ],
+          "delta": -14.794368489491566
+        }
+      },
+      "verdicts": {}
+    },
+    "PRIMARY fresh acc-legacy vs cache acc-legacy": {
+      "per_pair": [
+        {
+          "accuracy": -1.0563959227997355,
+          "multi_turn_accuracy": -1.8749999999999933,
+          "multi_turn_tokens": -3.7638113095620818,
+          "single_turn_accuracy": -0.6470938841996121,
+          "single_turn_tokens": -3.0552885301759813,
+          "total_tokens": -3.5487398466176545
+        },
+        {
+          "accuracy": 0.034331655066865974,
+          "multi_turn_accuracy": 1.1249999999999982,
+          "multi_turn_tokens": -3.4728085103554185,
+          "single_turn_accuracy": -0.5110025173996613,
+          "single_turn_tokens": -6.590927841323646,
+          "total_tokens": -4.441571902125641
+        },
+        {
+          "accuracy": -0.7925267782220247,
+          "multi_turn_accuracy": -2.500000000000002,
+          "multi_turn_tokens": -4.598637972168518,
+          "single_turn_accuracy": 0.06120983266697522,
+          "single_turn_tokens": -4.85983819157132,
+          "total_tokens": -4.677722701497822
+        },
+        {
+          "accuracy": -0.4852312552445781,
+          "multi_turn_accuracy": -1.750000000000007,
+          "multi_turn_tokens": -3.428779254579306,
+          "single_turn_accuracy": 0.1471531171331253,
+          "single_turn_tokens": -4.842147650636496,
+          "total_tokens": -3.863353875735287
+        },
+        {
+          "accuracy": -0.38437114368923275,
+          "multi_turn_accuracy": -1.1249999999999982,
+          "multi_turn_tokens": -2.095384453510385,
+          "single_turn_accuracy": -0.014056715533838915,
+          "single_turn_tokens": -4.145827748996245,
+          "total_tokens": -2.712821465882409
+        },
+        {
+          "accuracy": -0.6018979219112652,
+          "multi_turn_accuracy": -2.2499999999999964,
+          "multi_turn_tokens": -5.0202676317167345,
+          "single_turn_accuracy": 0.22215311713311703,
+          "single_turn_tokens": -3.7882717284422385,
+          "total_tokens": -4.644669096922094
+        }
+      ],
+      "pooled": {
+        "accuracy": {
+          "ci95": [
+            -1.0578784583395033,
+            -0.0655076550339825
+          ],
+          "delta": -0.5476818944666617
+        },
+        "multi_turn_accuracy": {
+          "ci95": [
+            -2.7708333333333326,
+            -0.12500000000000092
+          ],
+          "delta": -1.3958333333333333
+        },
+        "multi_turn_tokens": {
+          "ci95": [
+            -5.212633268212002,
+            -2.2269527529455364
+          ],
+          "delta": -3.729948188648741
+        },
+        "single_turn_accuracy": {
+          "ci95": [
+            -0.46515047324645203,
+            0.22822003492274687
+          ],
+          "delta": -0.1236061750333158
+        },
+        "single_turn_tokens": {
+          "ci95": [
+            -5.698684628197124,
+            -3.3297857205476245
+          ],
+          "delta": -4.547050281857655
+        },
+        "total_tokens": {
+          "ci95": [
+            -5.072577848174349,
+            -2.8997143272241694
+          ],
+          "delta": -3.9814798147968173
+        }
+      },
+      "verdicts": {
+        "recovery multi_turn_accuracy 1.0": "does not recover"
+      }
+    },
+    "SECONDARY interaction: DECS cost, fresh minus cache": {
+      "per_pair": [
+        {
+          "accuracy": 1.4137111900883514,
+          "multi_turn_accuracy": 3.1249999999999947,
+          "multi_turn_tokens": 2.235465339260312,
+          "single_turn_accuracy": 0.5580667851325383,
+          "single_turn_tokens": -2.1381204397515905,
+          "total_tokens": 0.9019716532741153
+        },
+        {
+          "accuracy": -0.6316328545337702,
+          "multi_turn_accuracy": -2.750000000000002,
+          "multi_turn_tokens": 0.24989857337265242,
+          "single_turn_accuracy": 0.4275507181992988,
+          "single_turn_tokens": 2.420888229563758,
+          "total_tokens": 0.9146888768355126
+        },
+        {
+          "accuracy": 0.7119317340441467,
+          "multi_turn_accuracy": 1.8750000000000047,
+          "multi_turn_tokens": 0.802034782538497,
+          "single_turn_accuracy": 0.13039760106617893,
+          "single_turn_tokens": 0.3283434831181662,
+          "total_tokens": 0.6589207935225883
+        },
+        {
+          "accuracy": 1.2878510785329866,
+          "multi_turn_accuracy": 2.625000000000005,
+          "multi_turn_tokens": -0.24914985637144405,
+          "single_turn_accuracy": 0.6192766177994913,
+          "single_turn_tokens": 1.0821210969919086,
+          "total_tokens": 0.1667373088128805
+        },
+        {
+          "accuracy": -0.30753245471148993,
+          "multi_turn_accuracy": -1.5000000000000013,
+          "multi_turn_tokens": -1.4791444490788415,
+          "single_turn_accuracy": 0.2887013179327602,
+          "single_turn_tokens": -0.7385309637182189,
+          "total_tokens": -1.2631213255178473
+        },
+        {
+          "accuracy": -0.43347154351150996,
+          "multi_turn_accuracy": -1.750000000000007,
+          "multi_turn_tokens": 2.6998238826210432,
+          "single_turn_accuracy": 0.22479268473272196,
+          "single_turn_tokens": -1.0056306620710664,
+          "total_tokens": 1.5587840303900808
+        }
+      ],
+      "pooled": {
+        "accuracy": {
+          "ci95": [
+            -0.31486592892870796,
+            0.9674517704065737
+          ],
+          "delta": 0.34014285831811913
+        },
+        "multi_turn_accuracy": {
+          "ci95": [
+            -1.4791666666666672,
+            1.9588541666666652
+          ],
+          "delta": 0.2708333333333322
+        },
+        "multi_turn_tokens": {
+          "ci95": [
+            -1.069401104855605,
+            2.4218571290045174
+          ],
+          "delta": 0.7098213787237032
+        },
+        "single_turn_accuracy": {
+          "ci95": [
+            -0.08622720149070076,
+            0.8201500721901386
+          ],
+          "delta": 0.3747976208104982
+        },
+        "single_turn_tokens": {
+          "ci95": [
+            -1.4424440411543156,
+            1.2781846207094363
+          ],
+          "delta": -0.008488209311173852
+        },
+        "total_tokens": {
+          "ci95": [
+            -0.7820831450271095,
+            1.7285891658436814
+          ],
+          "delta": 0.48966355621955504
+        }
+      },
+      "verdicts": {
+        "recovery multi_turn_accuracy 1.0": "inconclusive"
+      }
+    },
+    "fresh DECS-fixed vs cache DECS": {
+      "per_pair": [
+        {
+          "accuracy": 0.35731526728861596,
+          "multi_turn_accuracy": 1.250000000000001,
+          "multi_turn_tokens": -1.2696857683425211,
+          "single_turn_accuracy": -0.08902709906707384,
+          "single_turn_tokens": -5.442392734634504,
+          "total_tokens": -2.5421990909615055
+        },
+        {
+          "accuracy": -0.5973011994669042,
+          "multi_turn_accuracy": -1.6250000000000042,
+          "multi_turn_tokens": -3.1878415562054174,
+          "single_turn_accuracy": -0.0834517992003625,
+          "single_turn_tokens": -3.894602227606736,
+          "total_tokens": -3.4060226796732374
+        },
+        {
+          "accuracy": -0.080595044177878,
+          "multi_turn_accuracy": -0.6249999999999978,
+          "multi_turn_tokens": -3.6954927244765123,
+          "single_turn_accuracy": 0.19160743373315414,
+          "single_turn_tokens": -4.490860764669802,
+          "total_tokens": -3.9361946993915597
+        },
+        {
+          "accuracy": 0.8026198232884085,
+          "multi_turn_accuracy": 0.874999999999998,
+          "multi_turn_tokens": -3.708187524663542,
+          "single_turn_accuracy": 0.7664297349326166,
+          "single_turn_tokens": -3.5968323414711456,
+          "total_tokens": -3.674903499283
+        },
+        {
+          "accuracy": -0.6919035984007227,
+          "multi_turn_accuracy": -2.6249999999999996,
+          "multi_turn_tokens": -3.8031041247369113,
+          "single_turn_accuracy": 0.2746446023989213,
+          "single_turn_tokens": -4.972478157687932,
+          "total_tokens": -4.157649333122593
+        },
+        {
+          "accuracy": -1.0353694654227752,
+          "multi_turn_accuracy": -4.0000000000000036,
+          "multi_turn_tokens": -2.0286954591600903,
+          "single_turn_accuracy": 0.446945801865839,
+          "single_turn_tokens": -4.922887202761705,
+          "total_tokens": -2.9078744383833843
+        }
+      ],
+      "pooled": {
+        "accuracy": {
+          "ci95": [
+            -0.6872377451585276,
+            0.25881342345789027
+          ],
+          "delta": -0.2075390361485426
+        },
+        "multi_turn_accuracy": {
+          "ci95": [
+            -2.4999999999999996,
+            0.0833333333333344
+          ],
+          "delta": -1.125000000000001
+        },
+        "multi_turn_tokens": {
+          "ci95": [
+            -4.151242267383544,
+            -1.7008670369707637
+          ],
+          "delta": -2.9488345262641658
+        },
+        "single_turn_accuracy": {
+          "ci95": [
+            -0.07796416099017706,
+            0.581800449800089
+          ],
+          "delta": 0.25119144577718244
+        },
+        "single_turn_tokens": {
+          "ci95": [
+            -5.686584957098847,
+            -3.478872409116404
+          ],
+          "delta": -4.5533422381386375
+        },
+        "total_tokens": {
+          "ci95": [
+            -4.329627726345173,
+            -2.4751119605056937
+          ],
+          "delta": -3.4374739568025467
+        }
+      },
+      "verdicts": {}
+    }
+  },
+  "bfcl_interaction_multi_turn_by_training_seed_decode_averaged": {
+    "1234": 1.1666666666666659,
+    "5678": -0.6250000000000014
+  },
+  "checkpoint_validation": {
+    "bfcl_training_provenance": {
+      "ae.fresh.acc-legacy": {
+        "alpha": 2.0,
+        "data_order": "stored",
+        "final_iteration": 49,
+        "num_rollout": 50,
+        "passes": 1,
+        "seed": 1234,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/tau2-fresh-qwen3-4b-v1/synthetic/acc-legacy",
+        "target_revision": "6d096578df14d8e57401c582b1063601a5c37ef4afc97a868bb45e6cfec944d2",
+        "variant": "acc-legacy"
+      },
+      "ae.fresh.acc-legacy+decs-fixed": {
+        "alpha": 2.0,
+        "data_order": "stored",
+        "final_iteration": 49,
+        "num_rollout": 50,
+        "passes": 1,
+        "seed": 1234,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/tau2-fresh-qwen3-4b-v1/synthetic/acc-legacy+decs-fixed",
+        "target_revision": "8c1d278437f6db24a93ae111fe0e40ce676a28d7c47f91b0f8dfe8eab172f390",
+        "variant": "acc-legacy+decs-fixed"
+      },
+      "ae.fresh.acc-legacy+decs-fixed.s5678": {
+        "alpha": 2.0,
+        "data_order": "shuffled with seed 5678",
+        "final_iteration": 49,
+        "num_rollout": 50,
+        "passes": 1,
+        "seed": 5678,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/tau2-fresh-qwen3-4b-v1/synthetic/acc-legacy+decs-fixed",
+        "target_revision": "8c1d278437f6db24a93ae111fe0e40ce676a28d7c47f91b0f8dfe8eab172f390",
+        "variant": "acc-legacy+decs-fixed"
+      },
+      "ae.fresh.acc-legacy.s5678": {
+        "alpha": 2.0,
+        "data_order": "shuffled with seed 5678",
+        "final_iteration": 49,
+        "num_rollout": 50,
+        "passes": 1,
+        "seed": 5678,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/tau2-fresh-qwen3-4b-v1/synthetic/acc-legacy",
+        "target_revision": "6d096578df14d8e57401c582b1063601a5c37ef4afc97a868bb45e6cfec944d2",
+        "variant": "acc-legacy"
+      },
+      "ae.joint.acc-legacy": {
+        "final_iteration": 49,
+        "seed": 1234,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/looptool-qwen3-4b-v1/synthetic/acc-legacy",
+        "target_revision": "6d096578df14d8e57401c582b1063601a5c37ef4afc97a868bb45e6cfec944d2",
+        "variant": "acc-legacy"
+      },
+      "ae.joint.acc-legacy+decs": {
+        "final_iteration": 49,
+        "seed": 1234,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/looptool-qwen3-4b-v1/synthetic/acc-legacy+decs",
+        "target_revision": "c18d2da93ad74da7490786b390b3f63b886bc8a89d3cc3eccc3d9fbdcb597b7b",
+        "variant": "acc-legacy+decs"
+      },
+      "ae.joint.acc-legacy+decs.s5678": {
+        "data_order": "shuffled with seed 5678",
+        "final_iteration": 49,
+        "seed": 5678,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/looptool-qwen3-4b-v1/synthetic/acc-legacy+decs",
+        "target_revision": "c18d2da93ad74da7490786b390b3f63b886bc8a89d3cc3eccc3d9fbdcb597b7b",
+        "variant": "acc-legacy+decs"
+      },
+      "ae.joint.acc-legacy.s5678": {
+        "data_order": "shuffled with seed 5678",
+        "final_iteration": 49,
+        "seed": 5678,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/looptool-qwen3-4b-v1/synthetic/acc-legacy",
+        "target_revision": "6d096578df14d8e57401c582b1063601a5c37ef4afc97a868bb45e6cfec944d2",
+        "variant": "acc-legacy"
+      }
+    },
+    "distinct_trained_weight_identity_hashes": 1,
+    "expected_seed_variant_student_target_paths": true,
+    "process_loading": "tau modal_eval.py:788 resolves tag-specific path; :813 constructs a new VllmServer with that path; :450 subprocess.Popen starts its own process group; :880-884 stops every server in finally. No persistent in-process model-object reuse found.",
+    "provenance_consistent_across_decode_runs": true,
+    "tau2_manifests": {
+      "ae.fresh.acc-legacy": {
+        "model_identity": "be19d23c2c628073b6b463d01c1288c2a29b9f5888969bd03a6cee512fdeb1c8",
+        "model_path": "/checkpoints/agent-eff/fresh/acc-legacy/seed1234/hf",
+        "smoke_samples": 0,
+        "tag": "ae.fresh.acc-legacy"
+      },
+      "ae.fresh.acc-legacy+decs-fixed": {
+        "model_identity": "be19d23c2c628073b6b463d01c1288c2a29b9f5888969bd03a6cee512fdeb1c8",
+        "model_path": "/checkpoints/agent-eff/fresh/acc-legacy+decs-fixed/seed1234/hf",
+        "smoke_samples": 0,
+        "tag": "ae.fresh.acc-legacy+decs-fixed"
+      },
+      "ae.fresh.acc-legacy+decs-fixed.s5678": {
+        "model_identity": "be19d23c2c628073b6b463d01c1288c2a29b9f5888969bd03a6cee512fdeb1c8",
+        "model_path": "/checkpoints/agent-eff/fresh/acc-legacy+decs-fixed/seed5678/hf",
+        "smoke_samples": 0,
+        "tag": "ae.fresh.acc-legacy+decs-fixed.s5678"
+      },
+      "ae.fresh.acc-legacy.s5678": {
+        "model_identity": "be19d23c2c628073b6b463d01c1288c2a29b9f5888969bd03a6cee512fdeb1c8",
+        "model_path": "/checkpoints/agent-eff/fresh/acc-legacy/seed5678/hf",
+        "smoke_samples": 0,
+        "tag": "ae.fresh.acc-legacy.s5678"
+      },
+      "ae.joint.acc-legacy": {
+        "model_identity": "be19d23c2c628073b6b463d01c1288c2a29b9f5888969bd03a6cee512fdeb1c8",
+        "model_path": "/checkpoints/agent-eff/joint/acc-legacy/seed1234/hf",
+        "smoke_samples": 0,
+        "tag": "ae.joint.acc-legacy"
+      },
+      "ae.joint.acc-legacy+decs": {
+        "model_identity": "be19d23c2c628073b6b463d01c1288c2a29b9f5888969bd03a6cee512fdeb1c8",
+        "model_path": "/checkpoints/agent-eff/joint/acc-legacy+decs/seed1234/hf",
+        "smoke_samples": 0,
+        "tag": "ae.joint.acc-legacy+decs"
+      },
+      "ae.joint.acc-legacy+decs.s5678": {
+        "model_identity": "be19d23c2c628073b6b463d01c1288c2a29b9f5888969bd03a6cee512fdeb1c8",
+        "model_path": "/checkpoints/agent-eff/joint/acc-legacy+decs/seed5678/hf",
+        "smoke_samples": 0,
+        "tag": "ae.joint.acc-legacy+decs.s5678"
+      },
+      "ae.joint.acc-legacy.s5678": {
+        "model_identity": "be19d23c2c628073b6b463d01c1288c2a29b9f5888969bd03a6cee512fdeb1c8",
+        "model_path": "/checkpoints/agent-eff/joint/acc-legacy/seed5678/hf",
+        "smoke_samples": 0,
+        "tag": "ae.joint.acc-legacy.s5678"
+      },
+      "base": {
+        "model_identity": "4d7094cdd69c10d5f53d021ab6aeaad939f511c56f65332d6847eb20cbbb5199",
+        "model_path": "/models/models--Qwen--Qwen3-4B/snapshots/1cfa9a7208912126459214e8b04321603b3df60c",
+        "smoke_samples": 0,
+        "tag": "base"
+      }
+    },
+    "weight_bytes_independently_hashed": false
+  },
+  "limitations_and_findings": [
+    "No observed result-changing evaluation or aggregation bug.",
+    "Both confidence intervals resample tasks/entries conditional on existing checkpoints; neither measures new training-seed uncertainty. Six BFCL pairs are not six independent training replications.",
+    "tau2 primary interval lower bound is exactly 0.0.",
+    "BFCL interaction +0.27083 [-1.47917,+1.95885] is inconclusive; invariance/equivalence is not established.",
+    "tau2 nonsignificant DECS costs remain compatible with BFCL-sized costs; significance on one benchmark only does not establish a cross-benchmark difference.",
+    "The experiment changes task domain, visited states, prompt and response lengths, and realized target strength together; no general coverage-only or domain-only conclusion is identified.",
+    "tau_pooled.py averages any available trial records and silently intersects task sets; independent audit confirms this run is complete, but future analyses should enforce exact expected tag/task/trial keys and protocol.",
+    "model_identity hashes weight filenames and sizes, not bytes. All trained models share the same identity hash; distinct paths and provenance are validated but are not a content-integrity certificate.",
+    "Stale failures.json metadata exists despite complete raw records; raw-record audit establishes completeness for this analysis."
+  ],
+  "recomputed_reports_match_saved_reports_exactly": {
+    "bfcl": true,
+    "tau2": true
+  },
+  "scope": "Read-only evaluation and statistics audit; no GPU jobs or weight downloads.",
+  "source_root": "/private/tmp/claude-501/-Users-alexwa-Desktop-Lightning-Weave/be33d162-2ec8-4cb5-b5f5-e61d9c0e7228/scratchpad/night/analysis",
+  "tau2_completeness": {
+    "all_success_flags_match_rewards": true,
+    "conversations": 5904,
+    "distinct_protocols": 1,
+    "identical_task_trial_keys": true,
+    "models": 9,
+    "records_by_model_domain": {
+      "ae.fresh.acc-legacy+decs-fixed.s5678|tau2_airline": {
+        "conversations": 200,
+        "duplicates": 0,
+        "successes": 70,
+        "tasks": 50,
+        "terminations": {
+          "user_stop": 200
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.fresh.acc-legacy+decs-fixed.s5678|tau2_retail": {
+        "conversations": 456,
+        "duplicates": 0,
+        "successes": 154,
+        "tasks": 114,
+        "terminations": {
+          "user_stop": 456
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.fresh.acc-legacy+decs-fixed|tau2_airline": {
+        "conversations": 200,
+        "duplicates": 0,
+        "successes": 52,
+        "tasks": 50,
+        "terminations": {
+          "user_stop": 200
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.fresh.acc-legacy+decs-fixed|tau2_retail": {
+        "conversations": 456,
+        "duplicates": 0,
+        "successes": 170,
+        "tasks": 114,
+        "terminations": {
+          "user_stop": 456
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.fresh.acc-legacy.s5678|tau2_airline": {
+        "conversations": 200,
+        "duplicates": 0,
+        "successes": 61,
+        "tasks": 50,
+        "terminations": {
+          "user_stop": 200
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.fresh.acc-legacy.s5678|tau2_retail": {
+        "conversations": 456,
+        "duplicates": 0,
+        "successes": 174,
+        "tasks": 114,
+        "terminations": {
+          "user_stop": 456
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.fresh.acc-legacy|tau2_airline": {
+        "conversations": 200,
+        "duplicates": 0,
+        "successes": 68,
+        "tasks": 50,
+        "terminations": {
+          "user_stop": 200
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.fresh.acc-legacy|tau2_retail": {
+        "conversations": 456,
+        "duplicates": 0,
+        "successes": 168,
+        "tasks": 114,
+        "terminations": {
+          "user_stop": 456
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.joint.acc-legacy+decs.s5678|tau2_airline": {
+        "conversations": 200,
+        "duplicates": 0,
+        "successes": 57,
+        "tasks": 50,
+        "terminations": {
+          "context_window_exceeded": 1,
+          "user_stop": 199
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.joint.acc-legacy+decs.s5678|tau2_retail": {
+        "conversations": 456,
+        "duplicates": 0,
+        "successes": 157,
+        "tasks": 114,
+        "terminations": {
+          "user_stop": 456
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.joint.acc-legacy+decs|tau2_airline": {
+        "conversations": 200,
+        "duplicates": 0,
+        "successes": 56,
+        "tasks": 50,
+        "terminations": {
+          "user_stop": 200
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.joint.acc-legacy+decs|tau2_retail": {
+        "conversations": 456,
+        "duplicates": 0,
+        "successes": 148,
+        "tasks": 114,
+        "terminations": {
+          "user_stop": 456
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.joint.acc-legacy.s5678|tau2_airline": {
+        "conversations": 200,
+        "duplicates": 0,
+        "successes": 62,
+        "tasks": 50,
+        "terminations": {
+          "user_stop": 200
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.joint.acc-legacy.s5678|tau2_retail": {
+        "conversations": 456,
+        "duplicates": 0,
+        "successes": 162,
+        "tasks": 114,
+        "terminations": {
+          "max_steps": 1,
+          "user_stop": 455
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.joint.acc-legacy|tau2_airline": {
+        "conversations": 200,
+        "duplicates": 0,
+        "successes": 60,
+        "tasks": 50,
+        "terminations": {
+          "user_stop": 200
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "ae.joint.acc-legacy|tau2_retail": {
+        "conversations": 456,
+        "duplicates": 0,
+        "successes": 149,
+        "tasks": 114,
+        "terminations": {
+          "user_stop": 456
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "base|tau2_airline": {
+        "conversations": 200,
+        "duplicates": 0,
+        "successes": 61,
+        "tasks": 50,
+        "terminations": {
+          "context_window_exceeded": 2,
+          "user_stop": 198
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      },
+      "base|tau2_retail": {
+        "conversations": 456,
+        "duplicates": 0,
+        "successes": 150,
+        "tasks": 114,
+        "terminations": {
+          "context_window_exceeded": 5,
+          "user_stop": 451
+        },
+        "trial_seeds": {
+          "0": [
+            626729
+          ],
+          "1": [
+            373753
+          ],
+          "2": [
+            361454
+          ],
+          "3": [
+            1567
+          ]
+        },
+        "trials": 4
+      }
+    }
+  },
+  "tau2_contrasts": {
+    "DECS cost, cache (cache decs - cache acc)": {
+      "all_tasks": {
+        "delta": -1.1432926829268293,
+        "high": 1.753048780487805,
+        "low": -4.115853658536586
+      },
+      "tau2_airline": {
+        "delta": -2.25,
+        "high": 2.75,
+        "low": -7.006249999999994
+      },
+      "tau2_retail": {
+        "delta": -0.6578947368421052,
+        "high": 2.9605263157894735,
+        "low": -4.276315789473684
+      }
+    },
+    "DECS cost, fresh (fresh decs - fresh acc)": {
+      "all_tasks": {
+        "delta": -1.9054878048780488,
+        "high": 0.6859756097560976,
+        "low": -4.420731707317073
+      },
+      "tau2_airline": {
+        "delta": -1.7500000000000002,
+        "high": 3.0,
+        "low": -6.75
+      },
+      "tau2_retail": {
+        "delta": -1.9736842105263157,
+        "high": 0.9868421052631579,
+        "low": -4.934210526315789
+      }
+    },
+    "PRIMARY fresh acc - cache acc": {
+      "all_tasks": {
+        "delta": 2.8963414634146343,
+        "high": 5.716463414634147,
+        "low": 0.0
+      },
+      "tau2_airline": {
+        "delta": 1.7500000000000002,
+        "high": 6.25,
+        "low": -2.5
+      },
+      "tau2_retail": {
+        "delta": 3.399122807017544,
+        "high": 6.907894736842106,
+        "low": -0.3289473684210526
+      }
+    },
+    "SECONDARY interaction": {
+      "all_tasks": {
+        "delta": -0.7621951219512195,
+        "high": 3.429878048780488,
+        "low": -4.801829268292683
+      },
+      "tau2_airline": {
+        "delta": 0.5,
+        "high": 7.75,
+        "low": -7.000000000000001
+      },
+      "tau2_retail": {
+        "delta": -1.3157894736842104,
+        "high": 3.7280701754385963,
+        "low": -6.25
+      }
+    },
+    "cache acc - base": {
+      "all_tasks": {
+        "delta": 0.8384146341463415,
+        "high": 4.192073170731708,
+        "low": -2.4390243902439024
+      },
+      "tau2_airline": {
+        "delta": 0.0,
+        "high": 6.25,
+        "low": -6.25
+      },
+      "tau2_retail": {
+        "delta": 1.2061403508771928,
+        "high": 5.1535087719298245,
+        "low": -2.631578947368421
+      }
+    },
+    "fresh acc - base": {
+      "all_tasks": {
+        "delta": 3.7347560975609753,
+        "high": 7.317073170731707,
+        "low": 0.22675304878048952
+      },
+      "tau2_airline": {
+        "delta": 1.7500000000000002,
+        "high": 8.5,
+        "low": -5.0
+      },
+      "tau2_retail": {
+        "delta": 4.605263157894736,
+        "high": 8.881578947368421,
+        "low": 0.3289473684210526
+      }
+    },
+    "fresh decs - cache decs": {
+      "all_tasks": {
+        "delta": 2.1341463414634148,
+        "high": 5.564024390243903,
+        "low": -1.3719512195121952
+      },
+      "tau2_airline": {
+        "delta": 2.25,
+        "high": 9.0,
+        "low": -4.5
+      },
+      "tau2_retail": {
+        "delta": 2.083333333333333,
+        "high": 6.030701754385965,
+        "low": -1.7571271929824537
+      }
+    }
+  },
+  "tau2_run": "tau-98179d00b25d-full",
+  "transfer_interpretation": "For accuracy-only, 37 of 38 net extra successes occur in episode pairs whose transfer status changes. This is descriptive post-treatment stratification, not causal mediation. Transfer can be required/correct.",
+  "transfer_paired_decomposition": {
+    "ae.fresh.acc-legacy vs ae.joint.acc-legacy": {
+      "cache_transfer=False;fresh_transfer=False": {
+        "cache_successes": 233,
+        "episodes": 557,
+        "fresh_successes": 232,
+        "net_fresh_successes": -1
+      },
+      "cache_transfer=False;fresh_transfer=True": {
+        "cache_successes": 50,
+        "episodes": 177,
+        "fresh_successes": 39,
+        "net_fresh_successes": -11
+      },
+      "cache_transfer=True;fresh_transfer=False": {
+        "cache_successes": 48,
+        "episodes": 304,
+        "fresh_successes": 96,
+        "net_fresh_successes": 48
+      },
+      "cache_transfer=True;fresh_transfer=True": {
+        "cache_successes": 102,
+        "episodes": 274,
+        "fresh_successes": 104,
+        "net_fresh_successes": 2
+      }
+    },
+    "ae.fresh.acc-legacy+decs-fixed vs ae.joint.acc-legacy+decs": {
+      "cache_transfer=False;fresh_transfer=False": {
+        "cache_successes": 233,
+        "episodes": 580,
+        "fresh_successes": 248,
+        "net_fresh_successes": 15
+      },
+      "cache_transfer=False;fresh_transfer=True": {
+        "cache_successes": 52,
+        "episodes": 159,
+        "fresh_successes": 35,
+        "net_fresh_successes": -17
+      },
+      "cache_transfer=True;fresh_transfer=False": {
+        "cache_successes": 57,
+        "episodes": 312,
+        "fresh_successes": 69,
+        "net_fresh_successes": 12
+      },
+      "cache_transfer=True;fresh_transfer=True": {
+        "cache_successes": 76,
+        "episodes": 261,
+        "fresh_successes": 94,
+        "net_fresh_successes": 18
+      }
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "torch": "2.14.1",
+  "device": "cpu",
+  "benchmark_accuracy_claimed": false,
+  "hidden_state_relay": [
+    {
+      "layers": 1,
+      "query_position": 31,
+      "changed_key_position": 24,
+      "direct_attention_permitted": false,
+      "max_abs_final_logit_change": 0.0
+    },
+    {
+      "layers": 4,
+      "query_position": 31,
+      "changed_key_position": 24,
+      "direct_attention_permitted": false,
+      "max_abs_final_logit_change": 0.2504998445510864
+    }
+  ],
+  "geometry": [
+    {
+      "name": "sink4_w512",
+      "length": 4096,
+      "prefix_end": 0,
+      "causal_edges": 8390656,
+      "allowed_edges": 1980666,
+      "allowed_fraction_of_causal": 0.2360561557999756,
+      "gathered_query_key_pairs": 2959104,
+      "gathered_to_allowed_ratio": 1.4939944442929802,
+      "retained_mask_bytes": 2959104
+    },
+    {
+      "name": "task_observation_w512",
+      "length": 4096,
+      "prefix_end": 256,
+      "causal_edges": 8390656,
+      "allowed_edges": 3899776,
+      "allowed_fraction_of_causal": 0.46477605565047597,
+      "gathered_query_key_pairs": 4716288,
+      "gathered_to_allowed_ratio": 1.209374076870056,
+      "retained_mask_bytes": 4716288
+    },
+    {
+      "name": "task_observation_w512",
+      "length": 4096,
+      "prefix_end": 2048,
+      "causal_edges": 8390656,
+      "allowed_edges": 7603712,
+      "allowed_fraction_of_causal": 0.9062118623382963,
+      "gathered_query_key_pairs": 8256512,
+      "gathered_to_allowed_ratio": 1.0858528045249478,
+      "retained_mask_bytes": 8256512
+    }
+  ]
+}

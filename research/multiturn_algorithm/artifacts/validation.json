@@ -1,0 +1,75 @@
+{
+  "utc": "2026-10-08T05:37:53.370799+00:00",
+  "python": "3.12.13 (main, May 10 2026, 19:20:41) [Clang 22.1.3 ]",
+  "results": [
+    {
+      "script": "hierarchical_target_probe.py",
+      "exit_code": 0,
+      "sha256": "51859e1742f82b5ad2a61bdfa11de84519d44b71aa5badf978c6cea33245a05a",
+      "output_keys": [
+        "scope",
+        "projection",
+        "composition_order",
+        "token_local_composition",
+        "complementary_constraints",
+        "reasoning_retention",
+        "information_acquisition"
+      ]
+    },
+    {
+      "script": "token_tree_probe.py",
+      "exit_code": 0,
+      "sha256": "be5a17815422212d2ad749548fc3b879a0984f5a46aaee011394503b84ee38c4",
+      "output_keys": [
+        "kind",
+        "rationale_before_action",
+        "style_after_action",
+        "semantic_equivalence_assumption",
+        "production_caveat"
+      ]
+    },
+    {
+      "script": "continuation_probe.py",
+      "exit_code": 0,
+      "sha256": "2a0b319e749b3dc983fd677411f074bc6ea9a7cb5cedd55913035a01906e0174",
+      "output_keys": [
+        "kind",
+        "witness",
+        "stochastic_transition_trap",
+        "surrogate_misalignment",
+        "high_normalizer_loop",
+        "sweep"
+      ]
+    },
+    {
+      "script": "information_state_probe.py",
+      "exit_code": 0,
+      "sha256": "9fa66133f2416d10167603723e172b5b86fdbb2ec79c9cbd389465e1958ac86e",
+      "output_keys": [
+        "experiment_kind",
+        "not_evidence_of",
+        "information_acquisition",
+        "evidence_sensitive_delta",
+        "useful_prior_removal_failure",
+        "invalid_counterfactual_failure",
+        "current_policy_credit_can_suppress_prerequisite",
+        "checks"
+      ]
+    },
+    {
+      "script": "cache_structure_probe.py",
+      "exit_code": 0,
+      "sha256": "c190c7bd5d832bd274a1df99fd91b80894a5f3325c57e485bfc2ab68c3bc3b39",
+      "output_keys": [
+        "description",
+        "input_sha256",
+        "metadata",
+        "all",
+        "after_tool",
+        "other",
+        "caveats"
+      ]
+    }
+  ],
+  "scope": "CPU exact/synthetic probes plus historical cache structure. No LLM generation/training or benchmark run."
+}

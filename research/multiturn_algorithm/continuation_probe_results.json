@@ -1,0 +1,170 @@
+{
+  "kind": "exact synthetic finite-MDP calculation, not a learned-model benchmark",
+  "witness": {
+    "donor_pre_challenge_success": 0.01,
+    "student_base_challenge_success": 0.99,
+    "safe_reward": 0.2,
+    "alpha": 1.0,
+    "root_challenge_probability_donor_post": 0.454386389775656,
+    "root_challenge_probability_local": 0.45438638977565604,
+    "root_challenge_probability_corrected": 0.6886163906871252,
+    "student_challenge_success_after_transfer": 0.9962978032414466,
+    "base_task_return": 0.595,
+    "local_task_return": 0.5618268840011666,
+    "corrected_task_return": 0.7483437191802115,
+    "base_surrogate_value": 0.4823029532217793,
+    "local_surrogate_value": 0.4437636846677996,
+    "corrected_surrogate_value": 0.5608854291050431,
+    "local_log_z_root": 0.0,
+    "local_log_z_challenge": 0.9766218677608253,
+    "normalizer_return_root": 0.4437636846677996,
+    "local_harms_task": true,
+    "correction_improves_task_over_local": true
+  },
+  "stochastic_transition_trap": {
+    "safe_reward": 0.6,
+    "lottery_success_probability_fixed_by_environment": 0.5,
+    "lottery_expected_reward": 0.5,
+    "correct_causal_soft_bellman_lottery_probability": 0.47502081252106,
+    "incorrect_path_tilt_lottery_probability": 0.505028457200667,
+    "incorrect_path_tilt_conditional_lottery_success": 0.7310585786300049,
+    "interpretation": "Use E[next value] across exogenous transitions, not log E exp[next value]."
+  },
+  "surrogate_misalignment": {
+    "construction": "External reward equals 1 - donor task return on every complete episode.",
+    "base_external_return": 0.405,
+    "local_external_return": 0.43817311599883335,
+    "corrected_external_return": 0.2516562808197885,
+    "local_surrogate_value": 0.4437636846677996,
+    "corrected_surrogate_value": 0.5608854291050431,
+    "interpretation": "An exact improvement of checkpoint-ratio return can worsen external task return."
+  },
+  "high_normalizer_loop": {
+    "donor_pre_stop_continue": [
+      0.9,
+      0.1
+    ],
+    "donor_post_stop_continue": [
+      0.5,
+      0.5
+    ],
+    "recipient_base_stop_continue": [
+      0.1,
+      0.9
+    ],
+    "alpha": 1.0,
+    "local_stop_probability": 0.012195121951219516,
+    "log_z_per_live_state": 1.5163474893680882,
+    "rows": [
+      {
+        "horizon": 1,
+        "local_stop_success": 0.012195121951219523,
+        "corrected_stop_success": 0.012195121951219516,
+        "corrected_expected_turns": 1.0,
+        "corrected_ratio_objective": 1.5163474893680882
+      },
+      {
+        "horizon": 2,
+        "local_stop_success": 0.02424152290303394,
+        "corrected_stop_success": 0.014864864864864871,
+        "corrected_expected_turns": 1.9972972972972973,
+        "corrected_ratio_objective": 3.023131247742105
+      },
+      {
+        "horizon": 4,
+        "local_stop_success": 0.047895394373409506,
+        "corrected_stop_success": 0.015587489997332627,
+        "corrected_expected_turns": 3.995698853027474,
+        "corrected_ratio_objective": 6.032019839399691
+      },
+      {
+        "horizon": 8,
+        "local_stop_success": 0.09349681994463466,
+        "corrected_stop_success": 0.015624908529609823,
+        "corrected_expected_turns": 7.995536483798522,
+        "corrected_ratio_objective": 12.048367438256033
+      },
+      {
+        "horizon": 16,
+        "local_stop_success": 0.17825198454950986,
+        "corrected_stop_success": 0.015624999999456027,
+        "corrected_expected_turns": 15.99553571429471,
+        "corrected_ratio_objective": 24.080986705387968
+      }
+    ],
+    "interpretation": "Optimizing unnormalized checkpoint shifts rewards visiting high-Z states; this may reward loops or length rather than success."
+  },
+  "sweep": {
+    "total_cases": 1620,
+    "single_pair_same_reference_identity_checks": 45,
+    "all_exact_normalizer_identity_and_soft_policy_improvement_checks_passed": true,
+    "local_task_harm_cases": 249,
+    "stronger_recipient_cases": 720,
+    "stronger_recipient_local_task_harm_cases": 174,
+    "correction_improves_task_over_local_cases": 1105,
+    "correction_decreases_task_over_local_cases": 470,
+    "largest_aligned_reward_tradeoff": {
+      "donor_pre_challenge_success": 0.99,
+      "student_base_challenge_success": 0.05,
+      "safe_reward": 0.2,
+      "alpha": 0.25,
+      "root_challenge_probability_donor_post": 0.688616390687125,
+      "root_challenge_probability_local": 0.9598685073257376,
+      "root_challenge_probability_corrected": 0.6231376914358965,
+      "student_challenge_success_after_transfer": 0.7418413371607371,
+      "base_task_return": 0.125,
+      "local_task_return": 0.7200964355078584,
+      "corrected_task_return": 0.537641759962881,
+      "base_surrogate_value": -0.5485824758832638,
+      "local_surrogate_value": -0.48410232117744506,
+      "corrected_surrogate_value": -0.4029004241433708,
+      "local_log_z_root": 0.6281168153324078,
+      "local_log_z_challenge": -2.6717473075423017,
+      "normalizer_return_root": -0.48410232117744495,
+      "local_harms_task": false,
+      "correction_improves_task_over_local": false
+    },
+    "worst_local_regression": {
+      "donor_pre_challenge_success": 0.01,
+      "student_base_challenge_success": 0.99,
+      "safe_reward": 0.4,
+      "alpha": 0.25,
+      "root_challenge_probability_donor_post": 0.405412423768382,
+      "root_challenge_probability_local": 0.17772279771532373,
+      "root_challenge_probability_corrected": 0.9160719214023084,
+      "student_challenge_success_after_transfer": 0.9998150277676352,
+      "base_task_return": 0.6950000000000001,
+      "local_task_return": 0.5066008048465587,
+      "corrected_task_return": 0.9494737049730765,
+      "base_surrogate_value": 0.46825991759391333,
+      "local_surrogate_value": 0.22314918485453084,
+      "corrected_surrogate_value": 0.6194218859698973,
+      "local_log_z_root": 0.19557020153381832,
+      "local_log_z_challenge": 3.921987200543633,
+      "normalizer_return_root": 0.22314918485453084,
+      "local_harms_task": true,
+      "correction_improves_task_over_local": true
+    },
+    "largest_corrected_task_gain": {
+      "donor_pre_challenge_success": 0.01,
+      "student_base_challenge_success": 0.99,
+      "safe_reward": 0.2,
+      "alpha": 0.25,
+      "root_challenge_probability_donor_post": 0.454386389775656,
+      "root_challenge_probability_local": 0.3247883304398709,
+      "root_challenge_probability_corrected": 0.9604613342807562,
+      "student_challenge_success_after_transfer": 0.9998150277676352,
+      "base_task_return": 0.595,
+      "local_task_return": 0.4597705875293692,
+      "corrected_task_return": 0.968191408747503,
+      "base_surrogate_value": 0.4823029532217793,
+      "local_surrogate_value": 0.3306523399829291,
+      "corrected_surrogate_value": 0.7216352098059068,
+      "local_log_z_root": 0.04879368506060666,
+      "local_log_z_challenge": 3.921987200543633,
+      "normalizer_return_root": 0.33065233998292914,
+      "local_harms_task": true,
+      "correction_improves_task_over_local": true
+    }
+  }
+}

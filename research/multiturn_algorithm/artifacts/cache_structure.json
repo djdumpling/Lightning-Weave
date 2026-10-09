@@ -1,0 +1,137 @@
+{
+  "description": "Historical DECS efficiency projection cache; structure only, no correctness labels.",
+  "input_sha256": {
+    "/private/tmp/multiturn-algorithm-cache/weights.parquet": "6dbcf319cf58513578351d7cceec483aea92a89ade9dbafc7c93f8b0e838ef90",
+    "/private/tmp/multiturn-algorithm-cache/prompts.parquet": "6bad13234d67d9a11846874b3793585d951f0c3e766cf3db1d112f2907677def"
+  },
+  "metadata": {
+    "alpha": "2.8801688661967835",
+    "eta": "0.0",
+    "schema": "decision_projection_weights_v1"
+  },
+  "all": {
+    "states": 3200,
+    "responses": 25600,
+    "responses_per_state": {
+      "8": 3200
+    },
+    "exact_decisions_per_state": {
+      "1": 1992,
+      "2": 461,
+      "3": 157,
+      "4": 75,
+      "5": 48,
+      "6": 63,
+      "7": 65,
+      "8": 339
+    },
+    "canonical_tool_decisions_per_state": {
+      "1": 2086,
+      "2": 409,
+      "3": 140,
+      "4": 70,
+      "5": 44,
+      "6": 56,
+      "7": 65,
+      "8": 330
+    },
+    "all_same_exact_states": 1992,
+    "all_different_exact_states": 339,
+    "singleton_response_fraction": 0.1611328125,
+    "projected_weight_exactly_one_fraction": 0.1612109375,
+    "mean_abs_projected_weight_change": 0.791261410794169,
+    "mean_abs_ordinary_weight_change": 1.012588568882099,
+    "mean_ordinary_action_mass_total_variation": 0.1423293480786013,
+    "response_types": {
+      "pure_tool": 22179,
+      "public_text_or_mixed": 3191,
+      "truncated": 223,
+      "invalid_tool_serialization": 7
+    }
+  },
+  "after_tool": {
+    "states": 397,
+    "responses": 3176,
+    "responses_per_state": {
+      "8": 397
+    },
+    "exact_decisions_per_state": {
+      "1": 22,
+      "2": 21,
+      "3": 18,
+      "4": 11,
+      "5": 8,
+      "6": 23,
+      "7": 32,
+      "8": 262
+    },
+    "canonical_tool_decisions_per_state": {
+      "1": 23,
+      "2": 21,
+      "3": 20,
+      "4": 10,
+      "5": 6,
+      "6": 23,
+      "7": 33,
+      "8": 261
+    },
+    "all_same_exact_states": 22,
+    "all_different_exact_states": 262,
+    "singleton_response_fraction": 0.783375314861461,
+    "projected_weight_exactly_one_fraction": 0.783375314861461,
+    "mean_abs_projected_weight_change": 0.19042481771804454,
+    "mean_abs_ordinary_weight_change": 1.063458292879687,
+    "mean_ordinary_action_mass_total_variation": 0.46234930572754934,
+    "response_types": {
+      "public_text_or_mixed": 2546,
+      "pure_tool": 580,
+      "truncated": 50
+    }
+  },
+  "other": {
+    "states": 2803,
+    "responses": 22424,
+    "responses_per_state": {
+      "8": 2803
+    },
+    "exact_decisions_per_state": {
+      "1": 1970,
+      "2": 440,
+      "3": 139,
+      "4": 64,
+      "5": 40,
+      "6": 40,
+      "7": 33,
+      "8": 77
+    },
+    "canonical_tool_decisions_per_state": {
+      "1": 2063,
+      "2": 388,
+      "3": 120,
+      "4": 60,
+      "5": 38,
+      "6": 33,
+      "7": 32,
+      "8": 69
+    },
+    "all_same_exact_states": 1970,
+    "all_different_exact_states": 77,
+    "singleton_response_fraction": 0.07300214056368177,
+    "projected_weight_exactly_one_fraction": 0.07309133071708883,
+    "mean_abs_projected_weight_change": 0.87636027895372,
+    "mean_abs_ordinary_weight_change": 1.0053836882445528,
+    "mean_ordinary_action_mass_total_variation": 0.09700365304234285,
+    "response_types": {
+      "pure_tool": 21599,
+      "public_text_or_mixed": 645,
+      "truncated": 173,
+      "invalid_tool_serialization": 7
+    }
+  },
+  "caveats": [
+    "No inference about action correctness or new accuracy donors.",
+    "Byte-exact output groups are not sufficient for causal next-state equivalence if private reasoning persists.",
+    "Canonical JSON grouping is only diagnostic; public prose is never merged.",
+    "All group estimates use just eight samples per state."
+  ]
+}

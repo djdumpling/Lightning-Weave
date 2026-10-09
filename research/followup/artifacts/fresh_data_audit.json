@@ -1,0 +1,100 @@
+{
+  "anti_transfer_evidence": {
+    "airline": {
+      "collected_tasks": 600,
+      "explicit_no_transfer_block_tasks": 84,
+      "selected_states": 1600,
+      "selected_tasks_with_explicit_no_transfer_block": 83,
+      "states_from_explicit_no_transfer_block_tasks": 223,
+      "states_from_transfer_then_stop_tasks": 0,
+      "tasks_with_transfer_then_stop_instruction": 0
+    },
+    "retail": {
+      "collected_tasks": 563,
+      "explicit_no_transfer_block_tasks": 0,
+      "selected_states": 1600,
+      "selected_tasks_with_explicit_no_transfer_block": 0,
+      "states_from_explicit_no_transfer_block_tasks": 0,
+      "states_from_transfer_then_stop_tasks": 452,
+      "tasks_with_transfer_then_stop_instruction": 160
+    }
+  },
+  "dataset": {
+    "all_collected_tasks_passed_audit": true,
+    "collected_airline_initial_state_nonnull": 0,
+    "collected_retail_initial_state_nonnull": 0,
+    "collected_unique_tasks": 1163,
+    "counts": {
+      "airline": {
+        "eligible": 938,
+        "excluded": 210
+      },
+      "retail": {
+        "eligible": 563,
+        "excluded": 0
+      }
+    },
+    "dataset_sha256_verified": true,
+    "recomputed_audit_equals_saved": true,
+    "tasks": 1982
+  },
+  "interpretation": "Lower escalation is observed behavior; dataset does not generally forbid transfers, and observation alone does not identify the mechanism causing the gain.",
+  "major_training_data_bug_found": false,
+  "minor_audit_gap": {
+    "assessment": "One of 3200 states; distinct task goals (train baggage information versus eval booking). Violates strict shared-user exclusion intent but no evidence of evaluation-task rehearsal or major result change.",
+    "code": "data_curation/areal_tau2_tasks.py:84",
+    "eval_task": "airline 20",
+    "problem": "Training entity extraction uses instructions only, while eval extraction includes gold actions; misses a user named only in gold actions or resolved via reservation ownership.",
+    "selected_states": [
+      {
+        "prompt_id": "7d0d68b5780525431f282050",
+        "request_index": 1,
+        "state_type": "after_tool"
+      }
+    ],
+    "shared_user": "mia_li_3668",
+    "task": "airline_39",
+    "train_reservation": "NO6JO3"
+  },
+  "scope": "Fresh data pipeline, collection implementation, selected prompts and one original behavior-response shard; no new GPU run.",
+  "selected_prompts": {
+    "behavior_prompt_token_mismatches": [],
+    "behavior_shard_rows_checked": 800,
+    "counts": {
+      "action_kind": {
+        "read": 1062,
+        "text": 1455,
+        "transfer": 138,
+        "write": 545
+      },
+      "collector": {
+        "ae.joint.acc-legacy": 1600,
+        "ae.joint.acc-legacy+decs": 1600
+      },
+      "domain": {
+        "tau2_airline": 1600,
+        "tau2_retail": 1600
+      },
+      "state_type": {
+        "after_tool": 1737,
+        "first_user_turn": 367,
+        "later_user_turn": 1096
+      }
+    },
+    "hash_matches_receipt": true,
+    "max_states_per_episode": 4,
+    "pinned_tokenizer_count_mismatches": 0,
+    "pinned_tokenizer_roundtrip_mismatches": 0,
+    "prior_thinking_tags": 0,
+    "private_no_transfer_block_marker_in_prompts": 0,
+    "rows": 3200,
+    "sha256": "de708ae1e452cdf1166f73446e64851bdd5786a05c14b884715d66e9d6483b6e",
+    "unique_ids": 3200,
+    "unique_prompt_strings": 3198
+  },
+  "source_paths": {
+    "collection_plan": "/private/tmp/claude-501/-Users-alexwa-Desktop-Lightning-Weave/be33d162-2ec8-4cb5-b5f5-e61d9c0e7228/scratchpad/fresh/collect_plan_v1.json",
+    "saved_summary": "/private/tmp/claude-501/-Users-alexwa-Desktop-Lightning-Weave/be33d162-2ec8-4cb5-b5f5-e61d9c0e7228/scratchpad/fresh/prompts_summary.json",
+    "selected_prompts": "/private/tmp/fresh-audit-20261008/tau2-fresh-qwen3-4b-v1/prompts.parquet"
+  }
+}

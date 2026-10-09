@@ -1,0 +1,27 @@
+{
+  "initial_gradient_max_error": 2.929142545182728e-08,
+  "target_fixed_point_gradient_max": 3.639363205629988e-08,
+  "tail_action_probability_comparison": [
+    0.01,
+    0.29
+  ],
+  "loss_before_tail_swap": 0.1290883868932724,
+  "loss_after_tail_swap": 0.1290883868932724,
+  "behavior_other_mass": 0.3,
+  "post_only_target_other_mass": 0.49999999999999983,
+  "joint_weight_alpha_scaling_target_tv_error": 0.0,
+  "joint_weight_alpha_scaling_loss_ratio": 2.0,
+  "identity": {
+    "python": "3.12.13 (main, May 10 2026, 19:20:41) [Clang 22.1.3 ]",
+    "torch": "2.14.1",
+    "device": "cpu",
+    "seed": 0,
+    "input_dtype": "float64",
+    "loss_internal_dtype": "float32",
+    "code_sha256": {
+      "slime/rollout/offline_direct_opd.py": "bf1d8940b29719507e0f72f0fc4a539046bb1eb668366f4cc3817439b7464e2c",
+      "data_curation/build_direct_opd_composed_target.py": "52ee8b3dae2e92770d3fbaca1f2df1ce313ec3171d857f540ccab9d83b7d2de6",
+      "research/followup/probes/direct_opd_geometry.py": "44c4497e19ed2105e25d124738cc25e0f0e8aedabe8a6e731854dedbf2b6e05a"
+    }
+  }
+}

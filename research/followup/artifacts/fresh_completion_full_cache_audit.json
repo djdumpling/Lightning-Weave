@@ -1,0 +1,194 @@
+{
+  "cache": {
+    "files": [
+      {
+        "file": "rollouts-r00000-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00000-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00001-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00001-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00002-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00002-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00003-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00003-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00004-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00004-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00005-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00005-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00006-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00006-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00007-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00007-00001.parquet",
+        "rows": 800
+      }
+    ],
+    "finish_reasons": {
+      "length": 53,
+      "stop": 12747
+    },
+    "length_capped_response_tokens": 108544,
+    "length_capped_row_fraction": 0.004140625,
+    "length_capped_rows": 53,
+    "length_capped_token_fraction": 0.020959769115043343,
+    "mean_response_tokens": 404.584609375,
+    "response_token_quantiles": {
+      "max": 2048,
+      "p50": 314,
+      "p90": 725,
+      "p99": 1632
+    },
+    "response_tokens": 5178683,
+    "responses_per_prompt_histogram": {
+      "4": 3200
+    },
+    "root": "/opd/looptool-qwen3-4b-v1",
+    "rows": 12800,
+    "unclosed_think_response_tokens": 75776,
+    "unclosed_think_row_fraction": 0.002890625,
+    "unclosed_think_rows": 37,
+    "unclosed_think_token_fraction": 0.014632291646351013,
+    "unique_prompt_ids": 3200,
+    "unique_sample_ids": 12800
+  },
+  "fresh": {
+    "files": [
+      {
+        "file": "rollouts-r00000-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00000-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00001-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00001-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00002-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00002-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00003-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00003-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00004-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00004-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00005-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00005-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00006-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00006-00001.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00007-00000.parquet",
+        "rows": 800
+      },
+      {
+        "file": "rollouts-r00007-00001.parquet",
+        "rows": 800
+      }
+    ],
+    "finish_reasons": {
+      "length": 505,
+      "stop": 12295
+    },
+    "length_capped_response_tokens": 1034240,
+    "length_capped_row_fraction": 0.039453125,
+    "length_capped_rows": 505,
+    "length_capped_token_fraction": 0.10492187518228989,
+    "mean_response_tokens": 770.096796875,
+    "response_token_quantiles": {
+      "max": 2048,
+      "p50": 618,
+      "p90": 1527,
+      "p99": 2048
+    },
+    "response_tokens": 9857239,
+    "responses_per_prompt_histogram": {
+      "4": 3200
+    },
+    "root": "/opd/tau2-fresh-qwen3-4b-v1",
+    "rows": 12800,
+    "unclosed_think_response_tokens": 849920,
+    "unclosed_think_row_fraction": 0.032421875,
+    "unclosed_think_rows": 415,
+    "unclosed_think_token_fraction": 0.0862229271300006,
+    "unique_prompt_ids": 3200,
+    "unique_sample_ids": 12800
+  },
+  "fresh_cache_token_ratio": 1.9034258323979283,
+  "scope": "Whole original response caches; all columns read only; CPU-only Modal function; unclosed thinking defined by presence of <think> without </think> in response text."
+}

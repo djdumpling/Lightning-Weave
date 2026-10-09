@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-08",
+  "python": "/private/tmp/agentic-research-20261008-venv/bin/python",
+  "production_gpu_runtime_verified": false,
+  "checks": [
+    {
+      "repository": "Lightning-Weave",
+      "command": "python -m pytest -q tests/test_tau_eval_config.py tests/test_bfcl_eval_config.py tests/test_bfcl_pooled.py tests/test_bfcl_multiturn_failures.py tests/test_build_direct_opd_composed_target.py tests/test_composition_pipeline.py tests/test_build_synthetic_shift_target.py tests/test_offline_direct_opd.py",
+      "passed": 135,
+      "skipped": 1,
+      "skip_reason": "Distributed Gloo test requires RUN_DISTRIBUTED_TESTS=1"
+    },
+    {
+      "repository": "self-distillation",
+      "command": "python -m pytest -q tests/test_tau2_complete_rollout.py tests/test_turn_context_packing.py tests/test_turn_context_scoring.py -k 'not actual_loss_wrapper_counts_dummy_as_zero_tokens and not actual_patched_get_batch_emits_independent_thd_boundaries and not actual_rollout_logger_ignores_nonscalar_turn_metadata and not patch_only_three_actual_proven_files_and_fail_on_unknown_shape'",
+      "passed": 26,
+      "subtests_passed": 18,
+      "deselected": 4,
+      "deselected_reason": "Require absent frozen run runtime files"
+    },
+    {
+      "repository": "self-distillation",
+      "command": "python -m pytest -q tests/test_causal_sparse_attention.py tests/test_agentic_role_context.py tests/test_reasoning_window_attention.py tests/test_postthink_grounding_attention.py tests/test_observation_event_context.py",
+      "passed": 36,
+      "subtests_passed": 2
+    },
+    {
+      "repository": "agentic-eval",
+      "command": "python -m pytest -q tests/test_bfcl_score.py tests/test_bfcl_ctx_stats.py tests/test_tau_config.py",
+      "passed": 32
+    }
+  ],
+  "probes": [
+    "probes/analyze_tau.py",
+    "probes/direct_opd_geometry.py",
+    "probes/probe_attention.py"
+  ],
+  "notes": [
+    "Initial local test attempts lacked dependencies; the final reported runs used the completed isolated environment.",
+    "One scoring oracle fixture required FP64 normalization on ARM; production precision and test tolerance unchanged.",
+    "No new GPU run, full training experiment, or benchmark generation was performed."
+  ]
+}

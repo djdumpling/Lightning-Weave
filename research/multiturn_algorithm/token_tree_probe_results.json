@@ -1,0 +1,176 @@
+{
+  "kind": "exact autoregressive toy; not measured production behavior",
+  "rationale_before_action": {
+    "description": "Donors prefer different correct rationale modes; shared incorrect mode survives their product.",
+    "root_post1": {
+      "R1": 0.95,
+      "R2": 0.001,
+      "R0": 0.049
+    },
+    "root_post2": {
+      "R1": 0.001,
+      "R2": 0.95,
+      "R0": 0.049
+    },
+    "good_probability_given_rationale_under_every_model": {
+      "R1": 0.99,
+      "R2": 0.99,
+      "R0": 0.01
+    },
+    "results": [
+      {
+        "each_donor_weight_over_alpha": 1.0,
+        "base_action_marginal": {
+          "Good": 0.6633333333333332,
+          "Bad": 0.3366666666666666
+        },
+        "donor_post_action_marginals": [
+          {
+            "Good": 0.94198,
+            "Bad": 0.058020000000000016
+          },
+          {
+            "Good": 0.94198,
+            "Bad": 0.058020000000000016
+          }
+        ],
+        "token_local_action_marginal": {
+          "Good": 0.4429225761450824,
+          "Bad": 0.5570774238549174
+        },
+        "response_product_action_marginal": {
+          "Good": 0.4429225761450824,
+          "Bad": 0.5570774238549175
+        },
+        "marginalize_then_compose_action_target": {
+          "Good": 0.9925805866972511,
+          "Bad": 0.0074194133027487685
+        },
+        "token_local_root": {
+          "R1": 0.2208788653801441,
+          "R2": 0.2208788653801441,
+          "R0": 0.5582422692397118
+        }
+      },
+      {
+        "each_donor_weight_over_alpha": 0.5,
+        "base_action_marginal": {
+          "Good": 0.6633333333333332,
+          "Bad": 0.3366666666666666
+        },
+        "donor_post_action_marginals": [
+          {
+            "Good": 0.94198,
+            "Bad": 0.058020000000000016
+          },
+          {
+            "Good": 0.94198,
+            "Bad": 0.058020000000000016
+          }
+        ],
+        "token_local_action_marginal": {
+          "Good": 0.5559959941202984,
+          "Bad": 0.44400400587970146
+        },
+        "response_product_action_marginal": {
+          "Good": 0.5559959941202983,
+          "Bad": 0.4440040058797016
+        },
+        "marginalize_then_compose_action_target": {
+          "Good": 0.94198,
+          "Bad": 0.05802000000000001
+        },
+        "token_local_root": {
+          "R1": 0.27856938475525433,
+          "R2": 0.27856938475525433,
+          "R0": 0.44286123048949133
+        }
+      }
+    ]
+  },
+  "style_after_action": {
+    "description": "Irrelevant stylistic disagreement occurs after the semantic decision; local normalization protects that decision.",
+    "root_post1_and_post2": {
+      "Good": 0.95,
+      "Bad": 0.05
+    },
+    "style_after_good_post1": {
+      "X": 0.9999,
+      "Y": 0.0001
+    },
+    "style_after_good_post2": {
+      "X": 0.0001,
+      "Y": 0.9999
+    },
+    "results": [
+      {
+        "each_donor_weight_over_alpha": 1.0,
+        "base_action_marginal": {
+          "Good": 0.5,
+          "Bad": 0.5
+        },
+        "donor_post_action_marginals": [
+          {
+            "Good": 0.95,
+            "Bad": 0.05
+          },
+          {
+            "Good": 0.95,
+            "Bad": 0.05
+          }
+        ],
+        "token_local_action_marginal": {
+          "Good": 0.9972375690607735,
+          "Bad": 0.0027624309392265205
+        },
+        "response_product_action_marginal": {
+          "Good": 0.12616863148814986,
+          "Bad": 0.8738313685118502
+        },
+        "marginalize_then_compose_action_target": {
+          "Good": 0.9972375690607735,
+          "Bad": 0.0027624309392265205
+        },
+        "token_local_root": {
+          "Good": 0.9972375690607735,
+          "Bad": 0.0027624309392265205
+        }
+      },
+      {
+        "each_donor_weight_over_alpha": 0.5,
+        "base_action_marginal": {
+          "Good": 0.5,
+          "Bad": 0.5
+        },
+        "donor_post_action_marginals": [
+          {
+            "Good": 0.95,
+            "Bad": 0.05
+          },
+          {
+            "Good": 0.95,
+            "Bad": 0.05
+          }
+        ],
+        "token_local_action_marginal": {
+          "Good": 0.9500000000000001,
+          "Bad": 0.05000000000000002
+        },
+        "response_product_action_marginal": {
+          "Good": 0.27535234155816285,
+          "Bad": 0.7246476584418371
+        },
+        "marginalize_then_compose_action_target": {
+          "Good": 0.9500000000000001,
+          "Bad": 0.05000000000000002
+        },
+        "token_local_root": {
+          "Good": 0.9500000000000001,
+          "Bad": 0.05000000000000002
+        }
+      }
+    ]
+  },
+  "semantic_equivalence_assumption": "The action terminates the episode, or rationale/style is erased before subsequent policy state.",
+  "production_caveat": "Retained reasoning can change subsequent policy state. Finite exact support does not model top-16 tail approximation, gradient approximation, or training generalization."
+}

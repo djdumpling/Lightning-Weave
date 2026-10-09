@@ -1,0 +1,68 @@
+{
+  "audit_date": "2026-10-08",
+  "verdict": "No major result-changing implementation bug found. Completed runs are usable. Plan was materially followed; one minor strict shared-user exclusion gap affected one selected state. Several causal/equivalence conclusions exceed the evidence.",
+  "validation_scope": {
+    "tau2_conversations": 5904,
+    "bfcl_evaluation_trees": 24,
+    "all_selected_prompts_retokenized": 3200,
+    "fresh_training_runs_receipts_checked": 4,
+    "gpu_jobs_launched": 0,
+    "checkpoint_weight_contents_independently_hashed": false
+  },
+  "whole_cache_corrections": {
+    "response_tokens": {
+      "fresh": 9857239,
+      "cache": 5178683,
+      "ratio": 1.9034258323979283
+    },
+    "accuracy_target_kl_to_behavior_nats_per_token": {
+      "fresh": 0.07976277460791409,
+      "cache": 0.05019748
+    },
+    "response_tokens_in_unclosed_thinking_percent": {
+      "fresh": 8.6223,
+      "cache": 1.4632
+    },
+    "response_tokens_in_length_capped_responses_percent": {
+      "fresh": 10.492,
+      "cache": 2.096
+    },
+    "loss_normalization": "Global response-token mean; exact pinned runtime and numerical microbatch-repartition check found no packing-induced gradient scaling change. Token exposure ratio is not a gradient multiplier."
+  },
+  "interpretation": [
+    "Tested fresh-state recipe yields suggestive modest tau2 gain and small BFCL multi-turn regression, conditional on two trained seeds.",
+    "BFCL DECS interaction +0.27pp [-1.48,+1.96] is inconclusive; it does not establish invariance or an intrinsic shortening penalty.",
+    "Tau2 fresh DECS effect -1.91pp [-4.42,+0.69] remains compatible with a BFCL-sized accuracy cost.",
+    "37 of 38 net additional tau2 successes occur in transfer-changing episode pairs. This is descriptive post-treatment stratification, not causal mediation.",
+    "Explicit NO TRANSFER block occurs in 84/600 collected airline tasks and zero retail tasks; generalized anti-transfer explanation is unsupported."
+  ],
+  "minor_implementation_weaknesses": [
+    "Training overlap entity scan omits gold actions, missing one shared-user task which supplies one selected state; task differs from evaluation task.",
+    "Pooled tau2 analysis does not itself enforce complete matched trial sets; independent audit establishes completeness for this run.",
+    "Model identity hashes filenames and sizes, not weight bytes; distinct intended paths/provenance and fresh server processes were verified."
+  ],
+  "next_actions_ranked": [
+    "Adjudicate changed transfer decisions against task policy and outcomes before framing the gain as general multi-turn reasoning.",
+    "Use a target-strength-matched fresh accuracy control; explicitly account for token exposure and completion truncation.",
+    "Test a LoopTool/tau2 mixture with explicit response-token weights and retained BFCL evaluation; a 50/50 prompt mixture is not a 50/50 token mixture.",
+    "Enforce strict evaluation completeness and include training gold-action entities in future overlap audits."
+  ],
+  "evidence": [
+    {
+      "path": "fresh_data_audit.json",
+      "sha256": "ccf1ed762e5d9b0a47c84254e2d76907354b6c5728bbec188aee21ab96390e55"
+    },
+    {
+      "path": "fresh_training_audit.json",
+      "sha256": "32cab47ce2175546d22b81bc1e967e5c3ecf02b2bc6a60c774b8432b309f5921"
+    },
+    {
+      "path": "fresh_eval_audit.json",
+      "sha256": "2f2d7a9cc7928f398881d3d4d77527fd8cac319f6358c1b82b3fb27ad2ee596c"
+    },
+    {
+      "path": "fresh_completion_full_cache_audit.json",
+      "sha256": "e9896320d4918dc94350ee38a3c920b2c07e4f45edcc83800f07c96b2ef001a4"
+    }
+  ]
+}

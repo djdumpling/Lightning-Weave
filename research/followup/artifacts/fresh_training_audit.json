@@ -1,0 +1,315 @@
+{
+  "audit_date": "2026-10-08",
+  "code_references": {
+    "all_generated_tokens_trainable": "data_curation/collect_direct_opd_rollouts.py:111",
+    "clean_init_and_training_budget": "configs/agent_eff/modal_pipeline.py:395",
+    "core_target": "slime/rollout/offline_direct_opd.py:930",
+    "fixed_decs": "configs/agent_eff/config.py:441",
+    "frozen_generation": "configs/looptool_opd/modal_pipeline.py:323",
+    "synthetic_target_kl": "data_curation/build_synthetic_shift_target.py:459",
+    "token_reduction": "slime/backends/megatron_utils/loss.py:720"
+  },
+  "dynamic_packing_audit": {
+    "limitation": "Numerical test checks the loss adapter plus summed-count normalization; no repeated GPU model-forward parity experiment.",
+    "local_adapter_numerical_test": {
+      "max_gradient_absolute_difference": 0.0,
+      "microbatch_counts": [
+        1,
+        3,
+        4
+      ],
+      "objective_values": [
+        0.41803833842277527,
+        0.41803833842277527,
+        0.41803833842277527
+      ],
+      "passes": true
+    },
+    "runtime_image": "tonyhao96/jetmoe@sha256:d79db3699f58172088c8897efd4e21aa7960cbd5530c81b02a6bf07132695313",
+    "runtime_read": "CPU-only Modal source inspection; no GPU or model load",
+    "source_findings": [
+      "Local data.py:297-328 repartitions within the same global 64-example optimizer update; global batch membership and the number of updates are retained.",
+      "Local loss.py:720-762 returns the microbatch sum of losses and count of response tokens; the calculate_per_token_loss path has no num_microbatches multiplier or divisor.",
+      "Pinned schedules.py:237-240 skips both token and microbatch normalization when calculate_per_token_loss=True.",
+      "Pinned distributed_data_parallel.py:337-342 uses gradient_scaling_factor=1 and forbids average_in_collective in this mode.",
+      "Pinned finalize_model_grads.py:461-474 sums token counts over data-parallel ranks then scales accumulated gradients by 1/global_token_count."
+    ],
+    "source_sha256": {
+      "megatron/core/distributed/distributed_data_parallel.py": "fcefe590355799cc7af75d22bb54a1b478b2e8c07585498a24f1f77a0f4869f0",
+      "megatron/core/distributed/finalize_model_grads.py": "b7af51af204c572dfae5f365b328cfc199e29b5710a85340e9d7a498b4299501",
+      "megatron/core/model_parallel_config.py": "a8ed8ac863bce5c0611e8659b76766218b3092f6dc19fe1f025aaae64d6d334a",
+      "megatron/core/pipeline_parallel/schedules.py": "ffd2d3a853726729027294f46acb71f4f5301e80a49ca2de28b4bfb82abdc58f",
+      "megatron/training/arguments.py": "c56ef891a8a7ea373f8987aa995477443af0b1ae085ea363d146e45ec8564528"
+    },
+    "verdict": "No microbatch weighting bug found. Increasing token capacity changes partitioning, not mathematical gradient normalization."
+  },
+  "full_cache_evidence": {
+    "acc-legacy": {
+      "cache": {
+        "target_kl_to_behavior_per_token": 0.05019748332693919,
+        "total_rows": 12800,
+        "total_trainable_tokens": 5178683
+      },
+      "cache_manifest_sha256": "c6a2feb21535eae2e3cd68a18f7ee8d0f6f4b110e8fdb07db9e30df5ce5df4c9",
+      "fresh": {
+        "target_kl_to_behavior_per_token": 0.07976277460791409,
+        "total_rows": 12800,
+        "total_trainable_tokens": 9857239
+      },
+      "fresh_calibration": {},
+      "fresh_manifest_sha256": "b130848208a118f8a83b8a9e0a54be7dad67be8bfbe158e87a5cdc402547cec5",
+      "fresh_spec": {
+        "alpha": 2.0,
+        "terms": [
+          {
+            "coef": 1.0,
+            "direction": {
+              "terms": [
+                {
+                  "coef": 1.0,
+                  "source": "agent_acc"
+                }
+              ]
+            },
+            "transform": "raw"
+          }
+        ]
+      },
+      "target_kl_ratio": 1.588979552787824,
+      "trainable_token_ratio": 1.9034258323979283
+    },
+    "acc-legacy+decs-fixed": {
+      "cache": {
+        "target_kl_to_behavior_per_token": 0.04386293373392823,
+        "total_rows": 12800,
+        "total_trainable_tokens": 5178683
+      },
+      "cache_manifest_sha256": "e753e06ddf451164647002cf988c30b4a29a994b4a0027db86280179d2cfbe95",
+      "fresh": {
+        "target_kl_to_behavior_per_token": 0.06906017406876253,
+        "total_rows": 12800,
+        "total_trainable_tokens": 9857239
+      },
+      "fresh_calibration": {},
+      "fresh_manifest_sha256": "b29895763c4d1e45cb18d5b0659a173f016412de85642287603da43f38aacc9d",
+      "fresh_spec": {
+        "alpha": 2.0,
+        "terms": [
+          {
+            "coef": 1.0,
+            "direction": {
+              "terms": [
+                {
+                  "coef": 1.0,
+                  "source": "agent_acc"
+                }
+              ]
+            },
+            "transform": "raw"
+          },
+          {
+            "coef": 3.1135845716525035,
+            "direction": {
+              "terms": [
+                {
+                  "coef": 1.0,
+                  "source": "decs"
+                }
+              ]
+            },
+            "transform": "evidence"
+          }
+        ]
+      },
+      "target_kl_ratio": 1.5744540592674512,
+      "trainable_token_ratio": 1.9034258323979283
+    }
+  },
+  "receipts": [
+    {
+      "export_matches": true,
+      "export_sha256": "332a571d6be8c0a3de1318e26ef6491ca9c52d066a3b99f8bf0556bb54f77af9",
+      "path": "/private/tmp/fresh-audit-20261008/agent-eff/fresh/acc-legacy/seed1234/COMPLETE.json",
+      "receipt": {
+        "alpha": 2.0,
+        "data_order": "stored",
+        "final_iteration": 49,
+        "num_rollout": 50,
+        "passes": 1,
+        "seed": 1234,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/tau2-fresh-qwen3-4b-v1/synthetic/acc-legacy",
+        "target_revision": "6d096578df14d8e57401c582b1063601a5c37ef4afc97a868bb45e6cfec944d2",
+        "variant": "acc-legacy"
+      },
+      "sha256": "332a571d6be8c0a3de1318e26ef6491ca9c52d066a3b99f8bf0556bb54f77af9",
+      "target_revision_matches_sealed_manifest": true
+    },
+    {
+      "export_matches": true,
+      "export_sha256": "0a8267c011e34b95f8202a02f7e1aad708413f4c0191add671f7e91eda3ab4c1",
+      "path": "/private/tmp/fresh-audit-20261008/agent-eff/fresh/acc-legacy/seed5678/COMPLETE.json",
+      "receipt": {
+        "alpha": 2.0,
+        "data_order": "shuffled with seed 5678",
+        "final_iteration": 49,
+        "num_rollout": 50,
+        "passes": 1,
+        "seed": 5678,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/tau2-fresh-qwen3-4b-v1/synthetic/acc-legacy",
+        "target_revision": "6d096578df14d8e57401c582b1063601a5c37ef4afc97a868bb45e6cfec944d2",
+        "variant": "acc-legacy"
+      },
+      "sha256": "0a8267c011e34b95f8202a02f7e1aad708413f4c0191add671f7e91eda3ab4c1",
+      "target_revision_matches_sealed_manifest": true
+    },
+    {
+      "export_matches": true,
+      "export_sha256": "8e3368b5438422487cdf95c010f0a58bd5acbcb79269e62fa66d804c49721ce6",
+      "path": "/private/tmp/fresh-audit-20261008/agent-eff/fresh/acc-legacy+decs-fixed/seed1234/COMPLETE.json",
+      "receipt": {
+        "alpha": 2.0,
+        "data_order": "stored",
+        "final_iteration": 49,
+        "num_rollout": 50,
+        "passes": 1,
+        "seed": 1234,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/tau2-fresh-qwen3-4b-v1/synthetic/acc-legacy+decs-fixed",
+        "target_revision": "8c1d278437f6db24a93ae111fe0e40ce676a28d7c47f91b0f8dfe8eab172f390",
+        "variant": "acc-legacy+decs-fixed"
+      },
+      "sha256": "8e3368b5438422487cdf95c010f0a58bd5acbcb79269e62fa66d804c49721ce6",
+      "target_revision_matches_sealed_manifest": true
+    },
+    {
+      "export_matches": true,
+      "export_sha256": "afaeaa3562deee0f00bd729a337143dbdbb805d363b3cc3c99e10f99a1f0c9b2",
+      "path": "/private/tmp/fresh-audit-20261008/agent-eff/fresh/acc-legacy+decs-fixed/seed5678/COMPLETE.json",
+      "receipt": {
+        "alpha": 2.0,
+        "data_order": "shuffled with seed 5678",
+        "final_iteration": 49,
+        "num_rollout": 50,
+        "passes": 1,
+        "seed": 5678,
+        "student": {
+          "repo": "Qwen/Qwen3-4B",
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+        },
+        "target": "/opd/tau2-fresh-qwen3-4b-v1/synthetic/acc-legacy+decs-fixed",
+        "target_revision": "8c1d278437f6db24a93ae111fe0e40ce676a28d7c47f91b0f8dfe8eab172f390",
+        "variant": "acc-legacy+decs-fixed"
+      },
+      "sha256": "afaeaa3562deee0f00bd729a337143dbdbb805d363b3cc3c99e10f99a1f0c9b2",
+      "target_revision_matches_sealed_manifest": true
+    }
+  ],
+  "sampled_inputs": {
+    "all_sampled_loss_masks_one": true,
+    "cache_rows": 800,
+    "cache_truncation": {
+      "fraction_of_trainable_tokens": 0.029376832465990006,
+      "rows": 5,
+      "tokens_in_truncated_responses": 10240,
+      "total_rows": 800,
+      "trainable_tokens": 348574
+    },
+    "companion_acc_decs_fields_identical": [
+      "sample_id",
+      "prompt_id",
+      "student_revision",
+      "generation_config",
+      "candidate_ids",
+      "behavior_topk_log_probs",
+      "response_tokens",
+      "prompt_tokens",
+      "loss_mask",
+      "finish_reason"
+    ],
+    "fresh_rows": 1600,
+    "fresh_score_checks": {
+      "acc_decs_max_absolute_score": 74.07393646240234,
+      "acc_max_absolute_score": 41.40562438964844,
+      "finite_nonpositive_score_values_per_arm": 39804512
+    },
+    "fresh_truncation": {
+      "fraction_of_trainable_tokens": 0.10866546988441914,
+      "rows": 66,
+      "tokens_in_truncated_responses": 135168,
+      "total_rows": 1600,
+      "trainable_tokens": 1243891
+    },
+    "generation": "vLLM 0.11.0; clean b0; four responses per prompt; temperature 1; top_p 1; Top16 stored candidate probabilities; 2,048-token response cap. Only prompt cap differs: 8,192 versus 16,384.",
+    "raw_cast_note": "Expected storage cast from collected float64/int64 to scored float32/int32 applied before equality check.",
+    "raw_fresh_rollout_matches_composed_inputs_rows": 800,
+    "raw_match_fields": [
+      "sample_id",
+      "prompt_tokens",
+      "response_tokens",
+      "candidate_ids",
+      "behavior_topk_log_probs",
+      "behavior_sampled_log_probs",
+      "loss_mask",
+      "finish_reason"
+    ],
+    "student_revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+  },
+  "scientific_caveats": [
+    "The fixed recipe matches rows and optimizer updates, not total response tokens: exact full-cache fresh exposure is 1.9034 times cache. Global per-token normalization means this is not a claim of 1.9034 times gradient magnitude.",
+    "The exact full-cache accuracy target KL is 0.07976277 versus 0.05019748 nats/token, a ratio of 1.5890. Per-token target KL differs from achieved trained-policy KL.",
+    "Full acc+DECS target KL values compare q_full with b; they are not the incremental KL(q_full || q_acc).",
+    "The 2,048-token response cap is preserved intentionally; on sampled fresh data 10.87% of loss tokens are in incomplete responses versus 2.94% in the cache sample. This is a changed data property, not an introduced masking or termination bug.",
+    "Synthetic target_revision hashes the composition description rather than the complete underlying dataset. Fresh and cache accuracy-only revision hashes match, but disjoint fresh checkpoint/data roots prevented reuse. Future reruns should bind receipts to manifest hashes."
+  ],
+  "scope": "Read-only training implementation, actual completed checkpoint receipts, sealed manifests, sampled parquet integrity and targeted CPU tests. No GPU retraining or model-weight forensic checks.",
+  "sealed_shard_integrity": [
+    {
+      "matches_sealed_manifest": true,
+      "path": "/private/tmp/claude-501/-Users-alexwa-Desktop-Lightning-Weave/be33d162-2ec8-4cb5-b5f5-e61d9c0e7228/scratchpad/fresh/ref/fresh_acc-legacy/rollouts-r00000-00000.parquet",
+      "sha256": "81c618b651f4af13547628c2dd73985e134360bb568e5b0bf69d01440c04ba3a"
+    },
+    {
+      "matches_sealed_manifest": true,
+      "path": "/private/tmp/claude-501/-Users-alexwa-Desktop-Lightning-Weave/be33d162-2ec8-4cb5-b5f5-e61d9c0e7228/scratchpad/fresh/ref/fresh_acc-legacy/rollouts-r00000-00001.parquet",
+      "sha256": "3b9134e36408f92b7b3325cd2646d51e2335921c90d55e2e2f0c749bb3bf7735"
+    },
+    {
+      "matches_sealed_manifest": true,
+      "path": "/private/tmp/claude-501/-Users-alexwa-Desktop-Lightning-Weave/be33d162-2ec8-4cb5-b5f5-e61d9c0e7228/scratchpad/fresh/ref/cache_acc-legacy/rollouts-r00000-00000.parquet",
+      "sha256": "e7c7a9becbb06aa44b5deb7afc5c3da5b29ec3d0370b085c3b14d8536719cdf1"
+    },
+    {
+      "matches_sealed_manifest": true,
+      "path": "/private/tmp/claude-501/-Users-alexwa-Desktop-Lightning-Weave/be33d162-2ec8-4cb5-b5f5-e61d9c0e7228/scratchpad/fresh/ref/fresh_acc-legacy+decs-fixed/rollouts-r00000-00000.parquet",
+      "sha256": "269da673d1b0ec9604904ead4ee46bb2ba7a04aa4d862af3ffd11c1462e03403"
+    },
+    {
+      "matches_sealed_manifest": true,
+      "path": "/private/tmp/claude-501/-Users-alexwa-Desktop-Lightning-Weave/be33d162-2ec8-4cb5-b5f5-e61d9c0e7228/scratchpad/fresh/ref/fresh_acc-legacy+decs-fixed/rollouts-r00000-00001.parquet",
+      "sha256": "54b553ad54f66b176aa0f3912c9466e995fa40b1abae0026fa6ea39f64517bc7"
+    },
+    {
+      "matches_sealed_manifest": true,
+      "path": "/private/tmp/claude-501/-Users-alexwa-Desktop-Lightning-Weave/be33d162-2ec8-4cb5-b5f5-e61d9c0e7228/scratchpad/fresh/ref/cache_acc-legacy+decs/rollouts-r00000-00000.parquet",
+      "sha256": "911ecfe661d3cd326890a5cfbd419626ee5b9110286846204f8eee10491b11e9"
+    }
+  ],
+  "tests": {
+    "command": "python -m pytest tests/test_agent_eff_config.py tests/test_looptool_opd_config.py tests/test_training_config.py tests/test_offline_direct_opd.py tests/test_build_synthetic_shift_target.py -q",
+    "passed": 143,
+    "skip_reason": "Distributed Gloo test requires RUN_DISTRIBUTED_TESTS=1.",
+    "skipped": 1
+  },
+  "verdict": "No confirmed major result-changing training implementation bug found. Actual fixed-anchor fresh-state plan is consistent with code, receipts and sampled data."
+}

@@ -18,8 +18,15 @@ case "${ACTION}" in
             modal run "${PROJECT_ROOT}/configs/looptool_opd/modal_pipeline.py" \
             --action "${ACTION}" "$@"
         ;;
+    cache-chain)
+        # Server-side cache build; with OPD_DATA=tau2-fresh it first waits for the state collection.
+        export MODAL_ENVIRONMENT=${MODAL_ENVIRONMENT:-alex-dev-2}
+        exec uv run --no-project --python 3.12 --with modal==1.5.5 \
+            modal run --detach "${PROJECT_ROOT}/configs/looptool_opd/modal_pipeline.py" \
+            --action "${ACTION}" "$@"
+        ;;
     *)
-        echo "Usage: bash scripts/run_looptool_opd.sh plan|prepare|cache|convert|train|export|all [Modal entrypoint options]" >&2
+        echo "Usage: bash scripts/run_looptool_opd.sh plan|prepare|cache|cache-chain|convert|train|export|all [Modal entrypoint options]" >&2
         exit 2
         ;;
 esac

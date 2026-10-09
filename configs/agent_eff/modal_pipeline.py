@@ -59,7 +59,9 @@ from configs.agent_eff.config import (  # noqa: E402
     variant_specs,
 )
 
-app = modal.App(MODAL_APP_NAME)
+# A non-default state pool (OPD_DATA) runs as its own app, with the pool baked into its images.
+PROFILE_ENV = agent_eff.looptool.PROFILE_ENV
+app = modal.App(agent_eff.looptool.app_name(MODAL_APP_NAME))
 data_volume = modal.Volume.from_name(MODAL_DATA_VOLUME, create_if_missing=True)
 model_volume = modal.Volume.from_name(MODAL_MODEL_VOLUME, create_if_missing=True)
 checkpoint_volume = modal.Volume.from_name(MODAL_CHECKPOINT_VOLUME, create_if_missing=True)
@@ -75,7 +77,7 @@ cpu_image = (
         "huggingface_hub==0.35.3",
         extra_index_url="https://download.pytorch.org/whl/cpu",
     )
-    .env({"HF_HOME": REMOTE_MODEL_ROOT, "PYTHONPATH": REMOTE_REPO})
+    .env({"HF_HOME": REMOTE_MODEL_ROOT, "PYTHONPATH": REMOTE_REPO, **PROFILE_ENV})
     .add_local_dir(str(PROJECT_ROOT), remote_path=REMOTE_REPO, copy=True)
 )
 
@@ -88,6 +90,7 @@ runtime_image = (
             "PYTHONPATH": f"{REMOTE_REPO}:/root/Megatron-LM",
             "CUDA_DEVICE_MAX_CONNECTIONS": "1",
             "NCCL_DEBUG": "WARN",
+            **PROFILE_ENV,
         }
     )
     .add_local_dir(str(PROJECT_ROOT), remote_path=REMOTE_REPO, copy=True)
@@ -137,7 +140,7 @@ def donor_arguments(donors: dict[str, str]) -> list[str]:
 
 
 def training_root(variant: str, seed: int) -> Path:
-    return Path(CHECKPOINT_ROOT) / "joint" / variant / f"seed{seed}"
+    return Path(CHECKPOINT_ROOT) / agent_eff.ARM / variant / f"seed{seed}"
 
 
 @app.function(image=cpu_image, cpu=4, memory=16_384, timeout=21_600, volumes={REMOTE_MODEL_ROOT: model_volume})
@@ -503,19 +506,20 @@ def build_chain(variants: list[str], seeds: list[int]) -> dict:
     copy. One failure does not stop the others; each outcome is reported.
     """
     distinct = sorted(set(variants))
-    composed = dict(zip(distinct, compose.map(distinct, return_exceptions=True)))
+    composed = dict(zip(distinct, list(compose.map(distinct, return_exceptions=True))))
     failed = {
         variant: f"compose failed: {result}"
         for variant, result in composed.items()
         if isinstance(result, BaseException)
     }
     repeated = [variant for variant in distinct if variant not in failed and agent_eff.training_passes(variant) > 1]
-    for variant, result in zip(repeated, repeat_target.map(repeated, return_exceptions=True), strict=True):
+    # Skip the call for an empty list (the 2026-10-08 fresh-state build stalled at this point with nothing to repeat).
+    for variant, result in zip(repeated, repeat_target.map(repeated, return_exceptions=True) if repeated else [], strict=True):
         if isinstance(result, BaseException):
             failed[variant] = f"repeat failed: {result}"
     pairs = [(variant, seed) for variant in distinct if variant not in failed for seed in seeds]
     report = dict(failed)
-    results = build_student.starmap(pairs, return_exceptions=True)
+    results = list(build_student.starmap(pairs, return_exceptions=True)) if pairs else []
     report.update({f"{variant} seed{seed}": str(result) for (variant, seed), result in zip(pairs, results)})
     return report
 

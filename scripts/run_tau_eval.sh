@@ -9,7 +9,8 @@ if [[ $# -gt 0 ]]; then
 fi
 
 MODAL=(uv run --no-project --python 3.12 --with modal==1.5.5 modal)
-ENTRYPOINT="${PROJECT_ROOT}/configs/tau_bench_eval/modal_eval.py"
+ENTRYPOINT="${PROJECT_ROOT}/configs/tau_bench_eval/modal_eval.py::main"
+COLLECT="${PROJECT_ROOT}/configs/tau_bench_eval/modal_eval.py::collect"
 SECRET=prime-secret
 
 require_secret() {
@@ -39,8 +40,13 @@ case "${ACTION}" in
         export MODAL_ENVIRONMENT=${MODAL_ENVIRONMENT:-alex-dev-2}
         exec "${MODAL[@]}" run "${ENTRYPOINT}" --compare-only "$@"
         ;;
+    collect)
+        # Fresh-state collection on AReaL training tasks: --plan plan.json (see modal_eval.py::collect).
+        export MODAL_ENVIRONMENT=${MODAL_ENVIRONMENT:-alex-dev-2}
+        exec "${MODAL[@]}" run --detach "${COLLECT}" "$@"
+        ;;
     *)
-        echo "Usage: [TAU_PROFILE=prime|user30b] bash scripts/run_tau_eval.sh plan|smoke|run|compare [--models base,opd,thinking2507] [--domains tau2_airline,...] [--trials N]" >&2
+        echo "Usage: [TAU_PROFILE=prime|user30b|user235b|user235b-4b] bash scripts/run_tau_eval.sh plan|smoke|run|compare|collect [--models base,opd,ae.<arm>.<variant>[.s<seed>]] [--domains tau2_airline,...] [--trials N] [--wait-hours H] | collect --plan plan.json" >&2
         exit 2
         ;;
 esac

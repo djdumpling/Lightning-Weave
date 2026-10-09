@@ -42,6 +42,37 @@ YaRN. An empty user turn is scored 0 as `user_error`, not as the agent's
 failure. The profile has its own run id, and its scores are not comparable with
 gpt-4.1-user numbers.
 
+### Qwen3-4B agents with the 235B user (`TAU_PROFILE=user235b-4b`)
+
+```bash
+TAU_PROFILE=user235b-4b bash scripts/run_tau_eval.sh run --models base,ae.joint.acc-legacy --domains tau2_airline,tau2_retail --trials 4
+TAU_PROFILE=user235b-4b bash scripts/run_tau_eval.sh run --models ae.fresh.acc-legacy --trials 4 --wait-hours 20
+```
+
+prime's agent settings (native 40,960 window, `qwen3` parser, thinking-mode
+sampling) with the self-hosted Qwen3-235B-A22B-Instruct-2507-FP8 user at tau2's
+temperature 0, so base, the LoopTool student and the agent-efficiency students
+run without API credits (run id `tau-98179d00b25d-full`). `ae.<arm>.<variant>[.s<seed>]`
+names a student exported under `/checkpoints/agent-eff/`, as in the BFCL eval.
+`--wait-hours` waits on a CPU for each checkpoint (an `ae.*` export is complete
+once its provenance file exists), then starts its evaluation.
+
+### Collecting training states (`collect`)
+
+```bash
+TAU_PROFILE=user235b-4b bash scripts/run_tau_eval.sh collect --plan plan.json
+```
+
+Collector models play AReaL's tau2 *training* tasks (`inclusionAI/AReaL-tau2-data`,
+pinned in `config.py`, each task on its own database; audit them against the
+evaluation tasks with `data_curation/areal_tau2_tasks.py`). The plan is
+`{"run_id": "collect-...", "assignments": {tag: {domain: [task ids]}}}`. Each
+episode is one record under `<run_id>/<tag>/<domain>/` holding every agent request
+as served: its messages and tools, the response, and the server's own prompt token
+ids (from vLLM's `/tokenize`). Nothing is graded except an action-match
+diagnostic. `data_curation/fresh_states.py` turns the records into training
+prompts (see the `tau2-fresh` state pool in `configs/looptool_opd/config.py`).
+
 ## What Qwen published
 
 | Domain | Tasks | Qwen3-4B (thinking) | Qwen3-4B-Thinking-2507 |
@@ -53,9 +84,11 @@ gpt-4.1-user numbers.
 | TAU2-Telecom | 114 | 17.5 | 27.2 |
 
 Source: the [Qwen3-4B-Thinking-2507 model card](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507),
-published 2025-08-06. Every number is an exact count over the task set
-(32.0 = 16/50, 33.9 = 39/115, 38.6 = 44/114, 17.5 = 20/114), so Qwen ran one
-trial per task; this is checked in `tests/test_tau_eval_config.py`.
+published 2025-08-06. The reported percentages are compatible with single-trial counts
+(32.0 = 16/50, 33.9 ≈ 39/115, 38.6 ≈ 44/114, 17.5 ≈ 20/114), but this does
+not identify the number of trials: repeated trials can produce the same
+percentages. The local test checks numerical compatibility, not Qwen’s
+undocumented evaluation repeat count.
 
 Beyond that, the model cards say only "we set the output length to 32,768"
 for non-reasoning tasks, and a [request for the tau settings](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507/discussions/8)
@@ -80,7 +113,7 @@ generation settings for Qwen3-4B.
 | Turn budget | 32,768 tokens per agent turn (server-wide), clipped to the remaining window | Qwen's output length for non-reasoning tasks |
 | Window | 40,960 native, no YaRN | Qwen3-4B card: enable YaRN only for contexts past 32,768 |
 | History | final answers and tool calls only; reasoning is never resent | Qwen3-4B card's multi-turn guidance; both harnesses, via vLLM 0.11 |
-| Trials | 4 (pass^1 is the mean over trials) | tau2-bench's reference runs; Qwen's single trial estimates the same pass^1 |
+| Trials | 4 (pass^1 is the mean over trials) | tau2-bench's reference runs; Qwen's repeat count is not established |
 | Tool calls | native `tool_calls`, hermes parser; tool schemas exactly as each harness builds them | as the BFCL eval |
 
 `v1.0.0` of tau2-bench (2026-03) rewrote 75+ airline and retail tasks, so
@@ -222,15 +255,16 @@ uses the same tau2 seed at any trial count, so `--trials 8` later adds trials
 
 ## Comparability
 
-- Qwen's numbers are single trials, so they are noisy. The 95% sampling
-  interval is about ±13 points on the 50-task airline domains and about ±9 on
-  the 114/115-task domains. Treat `base` within that range of the Qwen
-  column as reproduced.
+- Qwen's repeat count and full evaluation configuration are not established.
+  Numerical proximity to a published score is not proof of reproduction.
+  Compare checkpoints under one pinned protocol, report task-cluster paired
+  uncertainty, and treat the published column as contextual reference.
 - The user simulators and agent sampling are reconstructions (see above). If
   the mentor has Qwen's actual settings, they are one `Protocol` edit each.
 - LoopTool-23k (`b6c572d4`, all 23,040 rows) contains none of the tau domains'
   distinctive tool names (for example `update_reservation_flights`,
   `exchange_delivered_order_items`, `toggle_airplane_mode`,
   `transfer_to_human_agents`) or policy text ("As an airline agent, you can
-  help users", "2024-05-15 15:00:00 EST", `###STOP###`), so the OPD student has
-  not trained on these environments.
+  help users", "2024-05-15 15:00:00 EST", `###STOP###`). This string audit
+  found no direct domain overlap; it does not rule out semantic task overlap
+  or independently establish uncontaminated evaluation.

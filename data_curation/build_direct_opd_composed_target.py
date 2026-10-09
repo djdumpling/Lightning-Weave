@@ -9,6 +9,7 @@ difference of finite, non-positive scores in the existing Direct-OPD schema.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
 from collections.abc import Sequence
@@ -23,7 +24,6 @@ if __package__ in (None, ""):
 from data_curation.common import (
     canonical_hash,
     file_sha256,
-    read_manifest,
     staged_directory,
     write_json,
     write_parquet,
@@ -32,6 +32,39 @@ from data_curation.composition import flatten_metadata, replace_metadata_fields,
 
 COMPOSITION_SCHEMA_VERSION = "offline_direct_opd_multi_anchor_composition_v1"
 COMPOSITION_RULES = {"weighted_log_density_ratio_sum", "weighted_post_log_prob_sum"}
+ANCHOR_SPECIFIC_FIELDS = {
+    "loss_mask", "loss_mask_before_token_projection", "token_projection_valid_mask",
+    "pre_teacher_log_probs", "post_teacher_log_probs",
+    "pre_teacher_revision", "post_teacher_revision",
+}
+OPTIONAL_ANCHOR_FIELDS = {"loss_mask_before_token_projection", "token_projection_valid_mask"}
+
+
+def validate_weights(weights: Sequence[float], count: int) -> None:
+    if len(weights) != count or count == 0:
+        raise ValueError("one weight is required per nonempty anchor")
+    if any(not math.isfinite(float(weight)) or float(weight) < 0 for weight in weights):
+        raise ValueError("anchor weights must be non-negative and finite")
+    if not any(float(weight) > 0 for weight in weights):
+        raise ValueError("at least one anchor weight must be positive")
+
+
+def validate_aligned_anchors(reference: pa.Table, candidate: pa.Table) -> None:
+    """Reject changes to frozen prefixes or token support before combining scores."""
+    if reference.num_rows != candidate.num_rows:
+        raise ValueError("aligned anchors differ in row count")
+    if set(reference.column_names) != set(candidate.column_names):
+        raise ValueError("aligned anchors differ in top-level columns")
+    for name in reference.column_names:
+        if name != "metadata" and not reference[name].equals(candidate[name]):
+            raise ValueError(f"aligned anchors differ in {name}")
+    left, right = flatten_metadata(reference), flatten_metadata(candidate)
+    left_fields, right_fields = set(left.type.names), set(right.type.names)
+    if (left_fields ^ right_fields) - OPTIONAL_ANCHOR_FIELDS:
+        raise ValueError("aligned anchors differ in metadata fields")
+    for name in sorted((left_fields & right_fields) - ANCHOR_SPECIFIC_FIELDS):
+        if not left.field(name).equals(right.field(name)):
+            raise ValueError(f"aligned anchors differ in metadata.{name}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,12 +90,26 @@ def compose_anchor_deltas(
     composition_rule: str = "weighted_log_density_ratio_sum",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return synthetic pre/post scores and their exact weighted delta."""
-    delta = np.zeros_like(pre_log_probs[0], dtype=np.float64)
-    for pre, post, weight in zip(pre_log_probs, post_log_probs, weights):
+    if not pre_log_probs or len(pre_log_probs) != len(post_log_probs):
+        raise ValueError("pre/post anchor arrays must be nonempty and aligned")
+    validate_weights(weights, len(pre_log_probs))
+    if composition_rule not in COMPOSITION_RULES:
+        raise ValueError(f"unknown composition rule {composition_rule!r}")
+    shape = np.asarray(pre_log_probs[0]).shape
+    if len(shape) != 2 or shape[1] <= 0:
+        raise ValueError("anchor scores must have shape [T,K] with positive K")
+    delta = np.zeros(shape, dtype=np.float64)
+    for pre, post, weight in zip(pre_log_probs, post_log_probs, weights, strict=True):
         pre, post = np.asarray(pre, dtype=np.float64), np.asarray(post, dtype=np.float64)
+        if pre.shape != shape or post.shape != shape:
+            raise ValueError("anchor score shapes differ")
+        if not np.isfinite(pre).all() or not np.isfinite(post).all():
+            raise ValueError("anchor scores must be finite")
         delta += float(weight) * (post - pre if composition_rule == "weighted_log_density_ratio_sum" else post)
     synthetic_post = np.minimum(delta, 0.0).astype(np.float32)
     synthetic_pre = np.minimum(-delta, 0.0).astype(np.float32)
+    if not np.isfinite(synthetic_pre).all() or not np.isfinite(synthetic_post).all():
+        raise ValueError("composed scores exceed finite float32 range")
     return synthetic_pre, synthetic_post, delta.astype(np.float32)
 
 
@@ -106,6 +153,8 @@ def replace_score_fields(
 
 
 def compose_tables(tables: Sequence[pa.Table], weights: list[float], *, rule: str, revision: str) -> pa.Table:
+    for table in tables[1:]:
+        validate_aligned_anchors(tables[0], table)
     metadata = [flatten_metadata(table) for table in tables]
     pre_rows, post_rows, loss_masks = [], [], []
     projection_masks = [] if "token_projection_valid_mask" in metadata[0].type.names else None
@@ -142,10 +191,29 @@ def compose_tables(tables: Sequence[pa.Table], weights: list[float], *, rule: st
 
 
 def main() -> None:
+    # The trainer's own manifest check (it verifies every shard checksum); imported here so that importing this module,
+    # as build_synthetic_shift_target.py does, does not pull in torch.
+    from slime.rollout.offline_direct_opd import validate_sealed_manifest
+
     args = parse_args()
     count = len(args.anchor_manifest)
-    manifests = [read_manifest(path) for path in args.anchor_manifest]
+    validate_weights(args.anchor_weight, count)
+    if len(args.anchor_name) != count or len(set(args.anchor_name)) != count:
+        raise ValueError("one unique name is required per anchor")
+    if args.rows <= 0 or args.repeat <= 0 or args.rows_per_output_shard <= 0:
+        raise ValueError("rows, repeat, and rows-per-output-shard must be positive")
+    manifests = [validate_sealed_manifest(path) for path in args.anchor_manifest]
     reference = manifests[0]
+    for manifest in manifests:
+        if int(manifest["total_rows"]) < args.rows:
+            raise ValueError("requested rows exceed an anchor dataset")
+        for field in (
+            "schema_version", "top_k", "student_model", "tokenizer_hash", "model_vocab_size",
+            "generation_config", "generation_config_hash", "source_dataset_sha256",
+            "loss_mask_storage_dtype", "score_storage_dtype", "token_storage_dtype",
+        ):
+            if reference.get(field) != manifest.get(field):
+                raise ValueError(f"aligned anchor manifests differ in {field}")
     anchors = [
         {
             "name": name,
@@ -153,7 +221,7 @@ def main() -> None:
             "pre_teacher_model": manifest["pre_teacher_model"],
             "post_teacher_model": manifest["post_teacher_model"],
         }
-        for name, weight, manifest in zip(args.anchor_name, args.anchor_weight, manifests)
+        for name, weight, manifest in zip(args.anchor_name, args.anchor_weight, manifests, strict=True)
     ]
     composition_spec = {
         "schema_version": COMPOSITION_SCHEMA_VERSION,
@@ -170,13 +238,15 @@ def main() -> None:
     source_rows = source_tokens = 0
     base_shards = []
     with staged_directory(args.output_dir) as temporary:
-        for shard_index, tables in enumerate(zip(*streams)):
+        for shard_index, tables in enumerate(zip(*streams, strict=True)):
             composed = compose_tables(tables, args.anchor_weight, rule=args.composition_rule, revision=revision)
             output = temporary / f"composed-c00-{shard_index:05d}.parquet"
             write_parquet(composed, output, compression="zstd", row_group_size=args.rows_per_output_shard)
             base_shards.append({"path": output.name, "rows": composed.num_rows, "sha256": file_sha256(output)})
             source_rows += composed.num_rows
             source_tokens += trainable_tokens(composed)
+        if source_rows != args.rows:
+            raise ValueError(f"requested {args.rows} rows but read {source_rows} aligned rows")
         shards = []
         for cycle in range(args.repeat):
             for shard_index, base in enumerate(base_shards):

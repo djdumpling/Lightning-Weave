@@ -38,8 +38,8 @@ def test_every_user_snapshot_has_a_prime_alias_and_price():
     assert CONFIG.USER_API_BASE == "https://api.pinference.ai/api/v1" and CONFIG.USER_SECRET == "prime-secret"
 
 
-def test_qwen_reported_numbers_are_single_trial_counts_over_the_pinned_task_sets():
-    # A one-decimal percentage of k successes out of n tasks: k = value * n / 100 to within rounding.
+def test_qwen_reported_numbers_are_compatible_with_single_trial_counts():
+    # Compatibility with k successes out of n tasks does not identify the original repeat count.
     for name, value in CONFIG.QWEN_REPORTED.items():
         tasks = CONFIG.PROTOCOL.domain(name).tasks
         successes = value * tasks / 100

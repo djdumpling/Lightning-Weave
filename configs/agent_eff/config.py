@@ -40,6 +40,9 @@ STUDENT_MODEL = looptool.STUDENT_MODEL
 STUDENT_REVISION = looptool.STUDENT_REVISION
 
 MODAL_APP_NAME = "lightning-weave-agent-eff"
+# Students trained on a cached state pool live under its arm: the LoopTool cache's are "joint"; the
+# fresh-state pilot's (OPD_DATA=tau2-fresh) are "fresh". BFCL/tau tags: ae.<arm>.<variant>[.s<seed>].
+ARM = {"looptool": "joint", "tau2-fresh": "fresh"}[looptool.DATA_PROFILE]
 BASE_CACHE = f"{REMOTE_DATA_ROOT}/anchor/final"
 ROLLOUT_DIR = f"{REMOTE_DATA_ROOT}/rollouts"
 PROMPT_DATA = f"{REMOTE_DATA_ROOT}/prompts.parquet"
@@ -429,6 +432,15 @@ def training_plan(variant: str) -> dict:
     }
 
 
+def fresh_specs() -> dict[str, dict]:
+    """The fresh-state pilot: acc-legacy+decs with DECS at the coefficient calibrated on the LoopTool cache.
+
+    Recomposing acc-legacy+decs on new states would recalibrate its KL budget there; keeping the coefficient
+    keeps the target function fixed, so only the states differ. (acc-legacy itself has no calibration.)
+    """
+    return {"acc-legacy+decs-fixed": spec(ACCURACY_TERMS["acc-legacy"], term({"decs": 1.0}, coef=DECS_MID_COEF))}
+
+
 def variant_sources(variant_spec: dict) -> set[str]:
     return {
         source["source"]
@@ -458,6 +470,7 @@ def variant_specs() -> dict[str, dict]:
         | paper_specs()
         | turn_start_specs()
         | exploratory_specs()
+        | fresh_specs()
     )
 
 

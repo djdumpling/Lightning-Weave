@@ -34,6 +34,7 @@ elif (MOUNTED_PROJECT_ROOT / "configs/looptool_opd/config.py").is_file():
 else:
     raise FileNotFoundError("cannot locate configs/looptool_opd/config.py")
 sys.path.insert(0, str(CONFIG_DIR))
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import (
     EXPECTED_CANONICAL_ROWS,
@@ -41,9 +42,11 @@ from config import (
     MODAL_CHECKPOINT_VOLUME,
     MODAL_DATA_VOLUME,
     MODAL_MODEL_VOLUME,
+    POOL,
     POST_TEACHER_MODEL,
     POST_TEACHER_REVISION,
     PRE_TEACHER_MODEL,
+    PROFILE_ENV,
     PRE_TEACHER_REVISION,
     RECIPE,
     REMOTE_CHECKPOINT_ROOT,
@@ -54,6 +57,7 @@ from config import (
     RUNTIME_IMAGE,
     STUDENT_MODEL,
     STUDENT_REVISION,
+    app_name,
 )
 
 CURATION_DIR = f"{REMOTE_DATA_ROOT}/curation"
@@ -71,8 +75,12 @@ CONVERTED_CHECKPOINT = f"{REMOTE_CHECKPOINT_ROOT}/initial-megatron"
 TRAINING_CHECKPOINT = f"{REMOTE_CHECKPOINT_ROOT}/train"
 EXPORTED_CHECKPOINT = f"{REMOTE_CHECKPOINT_ROOT}/hf"
 
-app = modal.App(MODAL_APP_NAME)
+COLLECTION = POOL.collection
+app = modal.App(app_name(MODAL_APP_NAME))
 data_volume = modal.Volume.from_name(MODAL_DATA_VOLUME, create_if_missing=True)
+# A collected pool's tau2 episodes (read-only).
+TAU_ROOT = "/tau"
+tau_volume = modal.Volume.from_name(COLLECTION["results_volume"]) if COLLECTION else None
 model_volume = modal.Volume.from_name(MODAL_MODEL_VOLUME, create_if_missing=True)
 checkpoint_volume = modal.Volume.from_name(MODAL_CHECKPOINT_VOLUME, create_if_missing=True)
 
@@ -87,7 +95,7 @@ cpu_image = (
         "datasketch==1.6.5",
         "bfcl-eval==2026.3.23",
     )
-    .env({"HF_HOME": REMOTE_MODEL_ROOT, "PYTHONPATH": REMOTE_REPO})
+    .env({"HF_HOME": REMOTE_MODEL_ROOT, "PYTHONPATH": REMOTE_REPO, **PROFILE_ENV})
     .add_local_dir(str(PROJECT_ROOT), remote_path=REMOTE_REPO, copy=True)
 )
 
@@ -98,7 +106,7 @@ rollout_image = (
     # Modal's uv_pip_install resolves its interpreter with `command -v python`.
     .run_commands("ln -sf /usr/bin/python3 /usr/local/bin/python")
     .uv_pip_install("pyarrow==20.0.0")
-    .env({"HF_HOME": REMOTE_MODEL_ROOT, "PYTHONPATH": REMOTE_REPO, "VLLM_WORKER_MULTIPROC_METHOD": "spawn"})
+    .env({"HF_HOME": REMOTE_MODEL_ROOT, "PYTHONPATH": REMOTE_REPO, "VLLM_WORKER_MULTIPROC_METHOD": "spawn", **PROFILE_ENV})
     .add_local_dir(str(PROJECT_ROOT), remote_path=REMOTE_REPO, copy=True)
 )
 
@@ -111,6 +119,7 @@ runtime_image = (
             "PYTHONPATH": f"{REMOTE_REPO}:/root/Megatron-LM",
             "CUDA_DEVICE_MAX_CONNECTIONS": "1",
             "NCCL_DEBUG": "WARN",
+            **PROFILE_ENV,
         }
     )
     .add_local_dir(str(PROJECT_ROOT), remote_path=REMOTE_REPO, copy=True)
@@ -185,14 +194,39 @@ def download_models(full: bool = True) -> dict[str, str]:
     return resolved
 
 
-@app.function(image=cpu_image, cpu=8, memory=32_768, timeout=21_600, volumes=DATA_AND_MODELS)
-def prepare_dataset() -> dict[str, object]:
-    """Run canonical curation, render with the student template, and select prompts."""
+def wait_for_collection(max_wait_hours: float) -> Path:
+    """The pool's collection, once every collector's server has finished (its invocation record is written)."""
+
+    import time
+
+    root = Path(TAU_ROOT) / COLLECTION["run_id"]
+    deadline = time.time() + max_wait_hours * 3600
+    while True:
+        tau_volume.reload()
+        done = [tag for tag in COLLECTION["collectors"] if any((root / tag / "invocations").glob("*-collect.json"))]
+        if len(done) == len(COLLECTION["collectors"]):
+            return root
+        if time.time() > deadline:
+            raise TimeoutError(f"collection {root} incomplete after {max_wait_hours} h: finished {done}")
+        print(f"waiting for collection {root}: finished {done}", flush=True)
+        time.sleep(300)
+
+
+@app.function(
+    image=cpu_image, cpu=8, memory=32_768, timeout=86_400,
+    volumes={**DATA_AND_MODELS, **({TAU_ROOT: tau_volume.read_only()} if COLLECTION else {})},
+)
+def prepare_dataset(max_wait_hours: float = 0.0) -> dict[str, object]:
+    """Select and render the pool's prompts with the student template.
+
+    LoopTool: canonical curation, then seeded selection. A collected pool: its tau2 episodes' decision states
+    (data_curation/fresh_states.py), once the collection finishes (waiting up to ``max_wait_hours``).
+    """
 
     data_volume.reload()
     model_volume.reload()
     Path(REMOTE_DATA_ROOT).mkdir(parents=True, exist_ok=True)
-    if not Path(CANONICAL_DATA).exists():
+    if not COLLECTION and not Path(CANONICAL_DATA).exists():
         run(
             [
                 "python", "data_curation/prepare_looptool_rl.py", "--output-dir", CURATION_DIR,
@@ -202,16 +236,30 @@ def prepare_dataset() -> dict[str, object]:
     if not Path(PROMPT_DATA).exists() or not Path(PROMPT_SUMMARY).exists():
         if Path(PROMPT_DATA).exists() != Path(PROMPT_SUMMARY).exists():
             raise RuntimeError("only one prompt artifact exists; use a new versioned REMOTE_DATA_ROOT")
-        run(
-            [
-                "python", "data_curation/prepare_direct_opd_looptool.py",
-                "--input", CANONICAL_DATA, "--output", PROMPT_DATA, "--summary", PROMPT_SUMMARY,
-                "--tokenizer", snapshot_path(STUDENT_MODEL, STUDENT_REVISION),
-                "--tokenizer-revision", STUDENT_REVISION,
-                "--max-prompt-length", str(RECIPE.max_prompt_tokens), "--num-prompts", str(RECIPE.selected_prompts),
-                "--selection-seed", str(RECIPE.data_seed), "--expected-input-rows", str(EXPECTED_CANONICAL_ROWS),
-            ]
-        )
+        common = [
+            "--tokenizer", snapshot_path(STUDENT_MODEL, STUDENT_REVISION),
+            "--output", PROMPT_DATA, "--summary", PROMPT_SUMMARY,
+        ]
+        if COLLECTION:
+            run(
+                [
+                    "python", "data_curation/fresh_states.py", *common,
+                    "--collection", str(wait_for_collection(max_wait_hours)),
+                    "--collectors", ",".join(COLLECTION["collectors"]), "--domains", ",".join(COLLECTION["domains"]),
+                    "--max-prompt-tokens", str(RECIPE.max_prompt_tokens),
+                    "--states-per-episode", str(COLLECTION["states_per_episode"]),
+                    "--num-prompts", str(RECIPE.selected_prompts), "--seed", str(RECIPE.data_seed),
+                ]
+            )
+        else:
+            run(
+                [
+                    "python", "data_curation/prepare_direct_opd_looptool.py", *common,
+                    "--input", CANONICAL_DATA, "--tokenizer-revision", STUDENT_REVISION,
+                    "--max-prompt-length", str(RECIPE.max_prompt_tokens), "--num-prompts", str(RECIPE.selected_prompts),
+                    "--selection-seed", str(RECIPE.data_seed), "--expected-input-rows", str(EXPECTED_CANONICAL_ROWS),
+                ]
+            )
     write_recipe_lock()
     summary = json.loads(Path(PROMPT_SUMMARY).read_text(encoding="utf-8"))
     if summary["selected_prompts"] != RECIPE.selected_prompts or summary["targets_in_output"] is not False:
@@ -446,14 +494,21 @@ def run_parallel(function: modal.Function, items: list[tuple[object, ...]]) -> N
         print(result, flush=True)
 
 
-def build_cache(workers: int) -> None:
+@app.function(image=cpu_image, cpu=1, memory=2_048, timeout=86_400, nonpreemptible=True)
+def cache_chain(workers: int, max_wait_hours: float) -> dict[str, object]:
+    """``build_cache`` server-side (prompts first wait for the fresh-state collection), so no stage needs the client."""
+
+    return build_cache(workers, max_wait_hours)
+
+
+def build_cache(workers: int, max_wait_hours: float = 0.0) -> dict[str, object]:
     if workers != RECIPE.cache_workers:
         raise ValueError(
             f"this cache version is locked to {RECIPE.cache_workers} workers; "
             "change Recipe.cache_workers and REMOTE_DATA_ROOT together to create a new cache"
         )
     download_models.remote(full=True)
-    prepare_dataset.remote()
+    prepare_dataset.remote(max_wait_hours)
     prepare_asset_lock.remote()
     ranks = [(rank, workers) for rank in range(workers)]
     run_parallel(collect_rollout_shard, ranks)
@@ -461,12 +516,16 @@ def build_cache(workers: int) -> None:
         run_parallel(score_anchor_shard, [(stage, rank, workers) for rank in range(workers)])
     manifest = seal_cache.remote()
     print(json.dumps({"sealed_cache": MANIFEST, "rows": manifest["total_rows"]}, indent=2), flush=True)
+    return {"sealed_cache": MANIFEST, "rows": manifest["total_rows"]}
 
 
 @app.local_entrypoint()
-def main(action: str = "plan", workers: int = RECIPE.cache_workers, resume: bool = False) -> None:
-    """Actions: plan, prepare, cache, convert, train, export, or all."""
+def main(action: str = "plan", workers: int = RECIPE.cache_workers, resume: bool = False, max_wait_hours: float = 0.0) -> None:
+    """Actions: plan, prepare, cache, cache-chain (server-side), convert, train, export, or all."""
 
+    if action == "cache-chain":
+        print(f"cache chain running server-side: {cache_chain.spawn(workers, max_wait_hours).object_id}", flush=True)
+        return
     if action == "plan":
         print(json.dumps(RECIPE.resolved(), indent=2, sort_keys=True))
     elif action == "prepare":

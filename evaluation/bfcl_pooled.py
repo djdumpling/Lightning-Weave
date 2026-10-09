@@ -19,7 +19,10 @@ A comparison may carry rules that turn a metric's 95% interval [lo, hi] into a v
   "costs" if hi < 0, otherwise "inconclusive";
 - ``["reduces", metric]``: "reduced" if hi < 0, otherwise "not shown".
 
-The comparisons file is ``{name: {"pairs": [[arm, reference], ...], "rules": [...]}}``.
+The comparisons file is ``{name: {"pairs": [[arm, reference], ...], "rules": [...]}}``. A four-run item
+``[arm, reference, control_arm, control_reference]`` is a difference of changes,
+change(arm, reference) - change(control_arm, control_reference): for example, whether a recipe changes an efficiency
+term's cost (an interaction), with all four runs resampled with the same entries.
 
     python evaluation/bfcl_pooled.py --root RESULTS --comparisons comparisons.json --output pooled.json
 """
@@ -89,6 +92,15 @@ def change(arm: np.ndarray, reference: np.ndarray) -> np.ndarray:
     return np.concatenate([accuracy, tokens], axis=-1)
 
 
+def contrast(values: dict[str, np.ndarray], runs: list[str]) -> np.ndarray:
+    """change(arm, reference), or for four runs the difference of two changes."""
+    if len(runs) == 2:
+        return change(values[runs[0]], values[runs[1]])
+    if len(runs) == 4:
+        return change(values[runs[0]], values[runs[1]]) - change(values[runs[2]], values[runs[3]])
+    raise ValueError(f"a comparison item names 2 or 4 runs, not {runs}")
+
+
 def verdict(rule: list, interval: dict[str, list[float]]) -> str:
     kind, metric = rule[0], rule[1]
     low, high = interval[metric]
@@ -125,8 +137,8 @@ def analyze(runs: dict[str, dict], comparisons: dict[str, dict], *, draws: int =
     report = {}
     for name, item in comparisons.items():
         pairs = item["pairs"]
-        per_pair = np.stack([change(point[arm], point[reference]) for arm, reference in pairs])
-        pooled = np.mean([change(boot[arm], boot[reference]) for arm, reference in pairs], axis=0)
+        per_pair = np.stack([contrast(point, runs) for runs in pairs])
+        pooled = np.mean([contrast(boot, runs) for runs in pairs], axis=0)
         interval = {
             metric: [float(np.percentile(pooled[:, k], 2.5)), float(np.percentile(pooled[:, k], 97.5))]
             for k, metric in enumerate(METRICS)

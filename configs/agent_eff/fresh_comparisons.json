@@ -1,0 +1,171 @@
+{
+ "PRIMARY fresh acc-legacy vs cache acc-legacy": {
+  "pairs": [
+   [
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy",
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy"
+   ],
+   [
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy.s5678",
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy.s5678"
+   ],
+   [
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy",
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy"
+   ],
+   [
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy.s5678",
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy.s5678"
+   ],
+   [
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy",
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy"
+   ],
+   [
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy.s5678",
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy.s5678"
+   ]
+  ],
+  "rules": [
+   [
+    "recovery",
+    "multi_turn_accuracy",
+    1.0
+   ]
+  ]
+ },
+ "fresh DECS-fixed vs cache DECS": {
+  "pairs": [
+   [
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy+decs-fixed",
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs"
+   ],
+   [
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy+decs-fixed.s5678",
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs.s5678"
+   ],
+   [
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy+decs-fixed",
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs"
+   ],
+   [
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy+decs-fixed.s5678",
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs.s5678"
+   ],
+   [
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy+decs-fixed",
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs"
+   ],
+   [
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy+decs-fixed.s5678",
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs.s5678"
+   ]
+  ],
+  "rules": []
+ },
+ "DECS cost on fresh states (fresh DECS-fixed vs fresh acc-legacy)": {
+  "pairs": [
+   [
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy+decs-fixed",
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy"
+   ],
+   [
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy+decs-fixed.s5678",
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy.s5678"
+   ],
+   [
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy+decs-fixed",
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy"
+   ],
+   [
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy+decs-fixed.s5678",
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy.s5678"
+   ],
+   [
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy+decs-fixed",
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy"
+   ],
+   [
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy+decs-fixed.s5678",
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy.s5678"
+   ]
+  ],
+  "rules": []
+ },
+ "DECS cost on the cache (reference, reproduces -0.82 / -2.37)": {
+  "pairs": [
+   [
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs",
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy"
+   ],
+   [
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs.s5678",
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy.s5678"
+   ],
+   [
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs",
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy"
+   ],
+   [
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs.s5678",
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy.s5678"
+   ],
+   [
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs",
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy"
+   ],
+   [
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs.s5678",
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy.s5678"
+   ]
+  ],
+  "rules": []
+ },
+ "SECONDARY interaction: DECS cost, fresh minus cache": {
+  "pairs": [
+   [
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy+decs-fixed",
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy",
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs",
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy"
+   ],
+   [
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy+decs-fixed.s5678",
+    "bfcl-v3-22b3e917da76-full/ae.fresh.acc-legacy.s5678",
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy+decs.s5678",
+    "bfcl-v3-22b3e917da76-full/ae.joint.acc-legacy.s5678"
+   ],
+   [
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy+decs-fixed",
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy",
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs",
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy"
+   ],
+   [
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy+decs-fixed.s5678",
+    "bfcl-v3-a9dc3055c864-full/ae.fresh.acc-legacy.s5678",
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy+decs.s5678",
+    "bfcl-v3-a9dc3055c864-full/ae.joint.acc-legacy.s5678"
+   ],
+   [
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy+decs-fixed",
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy",
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs",
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy"
+   ],
+   [
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy+decs-fixed.s5678",
+    "bfcl-v3-3905dd869e16-full/ae.fresh.acc-legacy.s5678",
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy+decs.s5678",
+    "bfcl-v3-3905dd869e16-full/ae.joint.acc-legacy.s5678"
+   ]
+  ],
+  "rules": [
+   [
+    "recovery",
+    "multi_turn_accuracy",
+    1.0
+   ]
+  ]
+ }
+}

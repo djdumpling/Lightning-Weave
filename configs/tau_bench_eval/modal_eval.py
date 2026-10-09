@@ -38,6 +38,10 @@ sys.path.insert(0, str(ENTRYPOINT_DIR))
 
 import harness  # noqa: E402 - after the sys.path setup above
 from config import (  # noqa: E402
+    AREAL_REPO,
+    AREAL_REVISION,
+    AREAL_TASKS_FILE,
+    AREAL_TASKS_SHA256,
     DEPENDENCY_CUTOFF,
     LANE_PYTHON,
     LANES,
@@ -46,7 +50,6 @@ from config import (  # noqa: E402
     MODAL_MODEL_VOLUME,
     MODAL_RESULTS_VOLUME,
     MODAL_VLLM_CACHE_VOLUME,
-    MODELS,
     PROFILE,
     PROTOCOL,
     QWEN_REPORTED,
@@ -66,6 +69,7 @@ from config import (  # noqa: E402
     USER_SECRET,
     USER_TEAM_ID_ENV,
     check_agent_window,
+    model_path as resolve_model_path,
     run_id,
     user_routes,
 )
@@ -137,6 +141,26 @@ lane_image = (
     .add_local_file(CONFIG_FILE, "/root/config.py", copy=True)
     .add_local_file(HARNESS_FILE, "/root/harness.py", copy=True)
     .run_function(verify_lane_image)
+)
+
+
+AREAL_ROOT = "/opt/areal-tau2-data"
+
+
+def verify_areal_data() -> None:
+    data = (Path(AREAL_ROOT) / AREAL_TASKS_FILE).read_bytes()
+    if hashlib.sha256(data).hexdigest() != AREAL_TASKS_SHA256:
+        raise RuntimeError(f"{AREAL_REPO} tasks differ from revision {AREAL_REVISION}")
+
+
+# Fresh-state collection: the lane image plus the AReaL tau2 training tasks and their databases.
+collect_lane_image = (
+    lane_image.run_commands(
+        f"{UV_INSTALL} 'huggingface_hub<1'",
+        f"python -c \"from huggingface_hub import snapshot_download; snapshot_download('{AREAL_REPO}', "
+        f"repo_type='dataset', revision='{AREAL_REVISION}', local_dir='{AREAL_ROOT}', "
+        f"allow_patterns=['{AREAL_TASKS_FILE}', 'tau2_rl_database/tau2_airline*', 'tau2_rl_database/tau2_retail*'])\"",
+    ).run_function(verify_areal_data)
 )
 
 
@@ -225,6 +249,64 @@ def check_user_models(models: list[str]) -> dict:
     return checked
 
 
+def lane_router(job: dict, domain) -> harness.Router:
+    """A lane's router, installed in the harness: the agent at its tunnel, the user at its tunnel or the user API."""
+
+    served_names = [PROTOCOL.served_model_name] + ([USER.served_model_name] if USER else [])
+    harness.configure_litellm(served_names, LANES.request_timeout_s)
+    aliases, prices = user_routes(PROTOCOL)
+    router = harness.Router(
+        PROTOCOL.served_model_name,
+        harness.Endpoint(job["base_url"], job["api_key"]),
+        harness.Endpoint(job["user_base_url"], job["user_api_key"]) if USER else user_endpoint(),
+        aliases,
+        prices,
+        harness.Retry(LANES.call_attempts, LANES.call_backoff_s, LANES.call_max_backoff_s),
+    )
+    harness.install_router(domain.suite, router)
+    harness.configure_logging()
+    return router
+
+
+def run_jobs(job: dict, domain, router: harness.Router, jobs: list, path, lane_root: Path, play=None) -> list[dict]:
+    """Run the jobs, one atomically written file each (``path(record)``), committing periodically.
+
+    Returns the infrastructure failures, which are also kept in the lane's failures.json until a rerun clears them.
+    """
+
+    def write(record: dict) -> None:
+        target = path(record)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        partial = target.with_suffix(".partial")
+        partial.write_text(json.dumps(record) + "\n", encoding="utf-8")
+        os.replace(partial, target)
+
+    stop = threading.Event()
+    committer = commit_periodically(results_volume, stop, LANES.commit_interval_s)
+    failures = harness.run_lane(
+        domain,
+        jobs,
+        PROTOCOL,
+        router,
+        concurrency=job["concurrency"],
+        attempts=LANES.attempts,
+        retry_delay_s=LANES.retry_delay_s,
+        write=write,
+        log=lambda message: print(f"[{job['tag']}:{domain.name}] {message}", flush=True),
+        play=play,
+    )
+    stop.set()
+    committer.join()
+    failures_file = lane_root / "failures.json"
+    if failures:
+        failures_file.parent.mkdir(parents=True, exist_ok=True)
+        failures_file.write_text(json.dumps(failures, indent=2) + "\n", encoding="utf-8")
+    elif failures_file.exists():
+        failures_file.unlink()
+    results_volume.commit()
+    return failures
+
+
 @app.function(
     image=lane_image,
     secrets=[user_secret, profile_secret],
@@ -240,20 +322,7 @@ def run_lane(job: dict) -> dict:
     tag, trials = job["tag"], job["trials"]
     lane_root = Path(REMOTE_RESULTS_ROOT) / job["run_id"] / tag / domain.name
     results_volume.reload()
-
-    served_names = [PROTOCOL.served_model_name] + ([USER.served_model_name] if USER else [])
-    harness.configure_litellm(served_names, LANES.request_timeout_s)
-    aliases, prices = user_routes(PROTOCOL)
-    router = harness.Router(
-        PROTOCOL.served_model_name,
-        harness.Endpoint(job["base_url"], job["api_key"]),
-        harness.Endpoint(job["user_base_url"], job["user_api_key"]) if USER else user_endpoint(),
-        aliases,
-        prices,
-        harness.Retry(LANES.call_attempts, LANES.call_backoff_s, LANES.call_max_backoff_s),
-    )
-    harness.install_router(domain.suite, router)
-    harness.configure_logging()
+    router = lane_router(job, domain)
     tasks = harness.load_tasks(domain.suite, domain.domain, PROTOCOL)
     if len(tasks) != domain.tasks:
         raise RuntimeError(f"{domain.name} has {len(tasks)} tasks, expected {domain.tasks}")
@@ -263,13 +332,6 @@ def run_lane(job: dict) -> dict:
 
     def path(task_id: str, trial: int) -> Path:
         return lane_root / f"trial{trial}" / record_name(task_id)
-
-    def write(record: dict) -> None:
-        target = path(record["task_id"], record["trial"])
-        target.parent.mkdir(parents=True, exist_ok=True)
-        partial = target.with_suffix(".partial")
-        partial.write_text(json.dumps(record) + "\n", encoding="utf-8")
-        os.replace(partial, target)
 
     # Rerunning resumes: finished conversations are skipped, and a larger
     # --trials adds trials with the same seed sequence.
@@ -284,29 +346,8 @@ def run_lane(job: dict) -> dict:
         f"concurrency={job['concurrency']}",
         flush=True,
     )
-    stop = threading.Event()
-    committer = commit_periodically(results_volume, stop, LANES.commit_interval_s)
     started = time.time()
-    failures = harness.run_lane(
-        domain,
-        jobs,
-        PROTOCOL,
-        router,
-        concurrency=job["concurrency"],
-        attempts=LANES.attempts,
-        retry_delay_s=LANES.retry_delay_s,
-        write=write,
-        log=lambda message: print(f"[{tag}:{domain.name}] {message}", flush=True),
-    )
-    stop.set()
-    committer.join()
-    failures_file = lane_root / "failures.json"
-    if failures:
-        failures_file.parent.mkdir(parents=True, exist_ok=True)
-        failures_file.write_text(json.dumps(failures, indent=2) + "\n", encoding="utf-8")
-    elif failures_file.exists():
-        failures_file.unlink()
-    results_volume.commit()
+    failures = run_jobs(job, domain, router, jobs, lambda record: path(record["task_id"], record["trial"]), lane_root)
 
     records = []
     for trial in range(trials):
@@ -324,6 +365,46 @@ def run_lane(job: dict) -> dict:
         "lane_requirements_sha256": hashlib.sha256(freeze).hexdigest(),
         **summary,
     }
+
+
+@app.function(
+    image=collect_lane_image,
+    secrets=[profile_secret],
+    cpu=8,
+    memory=65_536,
+    timeout=LANES.timeout_s,
+    volumes={REMOTE_RESULTS_ROOT: results_volume},
+)
+def collect_lane(job: dict) -> dict:
+    """Run one domain's AReaL training episodes with the tunnelled agent; one record per episode, every request kept."""
+
+    domain = PROTOCOL.domain(job["domain"])
+    lane_root = Path(REMOTE_RESULTS_ROOT) / job["run_id"] / job["tag"] / domain.name
+    results_volume.reload()
+    router = lane_router(job, domain)
+    tokenize = harness.tokenizer_client(job["tokenize_url"], job["api_key"], PROTOCOL.served_model_name)
+    router.capture = lambda kwargs, response: harness.capture_agent_call(kwargs, response, tokenize)
+    lines = (Path(AREAL_ROOT) / AREAL_TASKS_FILE).read_text(encoding="utf-8").splitlines()
+    raw = {task["id"]: task for task in map(json.loads, lines)}
+    task_ids = job["task_ids"]
+    if any(task_id not in raw or raw[task_id]["user_scenario"]["instructions"]["domain"] != domain.domain for task_id in task_ids):
+        raise RuntimeError(f"{domain.name}: unknown or other-domain AReaL task ids")
+    databases = harness.TaskDatabases(Path(AREAL_ROOT))
+
+    def path(task_id: str) -> Path:
+        return lane_root / record_name(task_id)
+
+    jobs = [harness.Job(task_id, raw[task_id], 0, harness.collection_seed(task_id)) for task_id in task_ids if not path(task_id).exists()]
+    print(f"[{job['tag']}:{domain.name}] {len(task_ids)} episodes, {len(jobs)} to run, concurrency={job['concurrency']}", flush=True)
+    started = time.time()
+    failures = run_jobs(
+        job, domain, router, jobs, lambda record: path(record["task_id"]), lane_root,
+        play=lambda item: harness.run_areal_episode(item.handle, databases, item.seed, domain.user_model, PROTOCOL),
+    )
+    written = sum(path(task_id).exists() for task_id in task_ids)
+    # The keys serve() reads from every lane.
+    return {"domain": domain.name, "expected": len(task_ids), "conversations": written,
+            "complete": written == len(task_ids), "failures": failures, "seconds": round(time.time() - started, 1)}
 
 
 class VllmServer:
@@ -666,10 +747,10 @@ def model_identity(model_path: str) -> str:
     return digest.hexdigest()
 
 
-@app.function(
+# The agent's GPUs, then a self-hosted user's; shared by every function that serves a model.
+SERVER_FUNCTION = dict(
     image=serving_image,
     secrets=[profile_secret],
-    # The agent's GPUs, then a self-hosted user's.
     gpu=SERVING.gpu_for(USER),
     cpu=8 * SERVING.gpus,
     memory=32_768 * SERVING.gpus + (65_536 if USER else 0),
@@ -681,12 +762,18 @@ def model_identity(model_path: str) -> str:
         REMOTE_RESULTS_ROOT: results_volume,
     },
 )
-def serve_and_evaluate(job: dict) -> dict:
-    """Serve one model (and a self-hosted user, if any) for exactly as long as its domain lanes run."""
+
+
+def serve(job: dict, lane: modal.Function, *, manifest: dict | None = None, lane_fields=None) -> dict:
+    """Serve one model (and a self-hosted user, if any) for exactly as long as its domain lanes run.
+
+    ``lane`` runs each domain against the tunnels; ``lane_fields(domain, base_url)`` adds its own job fields.
+    Returns the invocation record (also written under the run's ``invocations/``).
+    """
 
     tag, run, smoke_samples = job["tag"], job["run_id"], job["smoke_samples"]
     check_agent_window(PROTOCOL, tag)
-    model_path = MODELS[tag]
+    model_path = resolve_model_path(tag)
     if not (Path(model_path) / "config.json").exists():
         raise FileNotFoundError(f"{tag} checkpoint not found at {model_path}")
     if USER and not (Path(USER.path) / "config.json").exists():
@@ -701,6 +788,7 @@ def serve_and_evaluate(job: dict) -> dict:
             "model_identity": model_identity(model_path),
             "protocol": PROTOCOL.resolved(),
             "smoke_samples": smoke_samples,
+            **(manifest or {}),
         },
     )
     results_volume.commit()
@@ -764,10 +852,11 @@ def serve_and_evaluate(job: dict) -> dict:
                     "trials": job["trials"],
                     "smoke_samples": smoke_samples,
                     "concurrency": job["concurrency"] or LANES.concurrency_for(name),
+                    **(lane_fields(name, base_url) if lane_fields else {}),
                 }
                 for name in job["domains"]
             ]
-            calls = [run_lane.spawn(lane) for lane in lanes]
+            calls = [lane.spawn(item) for item in lanes]
             outcomes = []
             for call in calls:
                 try:
@@ -784,13 +873,13 @@ def serve_and_evaluate(job: dict) -> dict:
         monitor.join()
     committer.join()
     results, failures = [], []
-    for lane, outcome in zip(lanes, outcomes):
+    for item, outcome in zip(lanes, outcomes):
         if isinstance(outcome, BaseException):
-            failures.append({"domain": lane["domain"], "error": repr(outcome)})
+            failures.append({"domain": item["domain"], "error": repr(outcome)})
         else:
             results.append(outcome)
             if outcome["failures"] or not outcome["complete"]:
-                failures.append({"domain": lane["domain"], "missing": outcome["expected"] - outcome["conversations"]})
+                failures.append({"domain": item["domain"], "missing": outcome["expected"] - outcome["conversations"]})
     gpus = subprocess.run(
         ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], capture_output=True, text=True
     ).stdout.split("\n")
@@ -812,10 +901,60 @@ def serve_and_evaluate(job: dict) -> dict:
     path = root / "invocations" / f"{job['invocation']}.json"
     path.write_text(json.dumps(invocation, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     results_volume.commit()
+    return invocation
+
+
+@app.function(**SERVER_FUNCTION)
+def serve_and_evaluate(job: dict) -> dict:
+    """Evaluate one model on its domain lanes, then summarize the run's records."""
+
+    invocation = serve(job, run_lane)
     # Other invocations may have written other domains of this run, so the
     # summary is rebuilt from every record on disk.
-    summary = summarize_run.remote(run, tag, smoke_samples)
+    summary = summarize_run.remote(job["run_id"], job["tag"], job["smoke_samples"])
     return {**summary, "invocation": {key: value for key, value in invocation.items() if key != "lanes"}}
+
+
+@app.function(**SERVER_FUNCTION)
+def serve_and_collect(job: dict) -> dict:
+    """Run one collector model on AReaL training tasks (``job["task_ids"]``: {domain: [ids]}), keeping every request."""
+
+    invocation = serve(
+        job,
+        collect_lane,
+        manifest={"collection": {"areal": {"repo": AREAL_REPO, "revision": AREAL_REVISION, "tasks_sha256": AREAL_TASKS_SHA256}}},
+        lane_fields=lambda name, base_url: {
+            "task_ids": job["task_ids"][name],
+            # vLLM's /tokenize renders a chat exactly as the server does.
+            "tokenize_url": base_url[: -len("/v1")] + "/tokenize",
+        },
+    )
+    return {"tag": job["tag"], "invocation": invocation}
+
+
+@app.function(
+    image=lane_image,
+    secrets=[profile_secret],
+    cpu=1,
+    memory=2_048,
+    timeout=SERVING.server_timeout_s,
+    volumes={REMOTE_CHECKPOINT_ROOT: checkpoint_volume.read_only()},
+)
+def wait_and_evaluate(job: dict, wait_hours: float) -> dict:
+    """Start ``serve_and_evaluate`` once the checkpoint is complete, waiting on a CPU instead of on held GPUs.
+
+    An agent-efficiency export is complete once its provenance file exists (written after the weights).
+    """
+
+    path = Path(resolve_model_path(job["tag"]))
+    marker = path / ("agent_eff_provenance.json" if job["tag"].startswith("ae.") else "config.json")
+    deadline = time.time() + wait_hours * 3600
+    while not marker.exists():
+        if time.time() > deadline:
+            raise TimeoutError(f"{marker} did not appear within {wait_hours} h")
+        time.sleep(300)
+        checkpoint_volume.reload()
+    return serve_and_evaluate.remote(job)
 
 
 @app.function(
@@ -931,13 +1070,16 @@ def main(
     smoke_samples: int = 0,
     concurrency: int = 0,
     compare_only: bool = False,
+    wait_hours: float = 0.0,
 ) -> None:
-    """Evaluate each model on TAU1/TAU2, concurrently, four GPUs per model."""
+    """Evaluate each model on TAU1/TAU2, concurrently, four GPUs per model.
+
+    ``--wait-hours``: each model starts once its checkpoint is complete (for example, students still training).
+    """
 
     tags = [tag.strip() for tag in models.split(",") if tag.strip()]
-    unknown = sorted(set(tags) - set(MODELS))
-    if unknown:
-        raise ValueError(f"unknown model tags {unknown}; choose from {sorted(MODELS)}")
+    for tag in tags:
+        resolve_model_path(tag)
     selected = [name.strip() for name in domains.split(",") if name.strip()] or [d.name for d in PROTOCOL.domains]
     for name in selected:
         PROTOCOL.domain(name)
@@ -956,23 +1098,60 @@ def main(
             users = check_user_models.remote(sorted({PROTOCOL.domain(name).user_model for name in selected}))
             print(f"user simulators via {USER_API_BASE}: {users}", flush=True)
         invocation = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + "+".join(sorted(selected))
-        calls = [
-            serve_and_evaluate.spawn(
-                {
-                    "tag": tag,
-                    "run_id": run,
-                    "domains": selected,
-                    "trials": trials,
-                    "smoke_samples": smoke_samples,
-                    "concurrency": concurrency,
-                    "user_models": users,
-                    "invocation": invocation,
-                }
-            )
+        jobs = [
+            {
+                "tag": tag,
+                "run_id": run,
+                "domains": selected,
+                "trials": trials,
+                "smoke_samples": smoke_samples,
+                "concurrency": concurrency,
+                "user_models": users,
+                "invocation": invocation,
+            }
             for tag in tags
         ]
+        calls = [wait_and_evaluate.spawn(job, wait_hours) if wait_hours else serve_and_evaluate.spawn(job) for job in jobs]
         summaries = [call.get() for call in calls]
         print(json.dumps([summary["invocation"] for summary in summaries], indent=2, sort_keys=True))
     comparison = compare(summaries)
     write_comparison.remote(run, comparison)
     print_comparison(comparison, tags)
+
+
+@app.local_entrypoint()
+def collect(plan: str, concurrency: int = 0) -> None:
+    """Fresh-state collection: each collector model plays its AReaL training tasks (configs/tau_bench_eval/harness.py).
+
+    ``plan.json`` is {"run_id": "collect-...", "assignments": {tag: {domain: [task ids]}}}. Rerunning a plan skips
+    finished episodes; data_curation/fresh_states.py extracts training states from the records.
+    """
+
+    spec = json.loads(Path(plan).read_text(encoding="utf-8"))
+    if not spec["run_id"].startswith("collect-"):
+        raise ValueError("collection run ids start with collect-")
+    for tag, by_domain in spec["assignments"].items():
+        resolve_model_path(tag)
+        check_agent_window(PROTOCOL, tag)
+        for name in by_domain:
+            PROTOCOL.domain(name)
+    print(f"user simulator {USER.model}@{USER.revision[:8]}, self-hosted: {download_user_model.remote()}", flush=True)
+    # Downstream stages wait for every collector's "*-collect.json" invocation record.
+    invocation = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-collect"
+    calls = [
+        serve_and_collect.spawn(
+            {
+                "tag": tag,
+                "run_id": spec["run_id"],
+                "domains": sorted(by_domain),
+                "task_ids": by_domain,
+                "trials": 1,
+                "smoke_samples": 0,
+                "concurrency": concurrency,
+                "user_models": {USER.model: {"self_hosted": True, "revision": USER.revision}},
+                "invocation": invocation,
+            }
+        )
+        for tag, by_domain in spec["assignments"].items()
+    ]
+    print(json.dumps([call.get()["invocation"] for call in calls], indent=2, sort_keys=True))

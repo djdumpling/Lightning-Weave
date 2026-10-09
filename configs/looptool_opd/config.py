@@ -4,6 +4,14 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import json
+import os
+import sys
+from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from configs.tau_bench_eval.config import AREAL_REPO, AREAL_REVISION  # noqa: E402
 
 
 DATASET_REPO = "zhangkangning/LoopTool-23k"
@@ -29,7 +37,50 @@ MODAL_DATA_VOLUME = "lightning-weave-looptool-opd-data"
 MODAL_MODEL_VOLUME = "lightning-weave-hf-models"
 MODAL_CHECKPOINT_VOLUME = "lightning-weave-checkpoints"
 REMOTE_REPO = "/workspace/Lightning-Weave"
-REMOTE_DATA_ROOT = "/opd/looptool-qwen3-4b-v1"
+
+
+@dataclass(frozen=True)
+class StatePool:
+    """A cached state pool: where it lives, its prompt cap, and (if its prompts come from collected tau2
+    episodes rather than LoopTool) that collection. The frozen student still generates and anchors every pool."""
+
+    root: str
+    max_prompt_tokens: int
+    collection: dict | None = None
+
+
+STATE_POOLS = {
+    # The LoopTool prompts: V0 and every agent-efficiency arm.
+    "looptool": StatePool("/opd/looptool-qwen3-4b-v1", 8_192),
+    # Decision states trained students visited on AReaL tau2 training tasks (configs/tau_bench_eval collection
+    # mode, profile user235b-4b), extracted by data_curation/fresh_states.py.
+    "tau2-fresh": StatePool(
+        "/opd/tau2-fresh-qwen3-4b-v1",
+        16_384,
+        {
+            "results_volume": "lightning-weave-tau-eval",
+            "run_id": "collect-98179d00b25d-v1",
+            "collectors": ["ae.joint.acc-legacy", "ae.joint.acc-legacy+decs"],
+            "domains": ["tau2_airline", "tau2_retail"],
+            "tasks": {"repo": AREAL_REPO, "revision": AREAL_REVISION},
+            "states_per_episode": 4,
+        },
+    ),
+}
+# The launcher's OPD_DATA selects the pool. A non-default pool runs as its own Modal app with OPD_DATA baked into
+# its images (PROFILE_ENV), so every remote import resolves the same pool.
+DATA_PROFILE = os.environ.get("OPD_DATA", "looptool")
+if DATA_PROFILE not in STATE_POOLS:
+    raise ValueError(f"OPD_DATA={DATA_PROFILE!r}; choose from {sorted(STATE_POOLS)}")
+POOL = STATE_POOLS[DATA_PROFILE]
+PROFILE_ENV = {} if DATA_PROFILE == "looptool" else {"OPD_DATA": DATA_PROFILE}
+REMOTE_DATA_ROOT = POOL.root
+
+
+def app_name(base: str) -> str:
+    return f"{base}-{DATA_PROFILE}" if PROFILE_ENV else base
+
+
 REMOTE_MODEL_ROOT = "/models"
 REMOTE_CHECKPOINT_ROOT = "/checkpoints/looptool-offline-dopd-qwen3-4b-v1"
 
@@ -105,9 +156,12 @@ class Recipe:
 
     def resolved(self) -> dict[str, object]:
         self.validate()
+        dataset = {"repo": DATASET_REPO, "revision": DATASET_REVISION}
+        if POOL.collection is not None:
+            dataset = {"profile": DATA_PROFILE, "collection": POOL.collection}
         return {
             "algorithm": "single-anchor Offline Direct-OPD (tilted target)",
-            "dataset": {"repo": DATASET_REPO, "revision": DATASET_REVISION},
+            "dataset": dataset,
             "student_behavior_and_trainable_policy": {
                 "repo": STUDENT_MODEL,
                 "revision": STUDENT_REVISION,
@@ -155,7 +209,7 @@ class Recipe:
         }
 
 
-RECIPE = Recipe()
+RECIPE = Recipe(max_prompt_tokens=POOL.max_prompt_tokens)
 RECIPE.validate()
 
 

@@ -13,15 +13,21 @@ helpers run anywhere, including the local entrypoint.
 
 from __future__ import annotations
 
+import array
+import base64
 import collections
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+import hashlib
 import json
 import math
 import random
+import sys
 import threading
 import time
 import traceback
+import urllib.request
+import zlib
 from pathlib import Path
 from typing import Any, Callable
 
@@ -256,12 +262,17 @@ class Router:
         self.agent_models = {model, f"openai/{model}"}
         self.user_aliases, self.user_prices, self.retry = user_aliases, user_prices, retry
         self.local = threading.local()
+        # Collection only: called with each agent call's routed kwargs and response; returns one request record.
+        self.capture: Callable[[dict, Any], dict] | None = None
 
     def begin(self) -> None:
-        self.local.agent, self.local.user = [], []
+        self.local.agent, self.local.user, self.local.requests = [], [], []
 
     def calls(self) -> tuple[list[dict], list[dict]]:
         return getattr(self.local, "agent", []), getattr(self.local, "user", [])
+
+    def requests(self) -> list[dict]:
+        return getattr(self.local, "requests", [])
 
     def install(self, module: Any) -> None:
         if not getattr(module.completion, "_routed", False):
@@ -289,6 +300,11 @@ class Router:
                     time.sleep(self.retry.delay(attempt))
                     continue
                 self.record(model, response, time.time() - started)
+                if self.capture is not None and model in self.agent_models:
+                    try:
+                        getattr(self.local, "requests", []).append(self.capture(kwargs, response))
+                    except Exception as error:  # noqa: BLE001 - a missing request record is counted, not fatal
+                        getattr(self.local, "requests", []).append({"capture_error": repr(error)[:2_000]})
                 return response
             raise AssertionError("unreachable")
 
@@ -435,16 +451,22 @@ class Job:
     seed: int | None
 
 
-def run_conversation(domain: Any, job: Job, protocol: Any, router: Router) -> dict:
-    """One scored record; raises only for infrastructure and configuration errors."""
+def run_conversation(domain: Any, job: Job, protocol: Any, router: Router, play: Callable[[], dict] | None = None) -> dict:
+    """One record; raises only for infrastructure and configuration errors.
+
+    ``play`` runs the conversation and returns its outcome (``reward``, ``termination``, ``result``, and optional
+    extra record ``fields``); by default it is the harness's own scored conversation.
+    """
 
     router.begin()
     started = time.time()
-    try:
+    if play is None:
         if domain.suite == "tau1":
-            outcome = run_tau1(domain.domain, job.handle, job.trial, domain.user_model, protocol)
+            play = lambda: run_tau1(domain.domain, job.handle, job.trial, domain.user_model, protocol)  # noqa: E731
         else:
-            outcome = run_tau2(domain.domain, job.handle, job.trial, job.seed, domain.user_model, protocol)
+            play = lambda: run_tau2(domain.domain, job.handle, job.trial, job.seed, domain.user_model, protocol)  # noqa: E731
+    try:
+        outcome = play()
         error = None
     except ConfigurationError:
         raise
@@ -456,7 +478,7 @@ def run_conversation(domain: Any, job: Job, protocol: Any, router: Router) -> di
         outcome = {"reward": 0.0, "termination": kind, "result": None}
         error = {"type": type(exc).__name__, "message": str(exc)[:4_000], "traceback": traceback.format_exc()[-8_000:]}
     agent_calls, user_calls = router.calls()
-    return {
+    record = {
         "domain": domain.name,
         "task_id": job.task_id,
         "trial": job.trial,
@@ -469,7 +491,11 @@ def run_conversation(domain: Any, job: Job, protocol: Any, router: Router) -> di
         "user_calls": user_calls,
         "seconds": round(time.time() - started, 1),
         "result": outcome["result"],
+        **outcome.get("fields", {}),
     }
+    if router.capture is not None:
+        record["requests"] = router.requests()
+    return record
 
 
 def run_lane(
@@ -483,8 +509,12 @@ def run_lane(
     retry_delay_s: float,
     write: Callable[[dict], None],
     log: Callable[[str], None],
+    play: Callable[[Job], dict] | None = None,
 ) -> list[dict]:
-    """Run every job; returns the jobs that still failed on infrastructure after all attempts."""
+    """Run every job; returns the jobs that still failed on infrastructure after all attempts.
+
+    ``play`` replaces the scored conversation (see ``run_conversation``); collection runs its own episodes.
+    """
 
     stop = threading.Event()
     failures: list[dict] = []
@@ -496,7 +526,7 @@ def run_lane(
             if stop.is_set():
                 return
             try:
-                record = run_conversation(domain, job, protocol, router)
+                record = run_conversation(domain, job, protocol, router, play=(lambda: play(job)) if play else None)
             except ConfigurationError as error:
                 stop.set()
                 log(f"trial {job.trial} task {job.task_id}: configuration error, stopping the lane: {error}")
@@ -527,3 +557,171 @@ def run_lane(
     with ThreadPoolExecutor(max_workers=max(1, min(concurrency, len(jobs)))) as pool:
         list(pool.map(one, jobs))
     return failures
+
+
+# Fresh-state collection: Qwen3-4B students on AReaL tau2 training tasks (data_curation/areal_tau2_tasks.py).
+# Nothing is graded for the benchmark; the product is every agent request, exactly as it was served.
+
+
+def pack_tokens(tokens: list[int]) -> str:
+    """Token ids as base64 of zlib-compressed little-endian uint32; ``unpack_tokens`` inverts it."""
+    values = array.array("I", tokens)
+    if sys.byteorder != "little":
+        values.byteswap()
+    return base64.b64encode(zlib.compress(values.tobytes(), 6)).decode("ascii")
+
+
+def unpack_tokens(packed: str) -> list[int]:
+    values = array.array("I")
+    values.frombytes(zlib.decompress(base64.b64decode(packed)))
+    if sys.byteorder != "little":
+        values.byteswap()
+    return values.tolist()
+
+
+def tokenizer_client(url: str, api_key: str, served_model_name: str, attempts: int = 4) -> Callable[[dict], dict]:
+    """vLLM's /tokenize for a chat request: the served prompt's token ids, rendered by the server's own template path."""
+
+    def tokenize(body: dict) -> dict:
+        request = {"model": served_model_name, "messages": body["messages"], "add_generation_prompt": True}
+        if body.get("tools"):
+            request["tools"] = body["tools"]
+        data = json.dumps(request).encode()
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+        for attempt in range(1, attempts + 1):
+            try:
+                with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers), timeout=120) as response:
+                    tokens = json.loads(response.read())["tokens"]
+                return {"count": len(tokens), "tokens": pack_tokens(tokens)}
+            except Exception:  # noqa: BLE001 - retried, then recorded as missing by the capture
+                if attempt == attempts:
+                    raise
+                time.sleep(2 * attempt)
+        raise AssertionError("unreachable")
+
+    return tokenize
+
+
+def capture_agent_call(kwargs: dict, response: Any, tokenize: Callable[[dict], dict]) -> dict:
+    """One served agent request: its chat messages and tools, the response, and the server's rendering of the prompt."""
+
+    # litellm omits null fields from the request body; the rendering does not depend on them.
+    messages = [{key: value for key, value in message.items() if value is not None} for message in kwargs["messages"]]
+    tools = kwargs.get("tools")
+    choice = response.choices[0]
+    message = choice.message
+    reasoning = getattr(message, "reasoning_content", None)
+    if reasoning is None:
+        extra = getattr(message, "provider_specific_fields", None) or {}
+        reasoning = extra.get("reasoning_content") or extra.get("reasoning")
+    usage = getattr(response, "usage", None)
+    return {
+        "messages": messages,
+        "tools": tools,
+        "tool_choice": kwargs.get("tool_choice"),
+        "sampling": {key: kwargs.get(key) for key in ("temperature", "top_p", "seed")},
+        "response": {
+            "content": message.content,
+            "reasoning_content": reasoning,
+            "tool_calls": [
+                {"id": call.id, "name": call.function.name, "arguments": call.function.arguments}
+                for call in (message.tool_calls or [])
+            ],
+            "finish_reason": choice.finish_reason,
+        },
+        "prompt_tokens": getattr(usage, "prompt_tokens", None),
+        "completion_tokens": getattr(usage, "completion_tokens", None),
+        "server_render": tokenize({"messages": messages, "tools": tools}),
+    }
+
+
+class TaskDatabases:
+    """Each task database, loaded once per lane; every episode mutates its own deep copy."""
+
+    CLASSES = {"airline": "FlightDB", "retail": "RetailDB"}
+
+    def __init__(self, root: Path) -> None:
+        self.root, self.cache, self.lock = root, {}, threading.Lock()
+
+    def fresh(self, domain: str, db_path: str) -> Any:
+        from importlib import import_module
+
+        with self.lock:
+            if db_path not in self.cache:
+                db_class = getattr(import_module(f"tau2.domains.{domain}.data_model"), self.CLASSES[domain])
+                self.cache[db_path] = db_class.load(str(self.root / db_path))
+            db = self.cache[db_path]
+        return db.model_copy(deep=True)
+
+
+def action_reward(raw: dict, messages: list) -> float | None:
+    """tau2's action check against the task's gold actions (database-independent); a diagnostic only."""
+
+    try:
+        from tau2.data_model.tasks import Task
+        from tau2.evaluator.evaluator_action import ActionEvaluator
+
+        record = {key: value for key, value in raw.items() if key != "db_path"}
+        # AReaL stores the criteria as a JSON string.
+        if isinstance(record.get("evaluation_criteria"), str):
+            record["evaluation_criteria"] = json.loads(record["evaluation_criteria"])
+        task = Task.model_validate(record)
+        return float(ActionEvaluator.calculate_reward(task=task, full_trajectory=messages).reward)
+    except Exception:  # noqa: BLE001 - diagnostic only
+        return None
+
+
+def run_areal_episode(raw: dict, databases: TaskDatabases, seed: int, user_model: str, protocol: Any) -> dict:
+    """tau2's ``run_task`` for an AReaL task: the same agent, user and orchestrator, on the task's own database."""
+
+    from importlib import import_module
+
+    from tau2.agent.llm_agent import LLMAgent
+    from tau2.data_model.tasks import Task
+    from tau2.orchestrator.orchestrator import Orchestrator
+    from tau2.user.user_simulator import UserSimulator
+
+    domain = raw["user_scenario"]["instructions"]["domain"]
+    # The grader's criteria never reach the runtime task.
+    task = Task.model_validate({key: raw[key] for key in ("id", "user_scenario", "initial_state") if key in raw})
+    environment = import_module(f"tau2.domains.{domain}.environment").get_environment(
+        db=databases.fresh(domain, raw["db_path"])
+    )
+    agent = LLMAgent(
+        tools=environment.get_tools(),
+        domain_policy=environment.get_policy(),
+        llm=f"openai/{protocol.served_model_name}",
+        llm_args={"temperature": protocol.temperature, "top_p": protocol.top_p},
+    )
+    try:
+        user_tools = environment.get_user_tools()
+    except Exception:  # noqa: BLE001 - as run_task: domains without user tools raise
+        user_tools = None
+    user = UserSimulator(
+        tools=user_tools,
+        instructions=str(task.user_scenario),
+        llm=user_model,
+        llm_args={"temperature": protocol.tau2_user_temperature},
+    )
+    simulation = Orchestrator(
+        domain=domain,
+        agent=agent,
+        user=user,
+        environment=environment,
+        task=task,
+        max_steps=protocol.tau2_max_steps,
+        max_errors=protocol.tau2_max_errors,
+        seed=seed,
+    ).run()
+    reward = action_reward(raw, simulation.messages)
+    return {
+        # The action-match diagnostic, or -1 when it cannot be computed (never a benchmark score).
+        "reward": -1.0 if reward is None else reward,
+        "termination": simulation.termination_reason.value,
+        "result": simulation.model_dump(mode="json"),
+        "fields": {"db_path": raw["db_path"]},
+    }
+
+
+def collection_seed(task_id: str) -> int:
+    return int(hashlib.sha256(f"fresh-collect:{task_id}".encode()).hexdigest()[:8], 16) % 1_000_000

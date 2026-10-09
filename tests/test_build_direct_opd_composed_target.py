@@ -89,3 +89,81 @@ def test_nested_score_buffers_preserve_variable_response_lengths():
     array = nested_score_array(rows, arrow_type)
     assert array.type == arrow_type
     assert array.to_pylist() == [row.tolist() for row in rows]
+
+
+@pytest.mark.parametrize("weights", [[1.0], [1.0, 2.0, 3.0], [1.0, float('nan')], [0.0, 0.0]])
+def test_composition_rejects_incomplete_or_invalid_weights(weights):
+    scores = [np.zeros((1, 2)), np.zeros((1, 2))]
+    with pytest.raises(ValueError):
+        compose_anchor_deltas(scores, scores, weights)
+
+
+def test_composition_rejects_broadcastable_shape_mismatch():
+    with pytest.raises(ValueError, match="shapes differ"):
+        compose_anchor_deltas(
+            [np.zeros((2, 2)), np.zeros((1, 2))],
+            [np.ones((2, 2)), np.ones((1, 2))],
+            [1.0, 1.0],
+        )
+
+
+def _aligned_table(*, candidates=(1, 2), response=(1,), behavior=(-1.0, -2.0), sample_id="s0"):
+    return pa.table({
+        "prompt": ["same prompt"],
+        "label": ["same label"],
+        "metadata": [{
+            "sample_id": sample_id,
+            "candidate_ids": [list(candidates)],
+            "response_tokens": list(response),
+            "behavior_topk_log_probs": [list(behavior)],
+            "loss_mask": [True],
+            "pre_teacher_log_probs": [[-2.0, -3.0]],
+            "post_teacher_log_probs": [[-1.0, -2.0]],
+            "pre_teacher_revision": "pre",
+            "post_teacher_revision": "post",
+        }],
+    })
+
+
+@pytest.mark.parametrize("change", [
+    {"candidates": (2, 1)},
+    {"response": (2,)},
+    {"behavior": (-2.0, -1.0)},
+    {"sample_id": "different-row"},
+])
+def test_composition_rejects_equal_shaped_but_unaligned_scores(change):
+    from data_curation.build_direct_opd_composed_target import compose_tables
+    with pytest.raises(ValueError, match="aligned anchors differ"):
+        compose_tables(
+            [_aligned_table(), _aligned_table(**change)], [1.0, 1.0],
+            rule="weighted_log_density_ratio_sum", revision="test",
+        )
+
+
+@pytest.mark.parametrize("both_short", [False, True])
+def test_composition_never_seals_truncated_input(tmp_path, monkeypatch, both_short):
+    from argparse import Namespace
+    from data_curation import build_direct_opd_composed_target as compose
+
+    left, right = tmp_path / "left.json", tmp_path / "right.json"
+    output = tmp_path / "composed"
+    monkeypatch.setattr(compose, "parse_args", lambda: Namespace(
+        anchor_manifest=[left, right], anchor_name=["left", "right"], anchor_weight=[1.0, 1.0],
+        output_dir=output, rows=2, repeat=1, rows_per_output_shard=1,
+        composition_rule="weighted_log_density_ratio_sum",
+    ))
+    monkeypatch.setattr("slime.rollout.offline_direct_opd.validate_sealed_manifest", lambda path: {
+        "total_rows": 2, "pre_teacher_model": {"revision": "pre"},
+        "post_teacher_model": {"revision": "post"},
+    })
+
+    def chunks(path, manifest, **kwargs):
+        yield _aligned_table()
+        if not both_short and path == left:
+            yield _aligned_table(sample_id="s1")
+
+    monkeypatch.setattr(compose, "table_chunks", chunks)
+    with pytest.raises(ValueError):
+        compose.main()
+    assert not output.exists()
+    assert not list(tmp_path.glob(".composed.*"))

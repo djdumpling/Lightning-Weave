@@ -57,11 +57,52 @@ MODELS = {
     "thinking2507": f"{REMOTE_MODEL_ROOT}/models--Qwen--Qwen3-4B-Thinking-2507/snapshots/{THINKING_2507_REVISION}",
 }
 
+# Agent-efficiency students (configs/agent_eff), addressed as in the BFCL eval:
+# ``ae.<arm>.<variant>[.s<training seed>]``. All are trained from Qwen3-4B.
+AGENT_EFF_PREFIX = "ae."
+AGENT_EFF_ROOT = f"{REMOTE_CHECKPOINT_ROOT}/agent-eff"
+AGENT_EFF_DEFAULT_SEED = 1234
+
 # Qwen3-4B's config.json max_position_embeddings: 32,768 output + 8,192 prompt.
 NATIVE_MAX_MODEL_LEN = 40_960
 # Each agent's native window (config.json max_position_embeddings); without
 # YaRN, the serving window must fit inside it.
 MODEL_MAX_POSITIONS = {"base": NATIVE_MAX_MODEL_LEN, "opd": NATIVE_MAX_MODEL_LEN, "thinking2507": 262_144}
+
+
+def agent_eff_path(tag: str) -> str | None:
+    """The export of an ``ae.<arm>.<variant>[.s<seed>]`` tag, or None for any other tag."""
+
+    if not tag.startswith(AGENT_EFF_PREFIX):
+        return None
+    parts = tag[len(AGENT_EFF_PREFIX) :].split(".")
+    seed = AGENT_EFF_DEFAULT_SEED
+    if len(parts) == 3 and parts[2].startswith("s") and parts[2][1:].isdigit():
+        seed = int(parts.pop()[1:])
+    if len(parts) != 2 or not all(parts) or "/" in tag:
+        raise ValueError(f"malformed agent-efficiency tag {tag!r}; expected ae.<arm>.<variant>[.s<seed>]")
+    arm, variant = parts
+    return f"{AGENT_EFF_ROOT}/{arm}/{variant}/seed{seed}/hf"
+
+
+def model_path(tag: str) -> str:
+    path = MODELS.get(tag) or agent_eff_path(tag)
+    if path is None:
+        raise ValueError(f"unknown model tag {tag!r}; choose from {sorted(MODELS)} or ae.<arm>.<variant>[.s<seed>]")
+    return path
+
+
+def max_positions(tag: str) -> int:
+    model_path(tag)
+    return MODEL_MAX_POSITIONS.get(tag, NATIVE_MAX_MODEL_LEN)
+
+# Fresh-state collection runs Qwen3-4B students on AReaL's tau2 training tasks (each with its own database),
+# audited against the evaluation tasks above by data_curation/areal_tau2_tasks.py.
+AREAL_REPO = "inclusionAI/AReaL-tau2-data"
+AREAL_REVISION = "86971dc03da6e7c1a7933295e05b84aab8215386"
+AREAL_TASKS_FILE = "tau2_rl_train.jsonl"
+AREAL_TASKS_SHA256 = "f7cd4c53c279819cf7c96da3986295f94bd613c0ee078715e8ac6238ad1e5cfb"
+AREAL_TASK_COUNT = 1_982
 
 # Customers are simulated through Prime Intellect's OpenAI-compatible inference
 # API, which serves OpenAI models under undated aliases at OpenAI's list prices.
@@ -433,6 +474,15 @@ PROFILES = {
         reasoning_parser="deepseek_r1",
         user_server=USER_235B,
     ),
+    # The same 235B user for Qwen3-4B agents (base, the LoopTool student, the
+    # agent-efficiency students): prime's agent settings (native 40,960 window,
+    # qwen3 parser, thinking-mode sampling), so only the user differs from prime.
+    "user235b-4b": Protocol(
+        domains=tuple(
+            Domain("tau2", domain, tasks, USER_235B.model) for domain, tasks in (("retail", 114), ("airline", 50), ("telecom", 114))
+        ),
+        user_server=USER_235B,
+    ),
 }
 # Chosen by the launcher (TAU_PROFILE) and passed to every container, so remote
 # imports resolve the same protocol.
@@ -449,9 +499,9 @@ LANES = Lanes()
 def check_agent_window(protocol: Protocol, tag: str) -> None:
     """Without YaRN, the serving window must fit the agent's native positions."""
 
-    if protocol.rope_scaling is None and protocol.max_model_len > MODEL_MAX_POSITIONS[tag]:
+    if protocol.rope_scaling is None and protocol.max_model_len > max_positions(tag):
         raise ValueError(
-            f"{tag} has {MODEL_MAX_POSITIONS[tag]} native positions; max_model_len {protocol.max_model_len} needs YaRN"
+            f"{tag} has {max_positions(tag)} native positions; max_model_len {protocol.max_model_len} needs YaRN"
         )
 
 

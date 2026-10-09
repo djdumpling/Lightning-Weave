@@ -1,0 +1,59 @@
+{
+ "domains": [
+  "tau2_airline",
+  "tau2_retail"
+ ],
+ "groups": {
+  "base": [
+   "base"
+  ],
+  "cache acc": [
+   "ae.joint.acc-legacy",
+   "ae.joint.acc-legacy.s5678"
+  ],
+  "cache decs": [
+   "ae.joint.acc-legacy+decs",
+   "ae.joint.acc-legacy+decs.s5678"
+  ],
+  "fresh acc": [
+   "ae.fresh.acc-legacy",
+   "ae.fresh.acc-legacy.s5678"
+  ],
+  "fresh decs": [
+   "ae.fresh.acc-legacy+decs-fixed",
+   "ae.fresh.acc-legacy+decs-fixed.s5678"
+  ]
+ },
+ "contrasts": {
+  "PRIMARY fresh acc - cache acc": {
+   "fresh acc": 1,
+   "cache acc": -1
+  },
+  "fresh decs - cache decs": {
+   "fresh decs": 1,
+   "cache decs": -1
+  },
+  "DECS cost, fresh (fresh decs - fresh acc)": {
+   "fresh decs": 1,
+   "fresh acc": -1
+  },
+  "DECS cost, cache (cache decs - cache acc)": {
+   "cache decs": 1,
+   "cache acc": -1
+  },
+  "SECONDARY interaction": {
+   "fresh decs": 1,
+   "fresh acc": -1,
+   "cache decs": -1,
+   "cache acc": 1
+  },
+  "cache acc - base": {
+   "cache acc": 1,
+   "base": -1
+  },
+  "fresh acc - base": {
+   "fresh acc": 1,
+   "base": -1
+  }
+ }
+}

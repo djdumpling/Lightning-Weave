@@ -266,6 +266,28 @@ randomly chosen multi-turn prompts (`prompt_weights` files from `data_curation/t
 `configs/agent_eff/next_comparisons.json`, applied by `evaluation/bfcl_pooled.py`. Results are in results.md
 section 15 and, under interleaved thinking, results_2.md. The full pre-registration is in commit `6f73aa2`.
 
+## Fresh-state pilot (2026-10-08)
+
+The same recipe on another state pool: `OPD_DATA=tau2-fresh` selects the `tau2-fresh` pool in
+`configs/looptool_opd/config.py` (its own data root, a 16,384-token prompt cap, and the tau2 collection its prompts
+come from). The pool runs as its own Modal apps with the profile baked into their images, and its students live under
+the `fresh` arm (`ae.fresh.<variant>`). `acc-legacy+decs-fixed` keeps DECS at the LoopTool cache's calibrated
+coefficient rather than recalibrating it on the new states. Stages, after the collection
+([modal_tau_eval.md](modal_tau_eval.md), `collect`):
+
+```bash
+OPD_DATA=tau2-fresh bash scripts/run_looptool_opd.sh cache-chain --max-wait-hours 20   # states, behavior responses, anchor scores, seal
+OPD_DATA=tau2-fresh bash scripts/run_agent_eff.sh prepare --donors agent_acc,decs
+OPD_DATA=tau2-fresh bash scripts/run_agent_eff.sh score   --donors decs
+OPD_DATA=tau2-fresh bash scripts/run_agent_eff.sh build   --variant acc-legacy,acc-legacy+decs-fixed --seeds 1234,5678
+python evaluation/bfcl_pooled.py --root RESULTS --comparisons configs/agent_eff/fresh_comparisons.json
+python evaluation/tau_pooled.py --root TAU_RUN --spec configs/agent_eff/fresh_tau_comparisons.json --output tau.json
+python evaluation/tau_escalation.py --root TAU_RUN --tau2-domains TAU2/data/tau2/domains \
+  --spec configs/agent_eff/fresh_tau_comparisons.json --pairs ae.fresh.acc-legacy:ae.joint.acc-legacy
+```
+
+Results and caveats: results/agent_eff/results_4.md.
+
 ## BFCL evaluation
 
 The harness (interleaved thinking, the usage proxy and its join, decoding seeds, `ae.*` tags) is described in
@@ -307,7 +329,7 @@ python evaluation/bfcl_multiturn_failures.py --root RESULTS --ground-truth DIR -
 
 **Not covered by this pipeline:**
 
-- collecting a cache from another behavior policy (the sequential arm);
+- collecting a cache from another behavior policy (the sequential arm; the fresh-state pool changes the states, not the behavior policy);
 - cross-domain math/code caches;
 - the LoopTool held-out development evaluation;
 - the in-house GRPO donor pair.

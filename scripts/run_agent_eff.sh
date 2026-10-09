@@ -10,6 +10,10 @@
 #   bash scripts/run_agent_eff.sh train    --variant acc-clean+decs-deepscaler --seed 1234
 #   bash scripts/run_agent_eff.sh export   --variant acc-clean+decs-deepscaler --seed 1234
 #   bash scripts/run_agent_eff.sh build    --variant acc-legacy+l1max,acc-legacy+nemotron --seeds 1234,5678
+# Another state pool (OPD_DATA, configs/looptool_opd/config.py) uses the same actions once its cache is sealed:
+#   OPD_DATA=tau2-fresh bash scripts/run_agent_eff.sh prepare --donors agent_acc,decs
+#   OPD_DATA=tau2-fresh bash scripts/run_agent_eff.sh score   --donors decs
+#   OPD_DATA=tau2-fresh bash scripts/run_agent_eff.sh build   --variant acc-legacy,acc-legacy+decs-fixed --seeds 1234,5678
 #   bash scripts/run_agent_eff.sh build --variant paper-acc-legacy,paper-acc-legacy+decs,paper-half-acc-legacy,acc-legacy+decs-protect-turn-starts,acc-legacy+decs-gate-random-multi-turn --seeds 1234,5678
 set -euo pipefail
 cd "$(dirname "$0")/.."

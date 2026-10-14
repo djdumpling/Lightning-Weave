@@ -222,3 +222,34 @@ def test_failed_streaming_write_preserves_previous_output_and_cleans_temporary(t
         )
     assert destination.read_bytes() == previous
     assert sorted(path.name for path in tmp_path.iterdir()) == ["input.parquet", "output.parquet"]
+
+
+class HybridPrefixModel:
+    """Hybrid decoder whose prefix must be computed as one complete sequence."""
+    config = SimpleNamespace(model_type="qwen3_5_text")
+
+    def __init__(self):
+        self.decoder_lengths = []
+        self.head_lengths = []
+
+    def model(self, input_ids, use_cache):
+        assert use_cache is False
+        self.decoder_lengths.append(input_ids.shape[-1])
+        return SimpleNamespace(last_hidden_state=input_ids.cumsum(-1)[..., None])
+
+    def lm_head(self, hidden):
+        self.head_lengths.append(hidden.shape[0])
+        axis = torch.arange(13, dtype=torch.float32)
+        return (hidden * (axis + 1) / 37).sin().to(torch.float16)
+
+
+@pytest.mark.parametrize("score_field", SCORE_FIELDS)
+@pytest.mark.parametrize("chunk_size", [1, 2, 20])
+def test_hybrid_scores_preserve_full_prefix_and_bound_vocab_projection(score_field, chunk_size):
+    model = HybridPrefixModel()
+    scores = score_sequence_batch(model, deepcopy(ROWS), score_field, device="cpu", chunk_size=chunk_size)
+    assert scores == [expected_scores(row, score_field, None) for row in ROWS]
+    assert model.decoder_lengths == [len(row["prompt_tokens"]) + len(row["response_tokens"]) - 1 for row in ROWS]
+    assert max(model.head_lengths) <= chunk_size
+    direct = score_sequence(HybridPrefixModel(), ROWS[0], score_field, device="cpu", chunk_size=chunk_size)
+    assert direct == expected_scores(ROWS[0], score_field, None)

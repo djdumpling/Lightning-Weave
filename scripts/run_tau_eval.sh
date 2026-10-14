@@ -11,6 +11,7 @@ fi
 MODAL=(uv run --no-project --python 3.12 --with modal==1.5.5 modal)
 ENTRYPOINT="${PROJECT_ROOT}/configs/tau_bench_eval/modal_eval.py::main"
 COLLECT="${PROJECT_ROOT}/configs/tau_bench_eval/modal_eval.py::collect"
+BRANCH="${PROJECT_ROOT}/configs/tau_bench_eval/modal_eval.py::branch"
 SECRET=prime-secret
 
 require_secret() {
@@ -45,8 +46,13 @@ case "${ACTION}" in
         export MODAL_ENVIRONMENT=${MODAL_ENVIRONMENT:-alex-dev-2}
         exec "${MODAL[@]}" run --detach "${COLLECT}" "$@"
         ;;
+    branch)
+        # Executed branches of cached responses: --plan <path on the results volume> --run-prefix branch-... --shards N
+        export MODAL_ENVIRONMENT=${MODAL_ENVIRONMENT:-alex-dev-2}
+        exec "${MODAL[@]}" run --detach "${BRANCH}" "$@"
+        ;;
     *)
-        echo "Usage: [TAU_PROFILE=prime|user30b|user235b|user235b-4b] bash scripts/run_tau_eval.sh plan|smoke|run|compare|collect [--models base,opd,ae.<arm>.<variant>[.s<seed>]] [--domains tau2_airline,...] [--trials N] [--wait-hours H] | collect --plan plan.json" >&2
+        echo "Usage: [TAU_PROFILE=prime|user30b|user235b|user235b-4b|userdeepseek] bash scripts/run_tau_eval.sh plan|smoke|run|compare|collect|branch [--models base,opd,ae.<arm>.<variant>[.s<seed>]] [--domains tau2_airline,...] [--trials N] [--wait-hours H] | collect --plan plan.json" >&2
         exit 2
         ;;
 esac

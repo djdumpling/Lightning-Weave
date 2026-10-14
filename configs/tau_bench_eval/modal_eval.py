@@ -43,6 +43,9 @@ from config import (  # noqa: E402
     AREAL_TASKS_FILE,
     AREAL_TASKS_SHA256,
     DEPENDENCY_CUTOFF,
+    DeepSeekUserServer,
+    Qwen35Protocol,
+    Qwen35MentorProtocol,
     LANE_PYTHON,
     LANES,
     MODAL_APP_NAME,
@@ -62,6 +65,7 @@ from config import (  # noqa: E402
     TAU1_COMMIT,
     TAU1_REPO,
     TAU2_COMMIT,
+    CORRECTED_TASKS_ROOT,
     TAU2_REPO,
     USER_ALIASES,
     USER_API_BASE,
@@ -92,6 +96,9 @@ user_secret = modal.Secret.from_name(USER_SECRET, required_keys=[USER_API_KEY_EN
 profile_secret = modal.Secret.from_dict({"TAU_PROFILE": PROFILE})
 # A self-hosted user simulator (None: API users through Prime).
 USER = PROTOCOL.user_server
+EXTERNAL_USER = isinstance(USER, DeepSeekUserServer)
+MODERN_AGENT = isinstance(PROTOCOL, Qwen35Protocol)
+AGENT_SERVING_IMAGE = getattr(PROTOCOL, "serving_image", SERVING_IMAGE)
 
 
 def verify_lane_image() -> None:
@@ -116,7 +123,7 @@ def verify_lane_image() -> None:
 
 
 serving_image = (
-    modal.Image.from_registry(SERVING_IMAGE)
+    modal.Image.from_registry(AGENT_SERVING_IMAGE)
     .entrypoint([])
     # The official vLLM image exposes /usr/bin/python3 but no `python`, which
     # Modal needs to detect the image's Python version.
@@ -124,6 +131,19 @@ serving_image = (
     .env({"HF_HUB_OFFLINE": "1", "VLLM_NO_USAGE_STATS": "1"})
     .add_local_file(CONFIG_FILE, "/root/config.py", copy=True)
     .add_local_file(HARNESS_FILE, "/root/harness.py", copy=True)
+    .add_local_dir(str(ENTRYPOINT_DIR / "tasks"), CORRECTED_TASKS_ROOT, copy=True)
+)
+
+# DeepSeek has its own image; each agent uses the image pinned by its protocol.
+external_user_image = (
+    modal.Image.from_registry(USER.serving_image)
+    .entrypoint([])
+    .run_commands("ln -sf /usr/bin/python3 /usr/local/bin/python")
+    .env({"HF_HUB_OFFLINE": "1", "VLLM_NO_USAGE_STATS": "1", "VLLM_ENGINE_READY_TIMEOUT_S": "5400"})
+    .add_local_file(CONFIG_FILE, "/root/config.py", copy=True)
+    .add_local_file(HARNESS_FILE, "/root/harness.py", copy=True)
+    .add_local_dir(str(ENTRYPOINT_DIR / "tasks"), CORRECTED_TASKS_ROOT, copy=True)
+    if EXTERNAL_USER else serving_image
 )
 
 lane_image = (
@@ -140,6 +160,7 @@ lane_image = (
     .env({"PYTHONUNBUFFERED": "1", "TAU2_DATA_DIR": f"{TAU2_ROOT}/data"})
     .add_local_file(CONFIG_FILE, "/root/config.py", copy=True)
     .add_local_file(HARNESS_FILE, "/root/harness.py", copy=True)
+    .add_local_dir(str(ENTRYPOINT_DIR / "tasks"), CORRECTED_TASKS_ROOT, copy=True)
     .run_function(verify_lane_image)
 )
 
@@ -167,9 +188,11 @@ collect_lane_image = (
 download_image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install("huggingface_hub[hf_transfer]<1")
-    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
+    .env({"HF_HUB_ENABLE_HF_TRANSFER": "0", "HF_XET_HIGH_PERFORMANCE": "1"}
+         if EXTERNAL_USER else {"HF_HUB_ENABLE_HF_TRANSFER": "1"})
     .add_local_file(CONFIG_FILE, "/root/config.py", copy=True)
     .add_local_file(HARNESS_FILE, "/root/harness.py", copy=True)
+    .add_local_dir(str(ENTRYPOINT_DIR / "tasks"), CORRECTED_TASKS_ROOT, copy=True)
 )
 
 
@@ -182,7 +205,8 @@ def download_user_model() -> str:
     from huggingface_hub import snapshot_download
 
     model_volume.reload()
-    if not (Path(USER.path) / "config.json").exists():
+    started = time.monotonic()
+    if EXTERNAL_USER or not (Path(USER.path) / "config.json").exists():
         path = snapshot_download(USER.model, revision=USER.revision, cache_dir=REMOTE_MODEL_ROOT)
         if os.path.realpath(path) != os.path.realpath(USER.path):
             raise RuntimeError(f"downloaded to {path}, expected {USER.path}")
@@ -190,8 +214,34 @@ def download_user_model() -> str:
     shards = sorted(Path(USER.path).glob("*.safetensors"))
     if not shards:
         raise RuntimeError(f"no weights under {USER.path}")
-    return f"{USER.path} ({len(shards)} shards)"
+    if EXTERNAL_USER:
+        index = json.loads((Path(USER.path) / "model.safetensors.index.json").read_text())
+        missing = [name for name in set(index["weight_map"].values()) if not (Path(USER.path) / name).is_file()]
+        if missing:
+            raise RuntimeError(f"incomplete pinned user snapshot: {missing}")
+    size = sum(shard.stat().st_size for shard in shards)
+    return f"{USER.path} ({len(shards)} shards, {size / 1e9:.3f} GB; download/verification {time.monotonic() - started:.1f}s)"
 
+
+
+@app.function(image=download_image, secrets=[profile_secret], cpu=8, memory=16_384,
+              timeout=7_200, volumes={REMOTE_MODEL_ROOT: model_volume})
+def download_agent_model(tag: str) -> str:
+    from huggingface_hub import snapshot_download
+
+    model_volume.reload()
+    path = Path(resolve_model_path(tag))
+    if not str(path).startswith(REMOTE_MODEL_ROOT + "/models--"):
+        raise ValueError("agent download is only for pinned Hugging Face baselines")
+    model = path.parent.parent.name[len("models--"):].replace("--", "/")
+    result = snapshot_download(model, revision=path.name, cache_dir=REMOTE_MODEL_ROOT)
+    if os.path.realpath(result) != os.path.realpath(path):
+        raise RuntimeError(f"wrong pinned snapshot: {result}")
+    index = json.loads((path / "model.safetensors.index.json").read_text())
+    if any(not (path / name).is_file() for name in set(index["weight_map"].values())):
+        raise RuntimeError("incomplete agent weights")
+    model_volume.commit()
+    return str(path)
 
 def commit_periodically(volume: modal.Volume, stop: threading.Event, interval_s: int) -> threading.Thread:
     def loop() -> None:
@@ -263,8 +313,31 @@ def lane_router(job: dict, domain) -> harness.Router:
         prices,
         harness.Retry(LANES.call_attempts, LANES.call_backoff_s, LANES.call_max_backoff_s),
     )
+    router.reasoning_history = isinstance(PROTOCOL, Qwen35MentorProtocol)
     harness.install_router(domain.suite, router)
     harness.configure_logging()
+    if job.get("invocation"):
+        timing_path = (Path(REMOTE_RESULTS_ROOT) / job["run_id"] / job["tag"] / "invocations" /
+                       f"{job['invocation']}.{domain.name}.user_latency.jsonl")
+        timing_path.parent.mkdir(parents=True, exist_ok=True)
+        timing_lock, lane_started = threading.Lock(), time.time()
+        window, last_log = [], [lane_started]
+
+        def timing_sink(entry: dict) -> None:
+            entry["lane_started_at_unix_s"] = lane_started
+            entry["elapsed_from_lane_start_s"] = round(entry["finished_at_unix_s"] - lane_started, 3)
+            with timing_lock:
+                with timing_path.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(entry) + "\n")
+                window.append(entry["seconds"])
+                if time.time() - last_log[0] >= 60:
+                    print(f"[user latency {job['tag']}:{domain.name}] elapsed={entry['elapsed_from_lane_start_s']:.0f}s "
+                          f"completed={len(window)} p50={harness.percentile(window, .5):.2f}s "
+                          f"p90={harness.percentile(window, .9):.2f}s", flush=True)
+                    window.clear()
+                    last_log[0] = time.time()
+
+        router.user_timing_sink = timing_sink
     return router
 
 
@@ -323,12 +396,21 @@ def run_lane(job: dict) -> dict:
     lane_root = Path(REMOTE_RESULTS_ROOT) / job["run_id"] / tag / domain.name
     results_volume.reload()
     router = lane_router(job, domain)
+    if isinstance(PROTOCOL, Qwen35MentorProtocol):
+        tokenizer_url = job["base_url"].removesuffix("/v1") + "/tokenize"
+        tokenize = harness.tokenizer_client(tokenizer_url, job["api_key"], PROTOCOL.served_model_name)
+        def capture_check(kwargs, response):
+            if router.local.trial == 0 and router.local.task_id in {"0", "5"}:
+                return harness.capture_agent_call(kwargs, response, tokenize)
+            return {"sampling": {key: kwargs.get(key) for key in (
+                "temperature", "top_p", "presence_penalty", "max_tokens", "extra_body", "seed")}}
+        router.capture = capture_check
     tasks = harness.load_tasks(domain.suite, domain.domain, PROTOCOL)
     if len(tasks) != domain.tasks:
         raise RuntimeError(f"{domain.name} has {len(tasks)} tasks, expected {domain.tasks}")
     if job["smoke_samples"]:
         tasks = tasks[: job["smoke_samples"]]
-    seeds = harness.trial_seeds(PROTOCOL.tau2_seed, trials) if domain.suite == "tau2" else [None] * trials
+    seeds = harness.trial_seeds(PROTOCOL.tau2_seed, trials) if domain.suite in ("tau2", "tau2c") else [None] * trials
 
     def path(task_id: str, trial: int) -> Path:
         return lane_root / f"trial{trial}" / record_name(task_id)
@@ -405,6 +487,64 @@ def collect_lane(job: dict) -> dict:
     # The keys serve() reads from every lane.
     return {"domain": domain.name, "expected": len(task_ids), "conversations": written,
             "complete": written == len(task_ids), "failures": failures, "seconds": round(time.time() - started, 1)}
+
+
+@app.function(
+    image=collect_lane_image,
+    secrets=[profile_secret],
+    cpu=8,
+    memory=65_536,
+    timeout=LANES.timeout_s,
+    volumes={REMOTE_RESULTS_ROOT: results_volume},
+)
+def branch_lane(job: dict) -> dict:
+    """Run one domain's executed branches (data_curation/branch_outcomes.py) with the tunnelled agent and user.
+
+    Each branch resumes its episode's recorded history with a cached response as the agent's message, then plays
+    on; its record (named by branch id) holds tau2's database reward on the task's own database.
+    """
+
+    domain = PROTOCOL.domain(job["domain"])
+    lane_root = Path(REMOTE_RESULTS_ROOT) / job["run_id"] / job["tag"] / domain.name
+    results_volume.reload()
+    router = lane_router(job, domain)
+    lines = (Path(AREAL_ROOT) / AREAL_TASKS_FILE).read_text(encoding="utf-8").splitlines()
+    raw = {task["id"]: task for task in map(json.loads, lines)}
+    wanted = set(job["branch_ids"])
+    plan = (Path(REMOTE_RESULTS_ROOT) / job["plan"]).read_text(encoding="utf-8").splitlines()
+    branches = [item for item in map(json.loads, plan) if item["branch_id"] in wanted]
+    if len(branches) != len(wanted) or any(item["domain"] != domain.name or item["task_id"] not in raw for item in branches):
+        raise RuntimeError(f"{domain.name}: the plan does not hold these branches for this domain")
+    databases = harness.TaskDatabases(Path(AREAL_ROOT))
+
+    def path(branch_id: str) -> Path:
+        return lane_root / f"{branch_id}.json"
+
+    jobs = [harness.Job(item["branch_id"], item, 0, item["seed"]) for item in branches if not path(item["branch_id"]).exists()]
+    print(f"[{job['tag']}:{domain.name}] {len(wanted)} branches, {len(jobs)} to run, concurrency={job['concurrency']}", flush=True)
+    started = time.time()
+    failures = run_jobs(
+        job, domain, router, jobs, lambda record: path(record["task_id"]), lane_root,
+        play=lambda item: harness.run_areal_branch(raw[item.handle["task_id"]], databases, item.handle, domain.user_model, PROTOCOL),
+    )
+    written = sum(path(branch_id).exists() for branch_id in wanted)
+    return {"domain": domain.name, "expected": len(wanted), "conversations": written,
+            "complete": written == len(wanted), "failures": failures, "seconds": round(time.time() - started, 1)}
+
+
+@app.function(image=lane_image, cpu=2, memory=8_192, timeout=1_800, volumes={REMOTE_RESULTS_ROOT: results_volume})
+def read_branch_plan(plan: str) -> dict:
+    """{domain: [branch ids]} of a branch plan on the results volume, and the plan's hash."""
+
+    import hashlib
+
+    results_volume.reload()
+    data = (Path(REMOTE_RESULTS_ROOT) / plan).read_bytes()
+    by_domain: dict[str, list[str]] = collections.defaultdict(list)
+    for line in data.decode("utf-8").splitlines():
+        item = json.loads(line)
+        by_domain[item["domain"]].append(item["branch_id"])
+    return {"sha256": hashlib.sha256(data).hexdigest(), "branches": dict(by_domain)}
 
 
 class VllmServer:
@@ -524,14 +664,14 @@ USER_EXPECTED = (
         USER.served_model_name,
         USER.max_model_len,
         USER.expected_generation_defaults,
-        reasoning=USER.reasoning_parser is not None,
+        reasoning=USER.reasoning_parser is not None and not EXTERNAL_USER,
     )
     if USER
     else None
 )
 
 
-def check_serving_window(lines: list[str], expected: Expected) -> None:
+def check_serving_window(lines: list[str], expected: Expected, *, legacy_log: bool = True) -> None:
     """Confirm vLLM started with the expected window, with YaRN only if expected."""
 
     text = "".join(lines)
@@ -539,7 +679,7 @@ def check_serving_window(lines: list[str], expected: Expected) -> None:
         raise RuntimeError(f"vLLM did not report max_seq_len={expected.max_model_len}")
     if expected.yarn and "yarn" not in text:
         raise RuntimeError("vLLM's startup log does not mention the yarn rope_scaling override")
-    if SERVING.disable_cascade_attn and "'disable_cascade_attn': True" not in text:
+    if legacy_log and SERVING.disable_cascade_attn and "'disable_cascade_attn': True" not in text:
         raise RuntimeError("vLLM's non-default args do not include disable_cascade_attn=True")
 
 
@@ -560,6 +700,63 @@ def check_generation_defaults(lines: list[str], expected: Expected) -> dict:
             raise RuntimeError(f"vLLM default sampling params differ from the protocol: {mismatched}")
         return defaults
     raise RuntimeError("vLLM did not log its default chat sampling params; is --generation-config auto active?")
+
+
+
+def check_modern_agent_sampling(server: VllmServer) -> dict:
+    text = "".join(server.lines)
+    match = re.search(r"'override_generation_config': (\{[^{}]+\})", text)
+    overrides = ast.literal_eval(match.group(1)) if match else {}
+    defaults = {**overrides}
+    defaults["max_tokens"] = defaults.pop("max_new_tokens", None)
+    if defaults != PROTOCOL.expected_generation_defaults:
+        raise RuntimeError(f"modern agent sampling differs from protocol: {defaults}")
+    if "'default_chat_template_kwargs': {'enable_thinking': True}" not in text:
+        raise RuntimeError("Qwen3.5 thinking was not explicitly enabled")
+    return defaults
+
+def probe_current_step_history(server: VllmServer, api_key: str, model_path: str) -> dict:
+    """Decode actual generation prompts, proving vLLM's field mapping and native history gate."""
+    from transformers import AutoTokenizer
+    import vllm
+
+    tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+    tool = {"type": "function", "function": {"name": "get_weather", "description": "Get weather",
+            "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}}
+    def assistant(call_id, city, reasoning):
+        return {"role": "assistant", "content": None, "reasoning": reasoning,
+                "tool_calls": [{"id": call_id, "type": "function", "function": {
+                    "name": "get_weather", "arguments": json.dumps({"city": city})}}]}
+    old, current1, current2 = "OLD_STEP_REASONING_7a43", "CURRENT_STEP_REASONING_1_7a43", "CURRENT_STEP_REASONING_2_7a43"
+    messages = [
+        {"role": "user", "content": "Check Paris."}, assistant("old", "Paris", old),
+        {"role": "tool", "tool_call_id": "old", "content": "Paris: sunny."},
+        {"role": "assistant", "content": "Paris is sunny.", "reasoning": "OLD_FINAL_REASONING_7a43"},
+        {"role": "user", "content": "Now compare London and Rome."}, assistant("new1", "London", current1),
+        {"role": "tool", "tool_call_id": "new1", "content": "London: rainy."},
+        assistant("new2", "Rome", current2),
+        {"role": "tool", "tool_call_id": "new2", "content": "Rome: sunny."},
+    ]
+    args = harness.agent_llm_args(PROTOCOL)
+    body = {"model": PROTOCOL.served_model_name, "messages": messages, "tools": [tool], "tool_choice": "auto",
+            **{k: v for k, v in args.items() if k != "extra_body"}, **args["extra_body"], "max_tokens": 8}
+    evidence = []
+    for next_step in (False, True):
+        request = {**body, "messages": messages + ([{"role": "user", "content": "Thanks. Summarize."}] if next_step else [])}
+        status, response = request_json(server.url("/v1/chat/completions"), request, api_key)
+        if status != 200 or not response.get("prompt_token_ids"):
+            raise RuntimeError(f"history probe lacks actual prompt IDs: HTTP {status}")
+        ids = response["prompt_token_ids"]
+        decoded = tokenizer.decode(ids, skip_special_tokens=False)
+        if old in decoded or "OLD_FINAL_REASONING_7a43" in decoded:
+            raise RuntimeError("the native template retained reasoning from an earlier user turn")
+        if any((sentinel in decoded) != (not next_step) for sentinel in (current1, current2)):
+            raise RuntimeError("the current-step reasoning boundary differs from the mentor's protocol")
+        evidence.append({"after_new_user": next_step, "request": request,
+                         "prompt_token_ids": harness.pack_tokens(ids), "decoded_prompt": decoded,
+                         "prompt_tokens": response["usage"]["prompt_tokens"]})
+    return {"policy": PROTOCOL.reasoning_history, "vllm_version": vllm.__version__,
+            "wire_field": "reasoning", "native_template_field": "reasoning_content", "checks": evidence}
 
 
 def request_json(url: str, body: dict | None, api_key: str | None) -> tuple[int, dict]:
@@ -751,9 +948,9 @@ def model_identity(model_path: str) -> str:
 SERVER_FUNCTION = dict(
     image=serving_image,
     secrets=[profile_secret],
-    gpu=SERVING.gpu_for(USER),
+    gpu=SERVING.gpu_for(None if EXTERNAL_USER else USER),
     cpu=8 * SERVING.gpus,
-    memory=32_768 * SERVING.gpus + (65_536 if USER else 0),
+    memory=32_768 * SERVING.gpus + (65_536 if USER and not EXTERNAL_USER else 0),
     timeout=SERVING.server_timeout_s,
     volumes={
         REMOTE_MODEL_ROOT: model_volume.read_only(),
@@ -774,9 +971,20 @@ def serve(job: dict, lane: modal.Function, *, manifest: dict | None = None, lane
     tag, run, smoke_samples = job["tag"], job["run_id"], job["smoke_samples"]
     check_agent_window(PROTOCOL, tag)
     model_path = resolve_model_path(tag)
-    if not (Path(model_path) / "config.json").exists():
+    if model_path.startswith(REMOTE_MODEL_ROOT + "/"):
+        model_volume.reload()
+    # A warm container's checkpoint mount can predate an export that finished after it started; refresh it first.
+    for attempt in range(6):
+        if (Path(model_path) / "config.json").exists():
+            break
+        try:
+            checkpoint_volume.reload()
+        except Exception as error:  # noqa: BLE001 - a failed refresh only delays the check
+            print(f"[{tag}] checkpoint volume reload failed: {error}", flush=True)
+        time.sleep(10 * attempt)
+    else:
         raise FileNotFoundError(f"{tag} checkpoint not found at {model_path}")
-    if USER and not (Path(USER.path) / "config.json").exists():
+    if USER and not EXTERNAL_USER and not (Path(USER.path) / "config.json").exists():
         raise FileNotFoundError(f"user model not found at {USER.path}; run download_user_model")
     results_volume.reload()
     root = Path(REMOTE_RESULTS_ROOT) / run / tag
@@ -801,17 +1009,26 @@ def serve(job: dict, lane: modal.Function, *, manifest: dict | None = None, lane
     server = VllmServer(
         SERVING.vllm_command(model_path, api_key, PROTOCOL), SERVING.port, devices(0, SERVING.gpus) if USER else None
     )
-    servers, user_server, user_key, user_probe = [server], None, None, None
+    external = job.get("external_user")
+    if EXTERNAL_USER and external is None:
+        server.stop()
+        raise RuntimeError("DeepSeek requires its separate user container; use evaluate_with_external_user")
+    servers, user_server = [server], None
+    user_key = external["api_key"] if external else None
+    user_probe = external["metadata"]["probe"] if external else None
     restarts: list[float] = []
     user_restarts: list[float] = []
     stop = threading.Event()
     try:
         server.wait_ready()
-        check_serving_window(list(server.lines), AGENT_EXPECTED)
-        defaults = check_generation_defaults(list(server.lines), AGENT_EXPECTED)
+        check_serving_window(list(server.lines), AGENT_EXPECTED, legacy_log=not MODERN_AGENT)
+        defaults = (check_modern_agent_sampling(server) if MODERN_AGENT else
+                    check_generation_defaults(list(server.lines), AGENT_EXPECTED))
         probe = probe_endpoint(server, api_key, AGENT_EXPECTED)
+        if isinstance(PROTOCOL, Qwen35MentorProtocol):
+            probe["reasoning_history"] = probe_current_step_history(server, api_key, model_path)
         print(f"[{tag}] sampling defaults {defaults}; probe {probe}", flush=True)
-        if USER:
+        if USER and not EXTERNAL_USER:
             # Started after the agent is up, so the two servers' ports cannot race.
             user_key = "sk-" + secrets.token_urlsafe(32)
             user_server = VllmServer(
@@ -832,7 +1049,10 @@ def serve(job: dict, lane: modal.Function, *, manifest: dict | None = None, lane
             watch_server(user_server, f"{tag}:user", stop, user_restarts)
         with contextlib.ExitStack() as tunnels:
             base_url = f"{tunnels.enter_context(modal.forward(SERVING.port)).url}/v1"
-            user_base_url = f"{tunnels.enter_context(modal.forward(SERVING.user_port)).url}/v1" if user_server else None
+            user_base_url = (
+                external["base_url"] if external else
+                f"{tunnels.enter_context(modal.forward(SERVING.user_port)).url}/v1" if user_server else None
+            )
             invocations = root / "invocations"
             invocations.mkdir(parents=True, exist_ok=True)
             monitors = [monitor_metrics(server, tag, invocations / f"{job['invocation']}.vllm_metrics.jsonl", stop)]
@@ -849,6 +1069,7 @@ def serve(job: dict, lane: modal.Function, *, manifest: dict | None = None, lane
                     "api_key": api_key,
                     "user_base_url": user_base_url,
                     "user_api_key": user_key,
+                    "invocation": job["invocation"],
                     "trials": job["trials"],
                     "smoke_samples": smoke_samples,
                     "concurrency": job["concurrency"] or LANES.concurrency_for(name),
@@ -897,6 +1118,7 @@ def serve(job: dict, lane: modal.Function, *, manifest: dict | None = None, lane
         "user_models": job["user_models"],
         "user_probe": user_probe,
         "user_server_restarts": len(user_restarts),
+        **({"external_user": external["metadata"]} if external else {}),
     }
     path = root / "invocations" / f"{job['invocation']}.json"
     path.write_text(json.dumps(invocation, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -915,6 +1137,133 @@ def serve_and_evaluate(job: dict) -> dict:
     return {**summary, "invocation": {key: value for key, value in invocation.items() if key != "lanes"}}
 
 
+
+def check_deepseek_sampling(server: VllmServer) -> dict:
+    """vLLM 0.28 no longer logs default sampling; verify the pinned config and live overrides."""
+
+    text = "".join(server.lines)
+    required = (
+        f"'override_generation_config': {{'max_new_tokens': {USER.max_new_tokens}}}",
+        "'default_chat_template_kwargs': {'thinking': False}",
+    )
+    if any(value not in text for value in required):
+        raise RuntimeError("DeepSeek startup did not confirm the token cap and thinking=false")
+    config = json.loads((Path(USER.path) / "generation_config.json").read_text())
+    defaults = {key: config[key] for key in ("temperature", "top_p")}
+    defaults["max_tokens"] = USER.max_new_tokens
+    if defaults != USER.expected_generation_defaults:
+        raise RuntimeError(f"DeepSeek pinned sampling defaults changed: {defaults}")
+    return defaults
+
+
+def probe_nonthinking_user(server: VllmServer, key: str) -> dict:
+    """Check auth, response visibility, non-thinking mode, and native tools without a long prefill."""
+
+    status, _ = request_json(server.url("/v1/models"), None, None)
+    if status != 401:
+        raise RuntimeError(f"user endpoint is not authenticated: HTTP {status}")
+    messages = [
+        {"role": "system", "content": "You are a retail customer. You want to return your delivered blue jacket. Your order is #12345. Answer the assistant naturally in one short sentence."},
+        {"role": "user", "content": "How can I help you today?"},
+    ]
+    started = time.monotonic()
+    status, response = request_json(server.url("/v1/chat/completions"), {
+        "model": USER.served_model_name, "messages": messages, "temperature": 0,
+    }, key)
+    elapsed = time.monotonic() - started
+    if status != 200:
+        raise RuntimeError(f"non-thinking probe failed: HTTP {status}: {response}")
+    message = response["choices"][0]["message"]
+    content = message.get("content") or ""
+    if not content.strip() or message.get("reasoning") or message.get("reasoning_content") or any(
+        marker in content for marker in ("<think>", "</think>", "[think]", "[end_think]")
+    ):
+        raise RuntimeError(f"non-thinking user has empty content or reasoning: {message}")
+    if response["choices"][0]["finish_reason"] != "stop":
+        raise RuntimeError(f"user probe did not end normally: {response}")
+    # Telecom users have tools; validate the parser even though this smoke is retail-only.
+    status, tool_response = request_json(server.url("/v1/chat/completions"), {
+        "model": USER.served_model_name, "temperature": 0, "max_tokens": 512,
+        "messages": [{"role": "user", "content": "Call get_weather for Paris."}],
+        "tools": [{"type": "function", "function": {"name": "get_weather", "description": "Get current weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}}],
+    }, key)
+    if status != 200 or not tool_response["choices"][0]["message"].get("tool_calls"):
+        raise RuntimeError(f"DeepSeek tool parser probe failed: HTTP {status}: {tool_response}")
+    call = tool_response["choices"][0]["message"]["tool_calls"][0]["function"]
+    if call["name"] != "get_weather" or json.loads(call["arguments"]).get("city") != "Paris":
+        raise RuntimeError(f"unexpected probe tool: {call}")
+    return {"content": content, "reasoning_absent": True, "tool_call": call,
+            "completion_tokens": response["usage"]["completion_tokens"], "seconds": elapsed,
+            "tokens_per_second": response["usage"]["completion_tokens"] / elapsed}
+
+
+@app.function(
+    image=external_user_image, secrets=[profile_secret], gpu="H200:4", cpu=32, memory=196_608,
+    timeout=SERVING.server_timeout_s,
+    volumes={REMOTE_MODEL_ROOT: model_volume.read_only(), REMOTE_RESULTS_ROOT: results_volume,
+             "/root/.cache/vllm": vllm_cache_volume},
+)
+def evaluate_with_external_user(job: dict) -> dict:
+    """Keep the separate H200 user server alive until the agent's smoke/evaluation finishes."""
+
+    if not EXTERNAL_USER:
+        raise RuntimeError("select TAU_PROFILE=userdeepseek")
+    collection = job.get("work") == "collection"
+    if not collection:
+        summary = summarize_run.remote(job["run_id"], job["tag"], job["smoke_samples"])
+        by_domain = {lane["domain"]: lane for lane in summary["lanes"]}
+        if all(name in by_domain and by_domain[name]["complete"] and not by_domain[name]["failures"]
+               and by_domain[name]["trials"] >= job["trials"] for name in job["domains"]):
+            print("requested conversations already complete; skipping user/agent reload", flush=True)
+            return {**summary, "invocation": {"recovered_complete": True, "domains": job["domains"], "trials": job["trials"]}}
+    root = Path(REMOTE_RESULTS_ROOT) / job["run_id"] / job["tag"] / "invocations"
+    root.mkdir(parents=True, exist_ok=True)
+    key = "sk-" + secrets.token_urlsafe(32)
+    started = time.monotonic()
+    server = VllmServer(SERVING.user_vllm_command(USER, key), SERVING.user_port,
+                        label="[deepseek-user] ", startup_timeout_s=SERVING.user_startup_timeout_s)
+    stop, restarts = threading.Event(), []
+    metadata = {"image": USER.serving_image, "model": USER.model, "revision": USER.revision}
+    try:
+        server.wait_ready()
+        metadata["ready_seconds"] = time.monotonic() - started
+        metadata["gpus"] = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], text=True
+        ).splitlines()
+        check_serving_window(list(server.lines), USER_EXPECTED, legacy_log=False)
+        metadata["generation_defaults"] = check_deepseek_sampling(server)
+        metadata["sampling_validation"] = "pinned generation config and live server overrides"
+        metadata["probe"] = probe_nonthinking_user(server, key)
+        print(f"DeepSeek user ready: {json.dumps(metadata)}", flush=True)
+        (root / f"{job['invocation']}.user.json").write_text(json.dumps(metadata, indent=2) + "\n")
+        results_volume.commit()
+        watch_server(server, "deepseek-user", stop, restarts)
+        monitor = monitor_metrics(server, "deepseek-user", root / f"{job['invocation']}.user.vllm_metrics.jsonl", stop)
+        committer = commit_periodically(results_volume, stop, 120)
+        with modal.forward(SERVING.user_port) as tunnel:
+            worker = serve_and_collect if collection else serve_and_evaluate
+            result = worker.remote({**job, "external_user": {
+                "base_url": f"{tunnel.url}/v1", "api_key": key, "metadata": metadata,
+            }})
+        result["invocation"]["user_server_restarts"] = len(restarts)
+        return result
+    except BaseException as error:
+        metadata["error"] = repr(error)
+        raise
+    finally:
+        stop.set()
+        with server.lock:
+            server.stop()
+        if "monitor" in locals():
+            monitor.join()
+            committer.join()
+        metadata["server_restarts"] = len(restarts)
+        metadata["total_seconds"] = time.monotonic() - started
+        (root / f"{job['invocation']}.user.json").write_text(json.dumps(metadata, indent=2) + "\n")
+        log = "".join(server.lines).replace(key, "<redacted>")
+        (root / f"{job['invocation']}.user.log").write_text(log)
+        results_volume.commit()
+
 @app.function(**SERVER_FUNCTION)
 def serve_and_collect(job: dict) -> dict:
     """Run one collector model on AReaL training tasks (``job["task_ids"]``: {domain: [ids]}), keeping every request."""
@@ -928,6 +1277,22 @@ def serve_and_collect(job: dict) -> dict:
             # vLLM's /tokenize renders a chat exactly as the server does.
             "tokenize_url": base_url[: -len("/v1")] + "/tokenize",
         },
+    )
+    return {"tag": job["tag"], "invocation": invocation}
+
+
+@app.function(**SERVER_FUNCTION)
+def serve_and_branch(job: dict) -> dict:
+    """Run one shard of a branch plan (``job["branch_ids"]``: {domain: [ids]}) with the student and the user."""
+
+    invocation = serve(
+        job,
+        branch_lane,
+        manifest={
+            "branch": {"plan": job["plan"], "plan_sha256": job["plan_sha256"], "shard": job["shard"]},
+            "collection": {"areal": {"repo": AREAL_REPO, "revision": AREAL_REVISION, "tasks_sha256": AREAL_TASKS_SHA256}},
+        },
+        lane_fields=lambda name, base_url: {"branch_ids": job["branch_ids"][name], "plan": job["plan"]},
     )
     return {"tag": job["tag"], "invocation": invocation}
 
@@ -1048,7 +1413,8 @@ def print_comparison(comparison: dict, tags: list[str]) -> None:
     header += "".join(f"{f'{tag}-base [95% CI]':>28}" for tag in others)
     print("\npass^1 (%), mean over trials\n" + header)
     for name, row in comparison["domains"].items():
-        line = name.ljust(14) + f"{row['qwen_reported']:7.1f}"
+        reference = row["qwen_reported"]
+        line = name.ljust(14) + (f"{reference:7.1f}" if reference is not None else " " * 7)
         for tag in tags:
             value = row.get(tag, {}).get("pass_hat_k", {}).get("1")
             line += f"{value:9.1f}" if value is not None else " " * 9
@@ -1091,6 +1457,8 @@ def main(
         summaries = [summarize_run.remote(run, tag, smoke_samples) for tag in tags]
     else:
         print(f"run {run}: models={tags} domains={selected} trials={trials} smoke_samples={smoke_samples}", flush=True)
+        if "qwen35" in tags:
+            print(f"pinned Qwen3.5 baseline: {download_agent_model.remote('qwen35')}", flush=True)
         if USER:
             print(f"user simulator {USER.model}@{USER.revision[:8]}, self-hosted: {download_user_model.remote()}", flush=True)
             users = {USER.model: {"self_hosted": True, "revision": USER.revision}}
@@ -1111,12 +1479,56 @@ def main(
             }
             for tag in tags
         ]
-        calls = [wait_and_evaluate.spawn(job, wait_hours) if wait_hours else serve_and_evaluate.spawn(job) for job in jobs]
+        if EXTERNAL_USER and wait_hours:
+            raise ValueError("external user evaluation does not support checkpoint waiters")
+        evaluator = evaluate_with_external_user if EXTERNAL_USER else serve_and_evaluate
+        calls = [wait_and_evaluate.spawn(job, wait_hours) if wait_hours else evaluator.spawn(job) for job in jobs]
         summaries = [call.get() for call in calls]
         print(json.dumps([summary["invocation"] for summary in summaries], indent=2, sort_keys=True))
     comparison = compare(summaries)
     write_comparison.remote(run, comparison)
     print_comparison(comparison, tags)
+
+
+@app.local_entrypoint()
+def branch(plan: str, run_prefix: str, shards: int = 1, tag: str = "thinking2507", concurrency: int = 0, limit: int = 0) -> None:
+    """Executed branches: the plan (a JSONL on the results volume, from data_curation/branch_outcomes.py) is split by
+    hash into ``shards`` runs ``<run_prefix>-s<k>``, each served on its own node. Finished branches are skipped, so
+    a rerun resumes. ``limit`` keeps the first branches of each domain (a smoke test).
+    """
+
+    import hashlib
+
+    if not run_prefix.startswith("branch-"):
+        raise ValueError("branch run ids start with branch-")
+    resolve_model_path(tag)
+    check_agent_window(PROTOCOL, tag)
+    read = read_branch_plan.remote(plan)
+    print(f"plan {plan} ({read['sha256'][:12]}): " + ", ".join(f"{name} {len(ids)}" for name, ids in read["branches"].items()), flush=True)
+    print(f"user simulator {USER.model}@{USER.revision[:8]}, self-hosted: {download_user_model.remote()}", flush=True)
+    invocation = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-branch"
+    jobs = []
+    for shard in range(shards):
+        ids = {
+            name: [
+                branch_id for branch_id in (sorted(branch_ids)[:limit] if limit else branch_ids)
+                if int(hashlib.sha256(branch_id.encode()).hexdigest(), 16) % shards == shard
+            ]
+            for name, branch_ids in read["branches"].items()
+        }
+        ids = {name: items for name, items in ids.items() if items}
+        if ids:
+            jobs.append(
+                {
+                    "tag": tag, "run_id": f"{run_prefix}-s{shard}", "shard": shard, "domains": sorted(ids),
+                    "branch_ids": ids, "plan": plan, "plan_sha256": read["sha256"], "trials": 1, "smoke_samples": 0,
+                    "concurrency": concurrency,
+                    "user_models": {USER.model: {"self_hosted": True, "revision": USER.revision}},
+                    "invocation": invocation,
+                }
+            )
+    calls = [serve_and_branch.spawn(job) for job in jobs]
+    print(json.dumps([call.get()["invocation"] for call in calls], indent=2, sort_keys=True))
 
 
 @app.local_entrypoint()
@@ -1139,7 +1551,7 @@ def collect(plan: str, concurrency: int = 0) -> None:
     # Downstream stages wait for every collector's "*-collect.json" invocation record.
     invocation = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-collect"
     calls = [
-        serve_and_collect.spawn(
+        (evaluate_with_external_user if EXTERNAL_USER else serve_and_collect).spawn(
             {
                 "tag": tag,
                 "run_id": spec["run_id"],
@@ -1150,6 +1562,7 @@ def collect(plan: str, concurrency: int = 0) -> None:
                 "concurrency": concurrency,
                 "user_models": {USER.model: {"self_hosted": True, "revision": USER.revision}},
                 "invocation": invocation,
+                "work": "collection",
             }
         )
         for tag, by_domain in spec["assignments"].items()

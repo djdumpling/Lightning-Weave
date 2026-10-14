@@ -70,6 +70,7 @@ from data_curation.common import (
 )
 from data_curation.composition import trainable_tokens
 from data_curation.shift_geometry import (
+    OTHER_FLOOR,
     CachedRow,
     Direction,
     bucket_probs,
@@ -85,7 +86,7 @@ from data_curation.shift_geometry import (
 from data_curation.shift_states import STATE_CODE, STATE_TYPES, StateLabeler, TokenTable
 
 SCHEMA_VERSION = "offline_direct_opd_synthetic_shift_v2"
-TRANSFORMS = {"raw", "evidence", "heuristic"}
+TRANSFORMS = {"raw", "evidence", "heuristic", "outcome", "teacher"}
 KL_QUANTILES = (50, 90, 95, 99, 100)
 GATE_KEYS = {"exclude_state_types", "exclude_first_reflection", "prompt_weights"}
 
@@ -98,14 +99,21 @@ class Term:
         if self.transform not in TRANSFORMS:
             raise ValueError(f"term {index}: unknown transform {self.transform!r}")
         heuristic = self.transform == "heuristic"
+        outcome = self.transform == "outcome"
         pushes = spec.get("pushes", [])
-        if heuristic != bool(pushes) or heuristic == ("direction" in spec):
-            raise ValueError(f"term {index}: heuristic terms take pushes and no direction; other terms the reverse")
+        if heuristic != bool(pushes) or (heuristic or outcome) == ("direction" in spec):
+            raise ValueError(
+                f"term {index}: heuristic terms take pushes and no direction, outcome terms advantages and no "
+                "direction; other terms take a direction"
+            )
+        if outcome != ("advantages" in spec):
+            raise ValueError(f"term {index}: outcome terms, and only they, name their per-response advantages")
+        self.advantages = spec.get("advantages")
         unknown = {item["state"] for item in pushes} - set(STATE_TYPES)
         if unknown:
             raise ValueError(f"term {index}: unknown push states {sorted(unknown)}")
         self.pushes = [(STATE_CODE[item["state"]], item["group"], float(item["shift"])) for item in pushes]
-        self.direction = None if heuristic else Direction.from_spec(f"term{index}", spec["direction"])
+        self.direction = None if heuristic or outcome else Direction.from_spec(f"term{index}", spec["direction"])
         self.coef = float(spec.get("coef", 1.0))
         self.gate = spec.get("gate") or {}
         unknown_keys = set(self.gate) - GATE_KEYS
@@ -118,7 +126,9 @@ class Term:
         if unknown:
             raise ValueError(f"term {index}: unknown excluded state types {sorted(unknown)}")
         self.excluded_codes = None if not excluded else np.asarray([STATE_CODE[name] for name in excluded])
-        if self.transform in {"raw", "heuristic"} and self.gate:
+        if self.transform == "teacher" and (len(self.direction.terms) != 1 or float(self.direction.terms[0][1]) != 1.0):
+            raise ValueError(f"term {index}: a teacher term names exactly one source at weight 1 (its post model)")
+        if self.transform in {"raw", "heuristic", "outcome", "teacher"} and self.gate:
             raise ValueError(f"term {index}: {self.transform} terms are controls and take no gates")
         self.equalize = spec.get("equalize") or False  # a null equalize means off, as it did before "auto"
         if self.equalize not in (False, True, "auto"):
@@ -155,6 +165,34 @@ def heuristic_vector(row: CachedRow, pushes, labeler: StateLabeler, codes: np.nd
     return bucket_shift(delta)
 
 
+def outcome_vector(row: CachedRow, advantages: dict[str, float]) -> np.ndarray:
+    """The response's advantage on the bucket of its own sampled token at every position (the remaining-vocabulary
+    bucket when the token was outside the cached candidates), 0 on every other bucket."""
+    if row.sample_id not in advantages:
+        raise KeyError(f"no advantage for {row.sample_id}")
+    tokens = np.asarray(row.response_tokens)[:, None]
+    candidates = np.asarray(row.candidate_ids)
+    hit = candidates == tokens
+    bucket = np.where(hit.any(axis=-1), hit.argmax(axis=-1), candidates.shape[-1])
+    delta = np.zeros((candidates.shape[0], candidates.shape[-1] + 1), dtype=np.float64)
+    delta[np.arange(len(bucket)), bucket] = float(advantages[row.sample_id])
+    return delta
+
+
+def teacher_vector(row: CachedRow, source: str, alpha: float) -> np.ndarray:
+    """α·(log p_T − log b) on K+1 buckets, with p_T the source's post model over the cached candidates plus its
+    remaining mass, so q ∝ b·exp(δ/α) is exactly that model's bucketed distribution: ordinary distillation toward it
+    on the student's own states (a KL budget λ gives the geometric mixture b^(1−λ)·p_T^λ instead)."""
+    if not row.mapped[source][row.loss_mask].all():
+        raise ValueError(f"teacher term reads placeholder scores of unmapped {source} candidates ({row.sample_id})")
+    teacher = np.exp(np.asarray(row.post[source], dtype=np.float64))
+    other = np.clip(1.0 - teacher.sum(axis=-1, keepdims=True), OTHER_FLOOR, None)
+    buckets = np.concatenate([teacher, other], axis=-1)
+    buckets = buckets / buckets.sum(axis=-1, keepdims=True)
+    behavior = bucket_probs(row.behavior_log_probs)
+    return float(alpha) * (np.log(np.clip(buckets, 1e-30, None)) - np.log(behavior))
+
+
 def raw_vector(row: CachedRow, direction: Direction) -> np.ndarray:
     """Σ w (post − pre) on K+1 buckets in the reference composer's float64 order."""
     delta = np.zeros(row.behavior_log_probs.shape, dtype=np.float64)
@@ -172,6 +210,7 @@ class SyntheticComposer:
         *,
         labeler: StateLabeler | None,
         prompt_weights: dict[str, dict[str, float]] | None = None,
+        advantages: dict[str, dict[str, float]] | None = None,
     ):
         self.spec = spec
         self.alpha = float(spec["alpha"])
@@ -194,6 +233,13 @@ class SyntheticComposer:
             values = np.asarray(list(self.prompt_weights[name].values()), dtype=np.float64)
             if not (np.isfinite(values).all() and (values >= 0).all()):
                 raise ValueError(f"prompt weights {name!r} must be finite and non-negative")
+        self.advantages = advantages or {}
+        missing = {term.advantages for term in self.terms if term.advantages} - set(self.advantages)
+        if missing:
+            raise ValueError(f"outcome terms name advantages without --advantages: {sorted(missing)}")
+        for name, values in self.advantages.items():
+            if not np.isfinite(np.asarray(list(values.values()), dtype=np.float64)).all():
+                raise ValueError(f"advantages {name!r} must be finite")
         self.labeler = labeler
         self.multipliers = [1.0 for _ in self.terms]
         self.equalization: dict[int, dict[str, float]] = {}
@@ -259,6 +305,10 @@ class SyntheticComposer:
             return raw_vector(row, term.direction)
         if term.transform == "heuristic":
             return heuristic_vector(row, term.pushes, self.labeler, codes)
+        if term.transform == "outcome":
+            return outcome_vector(row, self.advantages[term.advantages])
+        if term.transform == "teacher":
+            return teacher_vector(row, term.direction.terms[0][0], self.alpha)
         vector = direction_vectors(row, [term.direction], probs)[..., 0]
         return vector * self.gate(term, row, probs, codes)[:, None]
 
@@ -391,6 +441,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--prompt-weights", action="append", default=[], help="NAME=PATH of a JSON {prompt_id: weight} file"
     )
+    parser.add_argument(
+        "--advantages", action="append", default=[], help="NAME=PATH of a JSON {sample_id: advantage} file"
+    )
     parser.add_argument("--calibration-fraction", type=float, default=0.25, help="prompt-stratified sample share")
     parser.add_argument("--output-dir", required=True, type=Path)
     return parser.parse_args()
@@ -405,19 +458,22 @@ def main() -> None:
     untrained = load_untrained(args.untrained)
     table = TokenTable.from_tokenizer_json(args.tokenizer_json) if args.tokenizer_json else None
     weight_files = {name: Path(path) for name, path in (item.split("=", 1) for item in args.prompt_weights)}
+    pairs = (item.split("=", 1) for item in getattr(args, "advantages", None) or [])
+    advantage_files = {name: Path(path) for name, path in pairs}
     composer = SyntheticComposer(
         spec,
         labeler=StateLabeler(table) if table else None,
         prompt_weights={name: json.loads(path.read_text(encoding="utf-8")) for name, path in weight_files.items()},
+        advantages={name: json.loads(path.read_text(encoding="utf-8")) for name, path in advantage_files.items()},
     )
     missing = composer.sources - {args.base_name} - set(donors)
     if missing:
         raise ValueError(f"spec uses sources without --donor: {sorted(missing)}")
     donors = {name: donors[name] for name in sorted(composer.sources - {args.base_name})}
-    compose(args, composer, donors, untrained, weight_files)
+    compose(args, composer, donors, untrained, weight_files, advantage_files)
 
 
-def compose(args, composer, donors, untrained, weight_files=None) -> None:
+def compose(args, composer, donors, untrained, weight_files=None, advantage_files=None) -> None:
     def rows(**kwargs):
         return iter_joined_rows(args.base, donors, base_name=args.base_name, untrained=untrained, **kwargs)
 
@@ -439,6 +495,10 @@ def compose(args, composer, donors, untrained, weight_files=None) -> None:
     if weight_files:
         model["prompt_weights"] = {
             name: {"path": str(path), "sha256": file_sha256(path)} for name, path in sorted(weight_files.items())
+        }
+    if advantage_files:
+        model["advantages"] = {
+            name: {"path": str(path), "sha256": file_sha256(path)} for name, path in sorted(advantage_files.items())
         }
     revision = canonical_hash(model)
     model.update({"model_type": "synthetic_shift_composition", "revision": revision})

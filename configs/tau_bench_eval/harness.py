@@ -264,9 +264,12 @@ class Router:
         self.local = threading.local()
         # Collection only: called with each agent call's routed kwargs and response; returns one request record.
         self.capture: Callable[[dict, Any], dict] | None = None
+        self.user_timing_sink: Callable[[dict], None] | None = None
+        self.reasoning_history = False
 
-    def begin(self) -> None:
+    def begin(self, *, task_id: str | None = None, trial: int | None = None) -> None:
         self.local.agent, self.local.user, self.local.requests = [], [], []
+        self.local.task_id, self.local.trial = task_id, trial
 
     def calls(self) -> tuple[list[dict], list[dict]]:
         return getattr(self.local, "agent", []), getattr(self.local, "user", [])
@@ -275,6 +278,15 @@ class Router:
         return getattr(self.local, "requests", [])
 
     def install(self, module: Any) -> None:
+        if self.reasoning_history and hasattr(module, "to_litellm_messages"):
+            original = module.to_litellm_messages
+            if not getattr(original, "_reasoning_sources", False):
+                def convert(messages):
+                    converted = original(messages)
+                    self.local.source_messages = messages
+                    return converted
+                convert._reasoning_sources = True
+                module.to_litellm_messages = convert
         if not getattr(module.completion, "_routed", False):
             module.completion = self.wrap(module.completion)
 
@@ -282,6 +294,8 @@ class Router:
         def routed(*args: Any, **kwargs: Any) -> Any:
             model = kwargs.get("model")
             if model in self.agent_models:
+                if self.reasoning_history:
+                    kwargs["messages"] = restore_reasoning_messages(self.local.source_messages, kwargs["messages"])
                 kwargs = self.agent.route(kwargs, self.model)
             elif model in self.user_aliases:
                 kwargs = self.user.route(kwargs, self.user_aliases[model])
@@ -322,10 +336,20 @@ class Router:
             }
             if model in self.user_aliases:
                 # litellm cannot price the user API's aliases, so spend comes from its price list.
+                finished_at = time.time()
+                entry.update({
+                    "started_at_unix_s": round(finished_at - seconds, 3),
+                    "finished_at_unix_s": round(finished_at, 3),
+                    "turn_index": len(getattr(self.local, "user", [])),
+                    "task_id": getattr(self.local, "task_id", None),
+                    "trial": getattr(self.local, "trial", None),
+                })
                 entry["model"] = getattr(response, "model", None)
                 input_price, output_price = self.user_prices[model]
                 entry["cost"] = (entry["prompt_tokens"] * input_price + entry["completion_tokens"] * output_price) / 1e6
             getattr(self.local, "user" if model in self.user_aliases else "agent", []).append(entry)
+            if model in self.user_aliases and self.user_timing_sink is not None:
+                self.user_timing_sink(dict(entry))
         except Exception:  # noqa: BLE001 - recording is observation only and must never fail a turn
             pass
 
@@ -378,6 +402,20 @@ def load_tasks(suite: str, domain: str, protocol: Any) -> list[tuple[str, Any]]:
         # The human user strategy makes no API call when the env is built.
         env = get_env(domain, user_strategy="human", user_model="none", task_split=protocol.tau1_task_split, task_index=0)
         return [(str(index), index) for index in range(len(env.tasks))]
+    if suite == "tau2c":
+        # tau2 with corrected task definitions (config.CORRECTED_TASKS), checked against their pinned hash.
+        from tau2.data_model.tasks import Task
+
+        try:  # beside config.py in the containers; the package path locally
+            from config import CORRECTED_TASKS, CORRECTED_TASKS_ROOT
+        except ImportError:
+            from configs.tau_bench_eval.config import CORRECTED_TASKS, CORRECTED_TASKS_ROOT
+
+        relative, sha256 = CORRECTED_TASKS[domain]
+        data = (Path(CORRECTED_TASKS_ROOT) / Path(relative).name).read_bytes()
+        if hashlib.sha256(data).hexdigest() != sha256:
+            raise ConfigurationError(f"corrected {domain} tasks do not match their pinned hash")
+        return [(task.id, task) for task in (Task.model_validate(item) for item in json.loads(data))]
     from tau2.run import get_tasks
 
     return [(task.id, task) for task in get_tasks(domain)]
@@ -415,6 +453,36 @@ def run_tau1(domain: str, task_index: int, trial: int, user_model: str, protocol
     }
 
 
+def agent_llm_args(protocol: Any) -> dict:
+    return getattr(protocol, "agent_llm_args", {"temperature": protocol.temperature, "top_p": protocol.top_p})
+
+
+def restore_reasoning_messages(sources: list, converted: list[dict]) -> list[dict]:
+    """Restore assistant reasoning on the agent wire; the native template decides its visibility."""
+    if len(sources) != len(converted):
+        raise ConfigurationError("Cannot align tau2 history with its API conversion")
+    result = []
+    for source, original in zip(sources, converted):
+        wire = dict(original)
+        result.append(wire)
+        if wire.get("role") != "assistant":
+            continue
+        raw = source.get("raw_data") if isinstance(source, dict) else getattr(source, "raw_data", None)
+        raw = raw if isinstance(raw, dict) else {}
+        candidates = [source, raw.get("message"), raw]
+        for candidate in candidates:
+            for field in ("reasoning_content", "reasoning"):
+                value = candidate.get(field) if isinstance(candidate, dict) else getattr(candidate, field, None)
+                if isinstance(value, str) and value.strip():
+                    # vLLM 0.28 reads the canonical wire field `reasoning` and
+                    # exposes both names to Qwen's native reasoning_content template.
+                    wire["reasoning"] = value
+                    break
+            if "reasoning" in wire:
+                break
+    return result
+
+
 def run_tau2(domain: str, task: Any, trial: int, seed: int, user_model: str, protocol: Any) -> dict:
     """One conversation exactly as tau2-bench's ``run_tasks`` runs it."""
 
@@ -427,7 +495,7 @@ def run_tau2(domain: str, task: Any, trial: int, seed: int, user_model: str, pro
         agent=protocol.tau2_agent,
         user=protocol.tau2_user,
         llm_agent=f"openai/{protocol.served_model_name}",
-        llm_args_agent={"temperature": protocol.temperature, "top_p": protocol.top_p},
+        llm_args_agent=agent_llm_args(protocol),
         llm_user=user_model,
         llm_args_user={"temperature": protocol.tau2_user_temperature},
         max_steps=protocol.tau2_max_steps,
@@ -458,7 +526,7 @@ def run_conversation(domain: Any, job: Job, protocol: Any, router: Router, play:
     extra record ``fields``); by default it is the harness's own scored conversation.
     """
 
-    router.begin()
+    router.begin(task_id=job.task_id, trial=job.trial)
     started = time.time()
     if play is None:
         if domain.suite == "tau1":
@@ -610,7 +678,7 @@ def capture_agent_call(kwargs: dict, response: Any, tokenize: Callable[[dict], d
     tools = kwargs.get("tools")
     choice = response.choices[0]
     message = choice.message
-    reasoning = getattr(message, "reasoning_content", None)
+    reasoning = getattr(message, "reasoning_content", None) or getattr(message, "reasoning", None)
     if reasoning is None:
         extra = getattr(message, "provider_specific_fields", None) or {}
         reasoning = extra.get("reasoning_content") or extra.get("reasoning")
@@ -619,7 +687,7 @@ def capture_agent_call(kwargs: dict, response: Any, tokenize: Callable[[dict], d
         "messages": messages,
         "tools": tools,
         "tool_choice": kwargs.get("tool_choice"),
-        "sampling": {key: kwargs.get(key) for key in ("temperature", "top_p", "seed")},
+        "sampling": {key: kwargs.get(key) for key in ("temperature", "top_p", "seed", "presence_penalty", "max_tokens", "extra_body")},
         "response": {
             "content": message.content,
             "reasoning_content": reasoning,
@@ -632,6 +700,8 @@ def capture_agent_call(kwargs: dict, response: Any, tokenize: Callable[[dict], d
         "prompt_tokens": getattr(usage, "prompt_tokens", None),
         "completion_tokens": getattr(usage, "completion_tokens", None),
         "server_render": tokenize({"messages": messages, "tools": tools}),
+        **({"actual_prompt_token_ids": pack_tokens(response.prompt_token_ids)}
+           if getattr(response, "prompt_token_ids", None) else {}),
     }
 
 
@@ -691,7 +761,7 @@ def run_areal_episode(raw: dict, databases: TaskDatabases, seed: int, user_model
         tools=environment.get_tools(),
         domain_policy=environment.get_policy(),
         llm=f"openai/{protocol.served_model_name}",
-        llm_args={"temperature": protocol.temperature, "top_p": protocol.top_p},
+        llm_args=agent_llm_args(protocol),
     )
     try:
         user_tools = environment.get_user_tools()
@@ -720,6 +790,124 @@ def run_areal_episode(raw: dict, databases: TaskDatabases, seed: int, user_model
         "termination": simulation.termination_reason.value,
         "result": simulation.model_dump(mode="json"),
         "fields": {"db_path": raw["db_path"]},
+    }
+
+
+def areal_db_reward(raw: dict, databases: TaskDatabases, messages: list) -> float:
+    """tau2's reward for an AReaL airline/retail task: its criteria leave reward_basis unset (tau2's DB and
+    COMMUNICATE default) with nothing to communicate, so it is the database check: the trajectory replayed on a
+    fresh copy of the task's database against the gold actions replayed on another."""
+
+    from importlib import import_module
+
+    from tau2.data_model.tasks import RewardType, Task
+    from tau2.evaluator.evaluator_env import EnvironmentEvaluator
+
+    record = {key: value for key, value in raw.items() if key not in ("db_path", "initial_state")}
+    if isinstance(record.get("evaluation_criteria"), str):
+        record["evaluation_criteria"] = json.loads(record["evaluation_criteria"])
+    task = Task.model_validate(record)
+    criteria = task.evaluation_criteria
+    # tau2 fills an unset reward_basis with its default, DB and COMMUNICATE.
+    default = {RewardType.DB, RewardType.COMMUNICATE}
+    if criteria is None or set(criteria.reward_basis) != default or criteria.communicate_info or criteria.nl_assertions:
+        raise ConfigurationError(f"{task.id}: only database-graded AReaL tasks are supported")
+    domain = raw["user_scenario"]["instructions"]["domain"]
+    module = import_module(f"tau2.domains.{domain}.environment")
+    info = EnvironmentEvaluator.calculate_reward(
+        environment_constructor=lambda solo_mode=False: module.get_environment(db=databases.fresh(domain, raw["db_path"])),
+        task=task,
+        full_trajectory=messages,
+    )
+    return float(info.reward)
+
+
+class BranchSetupError(Exception):
+    """The recorded history did not replay on the task's database; the branch has no outcome."""
+
+
+def run_areal_branch(raw: dict, databases: TaskDatabases, branch: dict, user_model: str, protocol: Any) -> dict:
+    """One executed branch (data_curation/branch_outcomes.py): the episode's history up to a state, a cached
+    response as the agent's message there, then the student and the user play on; graded like the evaluation.
+
+    tau2 restores the state from ``initial_state.message_history``: the environment replays the history's calls
+    (checking every recorded result) and the orchestrator resumes from its last message. A trailing branch call
+    has no result yet, so it is kept out of the replay and executed as the first step.
+    """
+
+    from importlib import import_module
+
+    from pydantic import TypeAdapter
+
+    from tau2.agent.llm_agent import LLMAgent
+    from tau2.data_model.message import AssistantMessage, Message
+    from tau2.data_model.tasks import Task
+    from tau2.orchestrator.orchestrator import Orchestrator
+    from tau2.user.user_simulator import UserSimulator
+
+    class BranchOrchestrator(Orchestrator):
+        def initialize(self):
+            try:
+                super().initialize()
+            except Exception as exc:  # noqa: BLE001 - a replay mismatch is the record's, not the model's
+                raise BranchSetupError(f"{type(exc).__name__}: {exc}") from exc
+
+        def _initialize_environment(self, initialization_data, initialization_actions, message_history):
+            last = message_history[-1] if message_history else None
+            if isinstance(last, AssistantMessage) and last.is_tool_call():
+                message_history = message_history[:-1]
+            super()._initialize_environment(initialization_data, initialization_actions, message_history)
+
+    domain = raw["user_scenario"]["instructions"]["domain"]
+    history = TypeAdapter(list[Message]).validate_python([*branch["history"], branch["branch"]])
+    task = Task.model_validate(
+        {
+            **{key: raw[key] for key in ("id", "user_scenario") if key in raw},
+            "initial_state": {"message_history": [message.model_dump(mode="json") for message in history]},
+        }
+    )
+    environment = import_module(f"tau2.domains.{domain}.environment").get_environment(
+        db=databases.fresh(domain, raw["db_path"])
+    )
+    agent = LLMAgent(
+        tools=environment.get_tools(),
+        domain_policy=environment.get_policy(),
+        llm=f"openai/{protocol.served_model_name}",
+        llm_args={"temperature": protocol.temperature, "top_p": protocol.top_p},
+    )
+    try:
+        user_tools = environment.get_user_tools()
+    except Exception:  # noqa: BLE001 - as run_task: domains without user tools raise
+        user_tools = None
+    user = UserSimulator(
+        tools=user_tools,
+        instructions=str(task.user_scenario),
+        llm=user_model,
+        llm_args={"temperature": protocol.tau2_user_temperature},
+    )
+    fields = {"sample_id": branch["sample_id"], "prompt_id": branch["prompt_id"], "areal_task_id": branch["task_id"]}
+    try:
+        simulation = BranchOrchestrator(
+            domain=domain,
+            agent=agent,
+            user=user,
+            environment=environment,
+            task=task,
+            max_steps=protocol.tau2_max_steps,
+            max_errors=protocol.tau2_max_errors,
+            seed=branch["seed"],
+        ).run()
+    except BranchSetupError as exc:
+        return {"reward": -1.0, "termination": "branch_setup_error", "result": None,
+                "fields": {**fields, "outcome": None, "setup_error": str(exc)[:4_000]}}
+    termination = simulation.termination_reason.value
+    # As tau2's evaluate_simulation: a run cut off by errors or the step limit scores 0.
+    reward = 0.0 if termination in ("too_many_errors", "max_steps") else areal_db_reward(raw, databases, simulation.messages)
+    return {
+        "reward": reward,
+        "termination": termination,
+        "result": simulation.model_dump(mode="json"),
+        "fields": {**fields, "outcome": reward, "action_reward": action_reward(raw, simulation.messages)},
     }
 
 

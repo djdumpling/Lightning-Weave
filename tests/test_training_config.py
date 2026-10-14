@@ -108,6 +108,8 @@ def test_dry_run_has_no_workspace_upload_and_binds_local_dashboard():
         "--dry-run",
     ], check=True, capture_output=True, text=True)
     lines = process.stdout.splitlines()
+    # any Ray head left in a reused container is stopped before this job's head starts
+    assert lines.index("ray stop --force") < next(i for i, line in enumerate(lines) if line.startswith("ray start"))
     ray_start = shlex.split(next(line for line in lines if line.startswith("ray start")))
     assert ray_start[ray_start.index("--dashboard-host") + 1] == "127.0.0.1"
     ray_submit = shlex.split(next(line for line in lines if line.startswith("ray job submit")))

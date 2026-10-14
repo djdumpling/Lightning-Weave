@@ -49,25 +49,41 @@ BASE_REVISION = "1cfa9a7208912126459214e8b04321603b3df60c"
 
 # The LoopTool OPD run's post anchor, at the same revision.
 THINKING_2507_REVISION = "768f209d9ea81521153ed38c47d515654e938aea"
+QWEN35_MODEL = "Qwen/Qwen3.5-4B"
+QWEN35_REVISION = "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
 
 # Every model is served under one name so harness requests are identical.
 MODELS = {
+    "qwen35": f"{REMOTE_MODEL_ROOT}/models--Qwen--Qwen3.5-4B/snapshots/{QWEN35_REVISION}",
     "base": f"{REMOTE_MODEL_ROOT}/models--Qwen--Qwen3-4B/snapshots/{BASE_REVISION}",
     "opd": f"{REMOTE_CHECKPOINT_ROOT}/looptool-offline-dopd-qwen3-4b-v1/hf",
     "thinking2507": f"{REMOTE_MODEL_ROOT}/models--Qwen--Qwen3-4B-Thinking-2507/snapshots/{THINKING_2507_REVISION}",
 }
 
+# The Qwen3.5 transfer experiment exports a language-only serving wrapper.
+# These additive tags preserve every existing model path and protocol digest.
+QWEN35_TRANSFER_TAGS = {
+    f"qwen35-retail-s{seed}": f"{REMOTE_CHECKPOINT_ROOT}/qwen35-retail-uniform-20261012-v1/seed{seed}/vllm"
+    for seed in (1234, 5678, 9012)
+}
+MODELS.update(QWEN35_TRANSFER_TAGS)
+
 # Agent-efficiency students (configs/agent_eff), addressed as in the BFCL eval:
-# ``ae.<arm>.<variant>[.s<training seed>]``. All are trained from Qwen3-4B.
+# ``ae.<arm>.<variant>[.s<training seed>]``. All are trained from Qwen3-4B, except the arms listed here, trained
+# from Qwen3-4B-Thinking-2507 (configs/agent_eff/config.py THINKING_2507_ARMS), which keep its native window.
 AGENT_EFF_PREFIX = "ae."
 AGENT_EFF_ROOT = f"{REMOTE_CHECKPOINT_ROOT}/agent-eff"
 AGENT_EFF_DEFAULT_SEED = 1234
+THINKING_2507_ARMS = frozenset({"fresh2507", "retail2507", "retailcap2507", "retailuni2507"})
 
 # Qwen3-4B's config.json max_position_embeddings: 32,768 output + 8,192 prompt.
 NATIVE_MAX_MODEL_LEN = 40_960
 # Each agent's native window (config.json max_position_embeddings); without
 # YaRN, the serving window must fit inside it.
-MODEL_MAX_POSITIONS = {"base": NATIVE_MAX_MODEL_LEN, "opd": NATIVE_MAX_MODEL_LEN, "thinking2507": 262_144}
+MODEL_MAX_POSITIONS = {"base": NATIVE_MAX_MODEL_LEN, "opd": NATIVE_MAX_MODEL_LEN, "thinking2507": 262_144, "qwen35": 262_144}
+
+
+MODEL_MAX_POSITIONS.update({tag: 262_144 for tag in QWEN35_TRANSFER_TAGS})
 
 
 def agent_eff_path(tag: str) -> str | None:
@@ -94,6 +110,8 @@ def model_path(tag: str) -> str:
 
 def max_positions(tag: str) -> int:
     model_path(tag)
+    if agent_eff_path(tag) and tag[len(AGENT_EFF_PREFIX) :].split(".")[0] in THINKING_2507_ARMS:
+        return MODEL_MAX_POSITIONS["thinking2507"]
     return MODEL_MAX_POSITIONS.get(tag, NATIVE_MAX_MODEL_LEN)
 
 # Fresh-state collection runs Qwen3-4B students on AReaL's tau2 training tasks (each with its own database),
@@ -118,6 +136,18 @@ USER_ALIASES = {"gpt-4o-2024-08-06": "openai/gpt-4o", "gpt-4.1-2025-04-14": "ope
 # 2026-09-24 (no cache discount listed). Used only to report spend.
 USER_PRICES = {"gpt-4o-2024-08-06": (2.5, 10.0), "gpt-4.1-2025-04-14": (2.0, 8.0)}
 
+# Retail with the task corrections of tau3-bench 1.0.0 (sierra-research/tau2-bench 01e812d, 2026-03-18): 27 of the 114
+# tasks changed instructions, gold actions or required communication; the retail database and policy are byte-identical
+# to the pinned TAU2_COMMIT's. tau3 also moved grading to DB + NL assertions (an LLM judge), which the pinned evaluator
+# cannot score, so suite "tau2c" runs the pinned tau2 code on the 27 corrected task definitions graded as v0.1.3 grades
+# (DB + COMMUNICATE; their reward_basis is dropped). With the pinned run's 87 unchanged tasks this gives the corrected
+# 114-task retail score. tasks/tau3_retail_tasks.json is the full upstream file the 27 were taken from.
+TAU3_COMMIT = "01e812d1d1c4df6d8d2299bf175e482527112244"
+CORRECTED_TASKS = {
+    "retail": ("tasks/tau3_retail_corrected27_v013_grading.json", "bedf6829e3eeecc4c8020513884638f80c9bad995db27cc65f1ff684cdc20ddf")
+}
+CORRECTED_TASKS_ROOT = "/root/corrected_tasks"
+
 # Qwen3-4B (thinking) as reported in the Qwen3-4B-Thinking-2507 model card. Each
 # value is an exact multiple of 100/tasks (for example 32.0 = 16/50), so Qwen
 # ran one trial per task. Reference only; not part of the protocol.
@@ -136,7 +166,7 @@ QWEN_REPORTED_2507 = {
     "tau2_airline": 58.0,
     "tau2_telecom": 27.2,
 }
-REFERENCE = {"base": QWEN_REPORTED, "opd": QWEN_REPORTED, "thinking2507": QWEN_REPORTED_2507}
+REFERENCE = {"base": QWEN_REPORTED, "opd": QWEN_REPORTED, "thinking2507": QWEN_REPORTED_2507, "qwen35": {}}
 
 
 @dataclass(frozen=True)
@@ -182,6 +212,29 @@ class UserServer:
         return {**USER_GENERATION_DEFAULTS[self.model], "max_tokens": self.max_new_tokens}
 
 
+@dataclass(frozen=True)
+class DeepSeekUserServer(UserServer):
+    """DeepSeek runs in its own modern serving container; old profiles retain their hashes."""
+
+    tensor_parallel_size: int = 1
+    data_parallel_size: int = 4
+    max_new_tokens: int = 8_192
+    tool_call_parser: str = "deepseek_v4"
+    reasoning_parser: str | None = "deepseek_v4"
+    tokenizer_mode: str = "deepseek_v4"
+    thinking: bool = False
+    # Official v0.28.0, resolved to its immutable linux/amd64 manifest.
+    serving_image: str = "vllm/vllm-openai@sha256:2286e8533ca8b6bc777594bae30524f1426ba46ca21797524e06df6a94b06635"
+
+    @property
+    def gpus(self) -> int:
+        return self.tensor_parallel_size * self.data_parallel_size
+
+
+USER_DEEPSEEK = DeepSeekUserServer(
+    model="deepseek-ai/DeepSeek-V4-Flash-0731",
+    revision="7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+)
 USER_30B = UserServer(model="Qwen/Qwen3-30B-A3B-Thinking-2507", revision="144afc2f379b542fdd4e85a1fcd5e1f79112d95d")
 # Non-thinking, so it replies in one line; 8,192 tokens bounds a degenerate greedy reply.
 USER_235B = UserServer(
@@ -191,6 +244,7 @@ USER_235B = UserServer(
     reasoning_parser=None,
 )
 USER_GENERATION_DEFAULTS = {
+    USER_DEEPSEEK.model: {"temperature": 1.0, "top_p": 1.0},
     USER_30B.model: {"temperature": 0.6, "top_k": 20, "top_p": 0.95},
     USER_235B.model: {"temperature": 0.7, "top_k": 20, "top_p": 0.8},
 }
@@ -267,8 +321,10 @@ class Protocol:
         names = [domain.name for domain in self.domains]
         if len(set(names)) != len(names):
             raise ValueError(f"duplicate domains: {names}")
-        if any(domain.suite not in ("tau1", "tau2") for domain in self.domains):
-            raise ValueError("every domain belongs to tau1 or tau2")
+        if any(domain.suite not in ("tau1", "tau2", "tau2c") for domain in self.domains):
+            raise ValueError("every domain belongs to tau1, tau2, or tau2c (tau2 with corrected task definitions)")
+        if any(domain.suite == "tau2c" and domain.domain not in CORRECTED_TASKS for domain in self.domains):
+            raise ValueError("tau2c covers only the domains with pinned corrected tasks")
         if not 0 < self.max_new_tokens < self.max_model_len:
             raise ValueError("max_new_tokens must fit inside max_model_len")
         if self.user_server is not None:
@@ -296,11 +352,45 @@ class Protocol:
             "tau1": TAU1_COMMIT,
             "tau2": TAU2_COMMIT,
             "dependency_cutoff": DEPENDENCY_CUTOFF,
-            "serving_image": SERVING_IMAGE,
+            "serving_image": getattr(self, "serving_image", SERVING_IMAGE),
         }
 
     def digest(self) -> str:
         return hashlib.sha256(json.dumps(self.resolved(), sort_keys=True).encode()).hexdigest()[:12]
+
+
+@dataclass(frozen=True)
+class Qwen35Protocol(Protocol):
+    """Native Qwen3.5 tool/think format on a modern image; public history as in the 2507 runs."""
+
+    serving_image: str = USER_DEEPSEEK.serving_image
+    max_model_len: int = 65_536
+    tool_call_parser: str = "qwen3_coder"
+    reasoning_parser: str = "qwen3"
+    enable_thinking: bool = True
+    language_model_only: bool = True
+
+
+@dataclass(frozen=True)
+class Qwen35MentorProtocol(Qwen35Protocol):
+    """Mentor's 2026-10-12 protocol, with the untouched native last-user reasoning gate."""
+
+    reasoning_history: str = "native_current_step_v1"
+    temperature: float = 1.0
+    expected_generation_defaults: dict[str, float] = field(default_factory=lambda: {
+        "temperature": 1.0, "top_p": .95, "top_k": 20, "min_p": 0.0,
+        "presence_penalty": 1.5, "repetition_penalty": 1.0, "max_tokens": 32_768,
+    })
+
+    @property
+    def agent_llm_args(self) -> dict:
+        defaults = self.expected_generation_defaults
+        return {
+            "temperature": self.temperature, "top_p": self.top_p,
+            "presence_penalty": defaults["presence_penalty"], "max_tokens": self.max_new_tokens,
+            "extra_body": {key: defaults[key] for key in ("top_k", "min_p", "repetition_penalty")}
+                          | {"chat_template_kwargs": {"enable_thinking": True}, "return_token_ids": True},
+        }
 
 
 @dataclass(frozen=True)
@@ -343,6 +433,8 @@ class Serving:
         return self.gpu_for(None)
 
     def gpu_for(self, user_server: UserServer | None) -> list[str]:
+        if isinstance(user_server, DeepSeekUserServer):
+            return self.gpu_for(None)
         total = self.gpus + (user_server.tensor_parallel_size if user_server else 0)
         types = USER_GPU_TYPES.get(user_server.model, self.gpu_types) if user_server else self.gpu_types
         return [f"{gpu_type}:{total}" for gpu_type in types]
@@ -375,6 +467,20 @@ class Serving:
             "--reasoning-parser", protocol.reasoning_parser,
             "--uvicorn-log-level", "warning",
         ]
+        if isinstance(protocol, Qwen35Protocol):
+            # This checkpoint has no generation_config.json. Make its benchmark
+            # sampling explicit, including top-k, rather than use neutral defaults.
+            command[command.index("--override-generation-config") + 1] = json.dumps({
+                "temperature": protocol.temperature, "top_p": protocol.top_p, "top_k": 20,
+                "max_new_tokens": protocol.max_new_tokens,
+            })
+            command += ["--language-model-only", "--default-chat-template-kwargs",
+                        json.dumps({"enable_thinking": protocol.enable_thinking})]
+        if isinstance(protocol, Qwen35MentorProtocol):
+            command[command.index("--override-generation-config") + 1] = json.dumps({
+                **{key: value for key, value in protocol.expected_generation_defaults.items() if key != "max_tokens"},
+                "max_new_tokens": protocol.max_new_tokens,
+            })
         if protocol.rope_scaling is not None:
             command += ["--hf-overrides", json.dumps({"rope_scaling": protocol.rope_scaling})]
         if self.disable_cascade_attn:
@@ -382,6 +488,26 @@ class Serving:
         return command
 
     def user_vllm_command(self, user_server: UserServer, api_key: str) -> list[str]:
+        if isinstance(user_server, DeepSeekUserServer):
+            return [
+                "vllm", "serve", user_server.path,
+                "--served-model-name", user_server.served_model_name,
+                "--host", "0.0.0.0", "--port", str(self.user_port), "--api-key", api_key,
+                "--dtype", user_server.dtype, "--seed", str(user_server.seed),
+                "--max-model-len", str(user_server.max_model_len),
+                "--tensor-parallel-size", str(user_server.tensor_parallel_size),
+                "--data-parallel-size", str(user_server.data_parallel_size), "--enable-expert-parallel",
+                "--max-num-seqs", "64", "--max-num-batched-tokens", str(self.max_num_batched_tokens),
+                "--gpu-memory-utilization", "0.9", "--kv-cache-dtype", "fp8", "--block-size", "256",
+                "--trust-remote-code", "--tokenizer-mode", user_server.tokenizer_mode,
+                "--enable-auto-tool-choice", "--tool-call-parser", user_server.tool_call_parser,
+                "--reasoning-parser", user_server.reasoning_parser,
+                "--reasoning-config", json.dumps({"reasoning_parser": "deepseek_v4", "reasoning_start_str": "", "reasoning_end_str": ""}),
+                "--default-chat-template-kwargs", json.dumps({"thinking": user_server.thinking}),
+                "--generation-config", "auto",
+                "--override-generation-config", json.dumps({"max_new_tokens": user_server.max_new_tokens}),
+                "--disable-cascade-attn", "--uvicorn-log-level", "warning",
+            ]
         command = [
             "vllm", "serve", user_server.path,
             "--served-model-name", user_server.served_model_name,
@@ -477,11 +603,42 @@ PROFILES = {
     # The same 235B user for Qwen3-4B agents (base, the LoopTool student, the
     # agent-efficiency students): prime's agent settings (native 40,960 window,
     # qwen3 parser, thinking-mode sampling), so only the user differs from prime.
+    # user235b on retail with the tau3 task corrections (suite tau2c): the same agents, user, code, database and
+    # policy; only the 27 corrected task definitions differ. Its own run id.
+    "user235b-corrected": Protocol(
+        domains=(Domain("tau2c", "retail", 27, USER_235B.model),),
+        max_model_len=65_536,
+        reasoning_parser="deepseek_r1",
+        user_server=USER_235B,
+    ),
     "user235b-4b": Protocol(
         domains=tuple(
             Domain("tau2", domain, tasks, USER_235B.model) for domain, tasks in (("retail", 114), ("airline", 50), ("telecom", 114))
         ),
         user_server=USER_235B,
+    ),
+    "userdeepseek": Protocol(
+        domains=tuple(
+            Domain("tau2", domain, tasks, USER_DEEPSEEK.model)
+            for domain, tasks in (("retail", 114), ("airline", 50), ("telecom", 114))
+        ),
+        max_model_len=65_536,
+        reasoning_parser="deepseek_r1",
+        user_server=USER_DEEPSEEK,
+    ),
+    "userdeepseek-qwen35": Qwen35Protocol(
+        domains=tuple(
+            Domain("tau2", domain, tasks, USER_DEEPSEEK.model)
+            for domain, tasks in (("retail", 114), ("airline", 50), ("telecom", 114))
+        ),
+        user_server=USER_DEEPSEEK,
+    ),
+    "userdeepseek-qwen35-mentor": Qwen35MentorProtocol(
+        domains=tuple(
+            Domain("tau2", domain, tasks, USER_DEEPSEEK.model)
+            for domain, tasks in (("retail", 114), ("airline", 50), ("telecom", 114))
+        ),
+        user_server=USER_DEEPSEEK,
     ),
 }
 # Chosen by the launcher (TAU_PROFILE) and passed to every container, so remote

@@ -219,6 +219,37 @@ def _score_logits(logits, targets, response_tokens, score_field, support_width):
     return (scores[:, 0] if score_field == "student_ref_sampled_log_probs" else scores).cpu().tolist()
 
 
+def score_qwen35_sequence(
+    model, metadata, score_field, *, device, chunk_size,
+    normalization_vocab_size=None, token_projection=None, _prepared=None,
+):
+    """Preserve the hybrid state with one decoder pass; bound only LM-head logits.
+
+    Transformers 5.5.3 restarts Qwen3.5 GDN state when a cached continuation
+    contains multiple tokens. Streaming context chunks therefore silently score
+    the wrong history. A complete text-decoder pass avoids that unsupported
+    cache path without allocating sequence_length × vocab_size logits.
+    """
+    import torch
+    if token_projection is not None:
+        raise ValueError("Qwen3.5 full-context scoring requires matching token IDs")
+    context, targets, indices = _prepared or _prepare_scoring_row(metadata, score_field, None)
+    width = len(metadata["candidate_ids"][0]) if score_field == "student_support_topk" else 0
+    chunks = []
+    with torch.inference_mode():
+        input_ids = torch.tensor([context], dtype=torch.long, device=device)
+        hidden = model.model(input_ids=input_ids, use_cache=False).last_hidden_state[0]
+        for start in range(0, len(indices), chunk_size):
+            end = min(start + chunk_size, len(indices))
+            positions = torch.tensor(indices[start:end], dtype=torch.long, device=device)
+            logits = model.lm_head(hidden.index_select(0, positions)).float()[..., :normalization_vocab_size]
+            chunks.append(_score_logits(logits, targets[start:end], metadata["response_tokens"][start:end], score_field, width))
+            del logits
+    if score_field == "student_support_topk":
+        return {key: [value for chunk in chunks for value in chunk[key]] for key in chunks[0]}
+    return [value for chunk in chunks for value in chunk]
+
+
 def score_sequence(
     model,
     metadata,
@@ -232,6 +263,11 @@ def score_sequence(
 ):
     """Stream cached logits at ordinary or sparse cross-tokenizer boundaries."""
     import torch
+
+    if getattr(getattr(model, "config", None), "model_type", None) == "qwen3_5_text":
+        return score_qwen35_sequence(model, metadata, score_field, device=device,
+            chunk_size=chunk_size, normalization_vocab_size=normalization_vocab_size,
+            token_projection=token_projection, _prepared=_prepared)
 
     context, targets, indices = (
         _prepare_scoring_row(metadata, score_field, token_projection) if _prepared is None else _prepared
@@ -280,6 +316,14 @@ def score_sequence_batch(
 ):
     """Batch short contexts; stream long ones using the same prepared rows."""
     import torch
+
+    if getattr(getattr(model, "config", None), "model_type", None) == "qwen3_5_text":
+        return [
+            score_qwen35_sequence(model, row, score_field, device=device,
+                chunk_size=chunk_size or 256, normalization_vocab_size=normalization_vocab_size,
+                token_projection=token_projection)
+            for row in metadata_rows
+        ]
 
     prepared = [_prepare_scoring_row(row, score_field, token_projection) for row in metadata_rows]
     max_length = max(len(context) for context, _, _ in prepared)

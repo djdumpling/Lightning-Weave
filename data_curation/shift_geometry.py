@@ -146,6 +146,8 @@ class CachedRow:
     mapped: dict[str, np.ndarray] = field(default_factory=dict)
     trained: dict[str, np.ndarray] = field(default_factory=dict)
     support: dict[str, np.ndarray] = field(default_factory=dict)  # [T]
+    # Each source's post-anchor log-probabilities of the cached candidates (full-vocabulary normalized), [T, K].
+    post: dict[str, np.ndarray] = field(default_factory=dict)
 
     def valid(self, source: str) -> np.ndarray:
         return self.mapped[source] & self.trained[source]
@@ -234,6 +236,7 @@ def iter_joined_rows(
                 mapped, trained = source_masks(columns, index, candidates, untrained.get(name, set()))
                 valid = mapped & trained
                 row.shifts[name] = post - pre
+                row.post[name] = post
                 row.mapped[name] = mapped
                 row.trained[name] = trained
                 # Unmapped entries hold placeholder scores, so only valid candidates count.

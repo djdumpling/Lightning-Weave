@@ -1,0 +1,51 @@
+{
+ "domains": [
+  "tau2_retail"
+ ],
+ "groups": {
+  "2507 base": [
+   "thinking2507"
+  ],
+  "agentforge": [
+   "ae.retail2507.agentforge",
+   "ae.retail2507.agentforge.s5678",
+   "ae.retail2507.agentforge.s9012"
+  ],
+  "agentforge-parent-matched": [
+   "ae.retail2507.agentforge-parent-matched",
+   "ae.retail2507.agentforge-parent-matched.s5678",
+   "ae.retail2507.agentforge-parent-matched.s9012"
+  ],
+  "agentforge-distill-matched": [
+   "ae.retail2507.agentforge-distill-matched",
+   "ae.retail2507.agentforge-distill-matched.s5678",
+   "ae.retail2507.agentforge-distill-matched.s9012"
+  ]
+ },
+ "contrasts": {
+  "agentforge (mentor's recipe) - 2507 base": {
+   "agentforge": 1,
+   "2507 base": -1
+  },
+  "agentforge-parent-matched - 2507 base": {
+   "agentforge-parent-matched": 1,
+   "2507 base": -1
+  },
+  "agentforge-distill-matched - 2507 base": {
+   "agentforge-distill-matched": 1,
+   "2507 base": -1
+  },
+  "targeted reference vs base reference (parent - agentforge)": {
+   "agentforge-parent-matched": 1,
+   "agentforge": -1
+  },
+  "distillation vs base reference (distill - agentforge)": {
+   "agentforge-distill-matched": 1,
+   "agentforge": -1
+  },
+  "targeted delta vs distillation (parent - distill)": {
+   "agentforge-parent-matched": 1,
+   "agentforge-distill-matched": -1
+  }
+ }
+}

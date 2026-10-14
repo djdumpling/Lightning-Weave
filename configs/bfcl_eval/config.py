@@ -58,6 +58,8 @@ THINKING_2507_REVISION = "768f209d9ea81521153ed38c47d515654e938aea"
 AGENT_EFF_PREFIX = "ae."
 AGENT_EFF_ROOT = f"{REMOTE_CHECKPOINT_ROOT}/agent-eff"
 AGENT_EFF_DEFAULT_SEED = 1234
+# Arms trained from Qwen3-4B-Thinking-2507 (configs/agent_eff/config.py THINKING_2507_ARMS) are served like it.
+THINKING_2507_ARMS = frozenset({"fresh2507", "retail2507", "retailcap2507", "retailuni2507"})
 CONCISE_SYSTEM_PROMPT = (
     "Reason only as much as the task requires. Once you know which tool calls or answer are needed, "
     "stop thinking and respond."
@@ -114,7 +116,8 @@ def resolve_model(tag: str) -> ModelSpec:
             seed = int(parts.pop()[1:])
         if len(parts) == 2 and all(parts) and "/" not in tag:
             arm, variant = parts
-            return ModelSpec(f"{AGENT_EFF_ROOT}/{arm}/{variant}/seed{seed}/hf", **decoding)
+            native = {"yarn": False, "reasoning_parser": "deepseek_r1"} if arm in THINKING_2507_ARMS else {}
+            return ModelSpec(f"{AGENT_EFF_ROOT}/{arm}/{variant}/seed{seed}/hf", **native, **decoding)
     raise ValueError(
         f"unknown model tag {tag!r}; choose from {sorted(MODEL_SPECS)} or ae.<arm>.<variant>[.s<seed>][.concise]"
     )

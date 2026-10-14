@@ -38,11 +38,27 @@ REMOTE_REPO = looptool.REMOTE_REPO
 RUNTIME_IMAGE = looptool.RUNTIME_IMAGE
 STUDENT_MODEL = looptool.STUDENT_MODEL
 STUDENT_REVISION = looptool.STUDENT_REVISION
+MODEL_TYPE = looptool.MODEL_TYPE
+TRAINING_GPU = looptool.TRAINING_GPU
 
 MODAL_APP_NAME = "lightning-weave-agent-eff"
 # Students trained on a cached state pool live under its arm: the LoopTool cache's are "joint"; the
-# fresh-state pilot's (OPD_DATA=tau2-fresh) are "fresh". BFCL/tau tags: ae.<arm>.<variant>[.s<seed>].
-ARM = {"looptool": "joint", "tau2-fresh": "fresh"}[looptool.DATA_PROFILE]
+# fresh-state pilot's (OPD_DATA=tau2-fresh) are "fresh"; Thinking-2507's (OPD_DATA=tau2-fresh-2507) are
+# "fresh2507". BFCL/tau tags: ae.<arm>.<variant>[.s<seed>].
+ARMS = {
+    "looptool": "joint",
+    "tau2-fresh": "fresh",
+    "tau2-fresh-2507": "fresh2507",
+    "tau2-retail-2507": "retail2507",
+    "tau2-retail-2507-cap2048": "retailcap2507",
+    "tau2-retail-2507-uniform": "retailuni2507",
+}
+ARM = ARMS[looptool.DATA_PROFILE]
+# Arms whose students are trained from Qwen3-4B-Thinking-2507: the BFCL and tau evaluations serve them with its
+# native window and reasoning parser (configs/bfcl_eval and configs/tau_bench_eval keep the same set).
+THINKING_2507_ARMS = frozenset(
+    ARMS[name] for name, pool in looptool.STATE_POOLS.items() if pool.student[0] == "Qwen/Qwen3-4B-Thinking-2507"
+)
 BASE_CACHE = f"{REMOTE_DATA_ROOT}/anchor/final"
 ROLLOUT_DIR = f"{REMOTE_DATA_ROOT}/rollouts"
 PROMPT_DATA = f"{REMOTE_DATA_ROOT}/prompts.parquet"
@@ -138,6 +154,41 @@ DONORS = {
             "math+code",
             "Lightning Weave's accuracy anchor (SFT then RL); a different family, scale, and recipe from DECS",
             core=True,
+        ),
+        Pair(
+            "agentforge",
+            "agent_accuracy",
+            Model("Qwen/Qwen3-8B-Base", "49e3418fbbbca6ecbdf9608b4d22e5a407081db4"),
+            Model("Kwai-Klear/Klear-AgentForge-8B", "fa3d41e92e9ce7a5b4a52a3e7439aa00521f40c9"),
+            "agent",
+            "the mentor's BFCL pair (Qwen3-4B 66 -> 69 on EnvFactory): agentic SFT+RL of Qwen3-8B over its base",
+        ),
+        # Targeted deltas (2026-10-09 evening): the same post models against their immediate post-trained parent,
+        # Qwen3-8B, so the shift excludes the generic post-training Thinking-2507 already has. EnvFactory-8B is SFT+RL
+        # from Qwen3-8B (its model card); Klear-AgentForge-8B is SFT+RL from Qwen3-8B-Base, so Qwen3-8B is its sibling.
+        Pair(
+            "agentforge-parent",
+            "agent_accuracy",
+            Model("Qwen/Qwen3-8B", "b968826d9c46dd6066d109eabc6255188de91218"),
+            Model("Kwai-Klear/Klear-AgentForge-8B", "fa3d41e92e9ce7a5b4a52a3e7439aa00521f40c9"),
+            "agent",
+            "Klear-AgentForge-8B over Qwen's own post-trained Qwen3-8B: agentic training minus generic post-training",
+        ),
+        Pair(
+            "envfactory",
+            "agent_accuracy",
+            Model("Qwen/Qwen3-8B", "b968826d9c46dd6066d109eabc6255188de91218"),
+            Model("LARK-Lab/EnvFactory-8B", "5a771b3d7db6b76e414d56d28e8110a798a44097"),
+            "agent",
+            "EnvFactory-8B over the model it was trained from (SFT+RL on executable tool environments)",
+        ),
+        Pair(
+            "envfactory-base",
+            "agent_accuracy",
+            Model("Qwen/Qwen3-8B-Base", "49e3418fbbbca6ecbdf9608b4d22e5a407081db4"),
+            Model("LARK-Lab/EnvFactory-8B", "5a771b3d7db6b76e414d56d28e8110a798a44097"),
+            "agent",
+            "EnvFactory-8B over the pretrained base: its full post-training, as the mentor's AgentForge pair",
         ),
         Pair(
             "decs",
@@ -441,6 +492,69 @@ def fresh_specs() -> dict[str, dict]:
     return {"acc-legacy+decs-fixed": spec(ACCURACY_TERMS["acc-legacy"], term({"decs": 1.0}, coef=DECS_MID_COEF))}
 
 
+# --- Strong students (2026-10-09): does the mentor's anchor transfer to Thinking-2507 once training reaches the ------
+# whole episode? Both arms train Thinking-2507 on its own uncapped fresh tau2 states (OPD_DATA=tau2-fresh-2507).
+# "agentforge" is the mentor's target exactly: the raw Qwen3-8B-Base -> Klear-AgentForge-8B shift alone, at alpha 2.
+# acc-legacy (Qwen3-4B-Base -> Thinking-2507) becomes the student's own post-training shift re-applied.
+
+
+# "agentforge+outcome" adds the executed-branch outcome term (data_curation/branch_outcomes.py): each cached
+# response's smoothed log-ratio of success probability to its state's, on its own sampled tokens, in nats like δ.
+# Branches run on the tau results volume as BRANCH_SHARDS runs (configs/tau_bench_eval ``branch``).
+TAU_RESULTS_VOLUME = "lightning-weave-tau-eval"
+BRANCH_PLAN = f"branch-plans/{looptool.DATA_PROFILE}/plan.jsonl"
+BRANCH_RUN = "branch-0870ad4ec984-v1"
+BRANCH_SHARDS = 4
+BRANCH_TAG = "thinking2507"
+ADVANTAGE_ROOT = f"{ANALYSIS_ROOT}/advantages"
+
+
+def branch_runs() -> list[str]:
+    return [f"{BRANCH_RUN}-s{shard}" for shard in range(BRANCH_SHARDS)]
+
+
+# Composed on 2026-10-09, the agentforge target is 0.0698 nats/token from behavior, and adding the outcome term at
+# coefficient 1 moved it only to 0.0704 (23% of states have responses that end differently, and most sampled tokens
+# are near-certain). "agentforge+outcome-matched" calibrates the outcome term's own increment, KL(q_with ‖ q_without),
+# to the anchor's 0.0698, so the outcome signal is as strong as the anchor's (an added arm, not pre-registered).
+AGENTFORGE_KL_TO_BEHAVIOR = 0.0698
+
+
+def strong_student_specs() -> dict[str, dict]:
+    agentforge = term({"agentforge": 1.0}, transform="raw")
+    outcome = {"transform": "outcome", "coef": 1.0, "advantages": "branch"}
+    matched = outcome | {"kl_budget": AGENTFORGE_KL_TO_BEHAVIOR, "max_multiplier": 50.0}
+    return {
+        "agentforge": spec(agentforge),
+        "agentforge+outcome": spec(agentforge, outcome),
+        "agentforge+outcome-matched": spec(agentforge, matched),
+    }
+
+
+# --- Retail (2026-10-09 evening, results_6.md): the post model fixed at Klear-AgentForge-8B, three references ---------
+# "agentforge" (the pretrained base; the mentor's recipe, coefficient 1) sets the strength: its realized KL to behavior
+# on the retail pool, measured when composed, is RETAIL_AGENTFORGE_KL. The probe-selected targeted delta (Qwen3-8B, the
+# post-trained parent) and ordinary distillation toward AgentForge itself (the ``teacher`` transform, λ ≤ 1) are both
+# calibrated to it, so the three differ in direction, not strength.
+RETAIL_AGENTFORGE_KL: float | None = 0.0697  # measured 2026-10-09 19:18 (agentforge on tau2-retail-2507)
+
+
+def retail_specs() -> dict[str, dict]:
+    if RETAIL_AGENTFORGE_KL is None:
+        return {}
+    budget = {"kl_budget": RETAIL_AGENTFORGE_KL}
+    return {
+        "agentforge-parent-matched": spec(term({"agentforge-parent": 1.0}, transform="raw", max_multiplier=50.0, **budget)),
+        "agentforge-distill-matched": spec(term({"agentforge": 1.0}, transform="teacher", max_multiplier=1.0, **budget)),
+        # Is the gain step-limited on a strong student? The mentor's delta at twice the coefficient (results_7.md).
+        "agentforge-x2": spec(term({"agentforge": 1.0}, transform="raw", coef=2.0)),
+    }
+
+
+def variant_advantages(variant_spec: dict) -> list[str]:
+    return sorted({item["advantages"] for item in variant_spec["terms"] if item.get("transform") == "outcome"})
+
+
 def variant_sources(variant_spec: dict) -> set[str]:
     return {
         source["source"]
@@ -471,6 +585,8 @@ def variant_specs() -> dict[str, dict]:
         | turn_start_specs()
         | exploratory_specs()
         | fresh_specs()
+        | strong_student_specs()
+        | retail_specs()
     )
 
 

@@ -350,3 +350,152 @@ def test_instruct_235b_user_profile():
     assert CONFIG.SERVING.gpu_for(user) == ["H200:8"]
     assert (protocol.max_model_len, protocol.reasoning_parser) == (65_536, "deepseek_r1")
     assert protocol.digest() not in {CONFIG.PROFILES[name].digest() for name in ("prime", "user30b", "prime2507")}
+
+
+def test_students_trained_from_2507_keep_its_native_window():
+    assert CONFIG.max_positions("ae.fresh2507.agentforge") == CONFIG.max_positions("thinking2507") == 262_144
+    assert CONFIG.max_positions("ae.fresh2507.acc-legacy.s5678") == 262_144
+    assert CONFIG.max_positions("ae.fresh.acc-legacy") == CONFIG.NATIVE_MAX_MODEL_LEN
+    CONFIG.check_agent_window(CONFIG.PROFILES["user235b"], "ae.fresh2507.agentforge.s5678")
+    with pytest.raises(ValueError, match="needs YaRN"):
+        CONFIG.check_agent_window(CONFIG.PROFILES["user235b"], "ae.fresh.acc-legacy")
+
+
+def test_the_corrected_retail_profile_pins_its_tasks_and_keeps_every_other_run_id():
+    import hashlib
+    from pathlib import Path
+
+    relative, sha256 = CONFIG.CORRECTED_TASKS["retail"]
+    data = (Path(CONFIG.__file__).parent / relative).read_bytes()
+    tasks = __import__("json").loads(data)
+    assert hashlib.sha256(data).hexdigest() == sha256 and len(tasks) == 27
+    # graded as the pinned version grades (no NL-assertion basis, which the pinned evaluator cannot score)
+    assert all("reward_basis" not in task["evaluation_criteria"] for task in tasks)
+    corrected = CONFIG.PROFILES["user235b-corrected"]
+    (domain,) = corrected.domains
+    assert (domain.suite, domain.domain, domain.name) == ("tau2c", "retail", "tau2c_retail")
+    assert replace(corrected, domains=CONFIG.PROFILES["user235b"].domains) == CONFIG.PROFILES["user235b"]
+    assert corrected.digest() != CONFIG.PROFILES["user235b"].digest()
+    with pytest.raises(ValueError, match="corrected tasks"):
+        replace(corrected, domains=(CONFIG.Domain("tau2c", "airline", 50, CONFIG.USER_235B.model),)).validate()
+
+
+def test_deepseek_user_is_isolated_and_keeps_the_existing_protocols():
+    protocol = CONFIG.PROFILES["userdeepseek"]
+    protocol.validate()
+    user = protocol.user_server
+    assert user.model == "deepseek-ai/DeepSeek-V4-Flash-0731"
+    assert len(user.revision) == 40 and "@sha256:" in user.serving_image
+    assert protocol.tau2_user_temperature == 0 and not user.thinking
+    assert user.max_new_tokens == 8192 and user.gpus == 4
+    assert CONFIG.SERVING.gpu_for(user) == CONFIG.SERVING.gpu_for(None)
+    assert CONFIG.PROFILES["user235b"].digest() == "0870ad4ec984"
+    assert CONFIG.PROFILES["user235b-4b"].digest() == "98179d00b25d"
+    assert replace(CONFIG.PROFILES["user235b"],
+                   domains=protocol.domains, user_server=user) == protocol
+    command = CONFIG.SERVING.user_vllm_command(user, "key")
+    for flag, value in (("--tokenizer-mode", "deepseek_v4"),
+                        ("--tool-call-parser", "deepseek_v4"),
+                        ("--data-parallel-size", "4"), ("--tensor-parallel-size", "1")):
+        assert command[command.index(flag) + 1] == value
+    assert "--trust-remote-code" in command and "--enable-expert-parallel" in command
+    import json
+    assert json.loads(command[command.index("--default-chat-template-kwargs") + 1]) == {"thinking": False}
+    assert json.loads(command[command.index("--override-generation-config") + 1]) == {"max_new_tokens": 8192}
+
+
+def test_qwen35_baseline_uses_native_tools_and_a_separate_modern_protocol():
+    import json
+    protocol = CONFIG.PROFILES["userdeepseek-qwen35"]
+    protocol.validate()
+    assert protocol.user_server == CONFIG.USER_DEEPSEEK
+    assert protocol.max_model_len == 65536 and protocol.max_new_tokens == 32768
+    assert protocol.tau2_user_temperature == 0 and protocol.enable_thinking
+    assert protocol.resolved()["serving_image"] == CONFIG.USER_DEEPSEEK.serving_image
+    assert CONFIG.PROFILES["userdeepseek"].digest() == "8fd4e3ade57c"
+    assert protocol.digest() != CONFIG.PROFILES["userdeepseek"].digest()
+    CONFIG.check_agent_window(protocol, "qwen35")
+    command = CONFIG.SERVING.vllm_command(CONFIG.model_path("qwen35"), "key", protocol)
+    assert command[command.index("--tool-call-parser") + 1] == "qwen3_coder"
+    assert command[command.index("--reasoning-parser") + 1] == "qwen3"
+    assert "--language-model-only" in command
+    assert json.loads(command[command.index("--default-chat-template-kwargs") + 1]) == {"enable_thinking": True}
+    assert json.loads(command[command.index("--override-generation-config") + 1]) == {
+        "temperature": .6, "top_p": .95, "top_k": 20, "max_new_tokens": 32768}
+
+
+def test_user_latency_preserves_task_context_and_telemetry_failure_is_nonfatal(monkeypatch):
+    router = make_router()
+    model = next(iter(CONFIG.USER_ALIASES))
+    monkeypatch.setattr(HARNESS.time, "time", lambda: 1000.)
+    seen = []
+    router.user_timing_sink = seen.append
+    router.begin(task_id="5", trial=7)
+    router.record(model, response(), .25)
+    router.record(model, response(), .5)
+    agent, user = router.calls()
+    assert not agent and len(user) == len(seen) == 2
+    assert [r["turn_index"] for r in seen] == [0, 1]
+    assert all(r["task_id"] == "5" and r["trial"] == 7 for r in seen)
+    assert seen[0]["started_at_unix_s"] == 999.75 and seen[0]["finished_at_unix_s"] == 1000.
+    def fail(entry):
+        raise OSError("observation sink unavailable")
+    router.user_timing_sink = fail
+    router.record(model, response(), .1)
+    assert len(router.calls()[1]) == 3
+
+
+def test_mentor_qwen35_profile_is_new_and_keeps_old_protocols():
+    import json
+    p = CONFIG.PROFILES["userdeepseek-qwen35-mentor"]
+    p.validate()
+    assert p.digest() != CONFIG.PROFILES["userdeepseek-qwen35"].digest()
+    assert CONFIG.PROFILES["userdeepseek-qwen35"].digest() == "cfa36a18ae6b"
+    assert CONFIG.PROFILES["userdeepseek"].digest() == "8fd4e3ade57c"
+    assert CONFIG.PROFILES["user235b"].digest() == "0870ad4ec984"
+    assert p.user_server == CONFIG.USER_DEEPSEEK
+    assert p.reasoning_history == "native_current_step_v1"
+    args = HARNESS.agent_llm_args(p)
+    assert args["temperature"] == 1 and args["top_p"] == .95 and args["presence_penalty"] == 1.5
+    assert args["max_tokens"] == 32768
+    assert args["extra_body"] == {"top_k": 20, "min_p": 0., "repetition_penalty": 1.,
+                                  "chat_template_kwargs": {"enable_thinking": True}, "return_token_ids": True}
+    cmd = CONFIG.SERVING.vllm_command(CONFIG.model_path("qwen35"), "key", p)
+    overrides = json.loads(cmd[cmd.index("--override-generation-config") + 1])
+    overrides["max_tokens"] = overrides.pop("max_new_tokens")
+    assert overrides == p.expected_generation_defaults
+
+
+def test_reasoning_is_restored_only_on_agent_requests_without_mutating_public_history():
+    seen = []
+    router = make_router()
+    router.reasoning_history = True
+    sources = [SimpleNamespace(raw_data={"message": {"reasoning": "actual hidden reasoning"}})]
+    public = [{"role": "assistant", "content": "public answer", "tool_calls": None}]
+    module = SimpleNamespace(to_litellm_messages=lambda messages: public, completion=lambda **kw: (seen.append(kw), response())[1])
+    router.install(module)
+    router.begin()
+    wire = module.to_litellm_messages(sources)
+    module.completion(model="openai/model", messages=wire)
+    module.completion(model="gpt-4.1-2025-04-14", messages=module.to_litellm_messages(sources))
+    assert seen[0]["messages"][0]["reasoning"] == "actual hidden reasoning"
+    assert "reasoning" not in seen[1]["messages"][0] and "reasoning" not in public[0]
+
+
+def test_native_qwen35_template_keeps_only_reasoning_after_the_last_user():
+    from pathlib import Path
+    from jinja2.sandbox import ImmutableSandboxedEnvironment
+    template = ImmutableSandboxedEnvironment().from_string(
+        (Path(__file__).parent / "fixtures/qwen35_4b_native_chat_template.jinja").read_text())
+    messages = [{"role": "user", "content": "Old turn"},
+                {"role": "assistant", "content": "Old answer", "reasoning_content": "OLD_HIDDEN"},
+                {"role": "user", "content": "Current turn"},
+                {"role": "assistant", "content": "", "reasoning_content": "CURRENT_HIDDEN",
+                 "tool_calls": [{"function": {"name": "lookup", "arguments": {"id": "1"}}}]},
+                {"role": "tool", "content": "Result"}]
+    rendered = template.render(messages=messages, tools=[], add_generation_prompt=True, enable_thinking=True)
+    assert "OLD_HIDDEN" not in rendered and "CURRENT_HIDDEN" in rendered
+    assert "<function=lookup>" in rendered
+    next_turn = template.render(messages=messages + [{"role": "user", "content": "Next turn"}],
+                                tools=[], add_generation_prompt=True, enable_thinking=True)
+    assert "CURRENT_HIDDEN" not in next_turn and "OLD_HIDDEN" not in next_turn

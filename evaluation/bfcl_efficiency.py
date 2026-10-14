@@ -118,8 +118,9 @@ def _steps(generation) -> list[list]:
 
 
 def _calls(step) -> list[tuple[str, str]]:
+    # A call the harness could not parse is recorded as None (Thinking-2507's outputs have a few); it names no call.
     if isinstance(step, list):
-        return [(name, _canonical_arguments(arguments)) for call in step for name, arguments in call.items()]
+        return [(name, _canonical_arguments(arguments)) for call in step if call for name, arguments in call.items()]
     return []
 
 

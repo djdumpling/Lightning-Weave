@@ -42,6 +42,7 @@ from config import (
     MODAL_CHECKPOINT_VOLUME,
     MODAL_DATA_VOLUME,
     MODAL_MODEL_VOLUME,
+    MODEL_TYPE,
     POOL,
     POST_TEACHER_MODEL,
     POST_TEACHER_REVISION,
@@ -57,6 +58,7 @@ from config import (
     RUNTIME_IMAGE,
     STUDENT_MODEL,
     STUDENT_REVISION,
+    TRAINING_GPU,
     app_name,
 )
 
@@ -248,6 +250,11 @@ def prepare_dataset(max_wait_hours: float = 0.0) -> dict[str, object]:
                     "--collectors", ",".join(COLLECTION["collectors"]), "--domains", ",".join(COLLECTION["domains"]),
                     "--max-prompt-tokens", str(RECIPE.max_prompt_tokens),
                     "--states-per-episode", str(COLLECTION["states_per_episode"]),
+                    "--generation-prompt", POOL.generation_prompt,
+                    *(["--prioritize-decisions"] if COLLECTION.get("prioritize_decisions") else []),
+                    *(["--episode-token-budget", str(COLLECTION["episode_token_budget"])]
+                      if COLLECTION.get("episode_token_budget") else []),
+                    *(["--repeat-to-quota"] if COLLECTION.get("repeat_to_quota") else []),
                     "--num-prompts", str(RECIPE.selected_prompts), "--seed", str(RECIPE.data_seed),
                 ]
             )
@@ -299,7 +306,7 @@ def prepare_asset_lock() -> str:
 
 @app.function(image=rollout_image, gpu="H100", cpu=8, memory=32_768, timeout=43_200, volumes=DATA_AND_MODELS)
 def collect_rollout_shard(rank: int, world_size: int) -> str:
-    """Generate one deterministic partition of the frozen Qwen3-4B cache."""
+    """Generate one deterministic partition of the frozen student's cache."""
 
     data_volume.reload()
     model_volume.reload()
@@ -323,10 +330,65 @@ def collect_rollout_shard(rank: int, world_size: int) -> str:
             "--gpu-memory-utilization", "0.90", "--dtype", "bfloat16", "--compilation-mode", "0",
             "--cudagraph-mode", "NONE", "--max-num-seqs", "32", "--shard-size", "800",
             "--rank", str(rank), "--world-size", str(world_size), "--enable-thinking",
+            *budget_arguments(),
         ]
     )
     data_volume.commit()
     return f"rank {rank}: complete"
+
+
+def budget_arguments() -> list[str]:
+    """A budgeted pool's per-state response caps and its repeated copies' seed offsets (fresh_states.py columns)."""
+    arguments = []
+    if COLLECTION and COLLECTION.get("episode_token_budget"):
+        arguments += ["--max-tokens-key", "response_budget"]
+    if COLLECTION and COLLECTION.get("repeat_to_quota"):
+        arguments += ["--seed-offset-key", "copy_index"]
+    return arguments
+
+
+@app.function(image=rollout_image, gpu="H100", cpu=8, memory=32_768, timeout=21_600, volumes=DATA_AND_MODELS)
+def collect_teacher_rollouts(repo: str, revision: str, prompt_ids: list[str], name: str, responses: int) -> str:
+    """A teacher's own next turns at some of the pool's states, sampled as the student's cache is (same rendered
+    prompts, sampling and caps), for the teacher-rescue probe (data_curation/branch_outcomes.py plans their branches)."""
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    data_volume.reload()
+    model_volume.reload()
+    model = snapshot_path(repo, revision)
+    require_paths([PROMPT_DATA, ASSET_LOCK, model])
+    root = Path(REMOTE_DATA_ROOT) / "teacher_rollouts"
+    output = root / name
+    if any(output.glob("*.parquet")):
+        return f"{name}: existing"
+    root.mkdir(parents=True, exist_ok=True)
+    wanted = set(prompt_ids)
+    table = pq.read_table(PROMPT_DATA)
+    rows = [row for row in table.to_pylist() if row["prompt_id"] in wanted]
+    if len(rows) != len(wanted):
+        raise ValueError(f"{len(wanted) - len(rows)} prompt ids are not in {PROMPT_DATA}")
+    subset = root / f"{name}.prompts.parquet"
+    pq.write_table(pa.Table.from_pylist(rows, schema=table.schema), subset)
+    run(
+        [
+            "python", "data_curation/collect_direct_opd_rollouts.py",
+            "--model", model, "--model-revision", revision,
+            "--asset-lock", ASSET_LOCK, "--input", str(subset), "--output-dir", str(output),
+            "--label-key", "label", "--prompt-id-key", "prompt_id",
+            "--max-prompts", str(len(rows)), "--responses-per-prompt", str(responses),
+            "--max-prompt-length", str(RECIPE.max_prompt_tokens),
+            "--max-response-length", str(RECIPE.max_response_tokens),
+            "--top-k", str(RECIPE.top_k), "--temperature", str(RECIPE.temperature), "--top-p", str(RECIPE.top_p),
+            "--seed", str(RECIPE.data_seed), "--batch-size", "64", "--tensor-parallel-size", "1",
+            "--gpu-memory-utilization", "0.90", "--dtype", "bfloat16", "--compilation-mode", "0",
+            "--cudagraph-mode", "NONE", "--max-num-seqs", "32", "--shard-size", "800",
+            "--rank", "0", "--world-size", "1", "--enable-thinking",
+        ]
+    )
+    data_volume.commit()
+    return f"{name}: {len(rows)} prompts x {responses}"
 
 
 SCORE_STAGES = {
@@ -389,7 +451,7 @@ def seal_cache() -> dict[str, object]:
 
 @app.function(image=runtime_image, gpu="H100:8", cpu=32, memory=131_072, timeout=14_400, volumes=ALL_VOLUMES)
 def convert_student_checkpoint() -> str:
-    """Convert only the trainable Qwen3-4B student to Megatron format."""
+    """Convert only the trainable student to Megatron format."""
 
     model_volume.reload()
     checkpoint_volume.reload()
@@ -406,7 +468,7 @@ def convert_student_checkpoint() -> str:
         {
             "STUDENT_MODEL": student,
             "OUTPUT_DIR": str(output),
-            "MODEL_TYPE": "qwen3-4B",
+            "MODEL_TYPE": MODEL_TYPE,
             "NUM_GPUS": "8",
             "MEGATRON_PATH": "/root/Megatron-LM",
         }
@@ -421,7 +483,7 @@ def convert_student_checkpoint() -> str:
 
 
 @app.function(
-    image=runtime_image, gpu="H100:8", cpu=32, memory=131_072, timeout=86_400,
+    image=runtime_image, gpu=TRAINING_GPU, cpu=32, memory=131_072, timeout=86_400,
     # Volume writes are staged on local disk until commit; ten ~45 GB torch_dist
     # checkpoints (weights + Adam state) exceed the default container disk.
     ephemeral_disk=1_048_576, volumes=ALL_VOLUMES, secrets=[modal.Secret.from_name("wandb-secret")],
@@ -440,7 +502,7 @@ def train_offline_dopd(resume: bool = False) -> str:
     load = str(save if resume else Path(CONVERTED_CHECKPOINT))
     run(
         [
-            "python", "configs/lightning_weave/train.py", "--model-type", "qwen3-4B", "--student", student,
+            "python", "configs/lightning_weave/train.py", "--model-type", MODEL_TYPE, "--student", student,
             "--data", FINAL_DIR, "--manifest", MANIFEST, "--load", load, "--save", str(save),
             "--num-gpus", str(RECIPE.training_gpus), "--alpha", str(RECIPE.alpha), "--lr", str(RECIPE.learning_rate),
             "--rollout-batch-size", str(RECIPE.rollout_batch_size),
@@ -480,7 +542,7 @@ def export_hf_checkpoint() -> str:
             "STUDENT_MODEL": student,
             "INPUT_DIR": str(iterations[-1]),
             "OUTPUT_DIR": str(output),
-            "MODEL_TYPE": "qwen3-4B",
+            "MODEL_TYPE": MODEL_TYPE,
             "MEGATRON_PATH": "/root/Megatron-LM",
         }
     )
@@ -520,9 +582,27 @@ def build_cache(workers: int, max_wait_hours: float = 0.0) -> dict[str, object]:
 
 
 @app.local_entrypoint()
-def main(action: str = "plan", workers: int = RECIPE.cache_workers, resume: bool = False, max_wait_hours: float = 0.0) -> None:
-    """Actions: plan, prepare, cache, cache-chain (server-side), convert, train, export, or all."""
+def main(
+    action: str = "plan",
+    workers: int = RECIPE.cache_workers,
+    resume: bool = False,
+    max_wait_hours: float = 0.0,
+    teachers: str = "",
+    prompt_ids: str = "",
+    responses: int = 2,
+) -> None:
+    """Actions: plan, prepare, cache, cache-chain (server-side), convert, train, export, all, or teacher-rollouts
+    (``--teachers name=repo@revision,... --prompt-ids FILE``: each teacher's turns at those states, in parallel)."""
 
+    if action == "teacher-rollouts":
+        ids = [line.strip() for line in Path(prompt_ids).read_text(encoding="utf-8").splitlines() if line.strip()]
+        items = []
+        for item in teachers.split(","):
+            name, model = item.split("=", 1)
+            repo, revision = model.split("@", 1)
+            items.append((repo, revision, ids, name, responses))
+        run_parallel(collect_teacher_rollouts, items)
+        return
     if action == "cache-chain":
         print(f"cache chain running server-side: {cache_chain.spawn(workers, max_wait_hours).object_id}", flush=True)
         return

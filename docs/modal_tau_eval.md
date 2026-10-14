@@ -57,6 +57,196 @@ names a student exported under `/checkpoints/agent-eff/`, as in the BFCL eval.
 `--wait-hours` waits on a CPU for each checkpoint (an `ae.*` export is complete
 once its provenance file exists), then starts its evaluation.
 
+### DeepSeek-V4-Flash-0731 user (`TAU_PROFILE=userdeepseek`)
+
+```bash
+MODAL_ENVIRONMENT=alex-dev-2 TAU_PROFILE=userdeepseek bash scripts/run_tau_eval.sh smoke \
+    --models thinking2507 --domains tau2_retail --smoke-samples 6 --trials 1 --concurrency 6
+```
+
+This profile uses the mentor's user settings: temperature 0, thinking off, and
+8,192 tokens per turn. The checkpoint is pinned at `7872f01b1d1fe23eabc4c98b48bffcef5a386062`.
+DeepSeek has its own four-H200 container on the official vLLM 0.28.0 image
+(linux/amd64 digest `2286e8533ca8b6bc777594bae30524f1426ba46ca21797524e06df6a94b06635`).
+It uses DP4 plus expert parallelism, the `deepseek_v4` tokenizer and tool/reasoning
+parsers, `--trust-remote-code`, and explicit `thinking=false`. The agent keeps the
+existing vLLM 0.11 image and 2507 protocol. The existing `user235b` profile keeps
+its protocol and results tree.
+
+The user container validates authentication, visible non-thinking output, and
+native tool calls before starting the agent. Its authenticated tunnel stays open
+until the agent's lanes finish. User startup duration, GPU names, probe latency,
+metrics, and a redacted server log are saved under the run's `invocations/`.
+This profile's smoke is separate from the full baseline evaluation.
+
+**Simulator check, 2026-10-11–12: serving works; task fidelity is not fully clean.**
+
+Run `tau-8fd4e3ade57c-smoke6`: frozen Thinking-2507, pinned τ2 retail tasks 0–5,
+one trial each, six concurrent conversations. All use user temperature 0,
+thinking off, and the server-side 8,192-token cap. This is a simulator smoke,
+not an accuracy baseline.
+
+| Measurement | Observed |
+| --- | --- |
+| User hardware | 4 × NVIDIA H200, DP4 + expert parallelism |
+| Weights | 48 shards, 166.887 GB, pinned revision above |
+| Weight loading | about 95 seconds per GPU rank; 44.17 GiB per rank |
+| Process start → healthy API | 640.16 seconds (10 min 40 sec), including kernel warm-up and graph capture |
+| Standalone six-request throughput probe | 986 output tokens in 3.897 seconds: 252.98 tokens/s aggregate; median request 2.784 seconds |
+| Actual τ2 user requests | 37 calls, 1,244 output tokens; median latency 25.74 seconds, maximum 51.18 seconds |
+| Surface/termination checks | 0 empty user turns; 0 reasoning fields or marker leaks; all 37 calls finish `stop`; all 6 conversations end `user_stop` |
+
+The throughput probe used six simultaneous standalone restatements of the
+retail tasks. It used short prompts and localhost, so it is distinct from the
+observed τ2 request latency. The real run logged shape-specific JIT compilation;
+its latency contributions were not isolated. A follow-up record/log audit on
+2026-10-12 found that all six first user calls took about 51 seconds during
+first-use compilation, while many later calls finished under two seconds. The
+25.74-second smoke median is therefore not a steady-state speed estimate.
+
+Manual fidelity audit:
+- Tasks 0 and 1 correctly distinguished accepting a no-backlight keyboard from
+  keeping the keyboard when the RGB/full-size/clicky option was unavailable.
+- Task 2 kept all three returns and the T-shirt-count request. Tasks 3 and 4
+  preserved the distinction between pending small T-shirts and all pending
+  T-shirts. Users supplied known identity information without inventing email.
+- **Task 5 failed its confirmation rules.** At the first confirmation the user
+  should request only the desk-lamp exchange; at the second it should request no
+  exchanges and return the bottle. Instead it approved both exchanges twice,
+  then changed its mind after the agent executed them. It ultimately ended with
+  `###TRANSFER###`. The other five ended with `###STOP###`.
+
+The pinned grader also warned about invalid gold product IDs on tasks 3/4;
+the smoke's rewards are not evidence of simulator fidelity. The task-5 failure
+above comes from its instructions and transcript, independently of grading.
+
+A Modal worker disappeared during teardown after all six records were saved,
+and the outer call started an automatic reload. That app was stopped with
+`modal app stop --yes`; the summary was rebuilt on CPU and reports all six
+records complete. No additional conversations, baseline evaluation, or training
+were run. All task apps are stopped. Changes remain uncommitted.
+
+Local evidence: `scratchpad/deepseek_user/first_startup.json`,
+`throughput.json`, `records/smoke_audit.json`, `transcripts.txt`, and
+`launch-final.log`. The six records and rebuilt summary remain in the results
+volume under the smoke run ID. Local checks: 27 τ2 tests pass, Python compilation
+and shell syntax pass, and the existing user235b protocol hashes are preserved.
+
+### DeepSeek retail baselines, avg@24 (2026-10-12)
+
+Only frozen Thinking-2507 and Qwen3.5-4B are evaluated: 114 pinned retail tasks
+× 24 trials each, concurrency 64, the existing trial-seed sequence and grading.
+The DeepSeek settings remain temperature 0, thinking off, and 8,192 output tokens.
+
+```bash
+MODAL_ENVIRONMENT=alex-dev-2 TAU_PROFILE=userdeepseek bash scripts/run_tau_eval.sh run \
+    --models thinking2507 --domains tau2_retail --trials 24 --concurrency 64
+MODAL_ENVIRONMENT=alex-dev-2 TAU_PROFILE=userdeepseek-qwen35 bash scripts/run_tau_eval.sh run \
+    --models qwen35 --domains tau2_retail --trials 24 --concurrency 64
+```
+
+- Thinking-2507: `tau-8fd4e3ade57c-full`; its agent stays on vLLM 0.11.
+- Qwen3.5-4B: `tau-cfa36a18ae6b-full`, checkpoint
+  `851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`, native `qwen3_coder` tool parser,
+  `qwen3` reasoning parser, thinking enabled, and language-model-only serving on
+  the pinned vLLM 0.28 image. Agent decoding remains temperature 0.6, top-p 0.95,
+  top-k 20, a 65,536-token context and 32,768-token output cap. Its checkpoint has
+  no generation config, so those defaults are explicitly set and checked.
+
+Each user call records start/end timestamps, its turn index, task and trial,
+latency, and token usage. A per-lane `user_latency.jsonl` records calls while the
+run is live, and logs rolling p50/p90 latency each minute. Analyze latency by
+elapsed time and first/later user turns before calling it normal serving speed.
+
+The comparison uses existing 235B-user records only: Thinking-2507 at avg@24,
+`tau-0870ad4ec984-full`, 52.485% retail and task 5 at 19/24. Report task-level pass
+rates under both users and inspect repeated task-5 confirmation failures. There
+is no new 235B-user Qwen3.5 evaluation, so its new baseline has no matched
+simulator-change contrast. The full runs use separate result trees from the
+six-conversation smoke.
+
+Qwen3.5's native serving checks pass on four H100 80GB GPUs. An additional
+retail response diagnostic captured exact generated token IDs: in two of 24
+unseeded replays of one existing turn, the checkpoint emitted `<|im_end|>`
+inside reasoning without `</think>`, final content, or tool markup. The native
+parser therefore had nothing to return as an assistant action. These are model
+failures under this protocol; baseline records score them zero. The diagnostic
+uses a 2,048-token output budget and is not a scored episode or an estimate of
+the benchmark-wide error rate. Its short empty responses stopped at 470/496
+tokens, so this mechanism is distinct from exhausting the output budget.
+
+The audit reports avg@24 and its comparator interval only when every requested
+record is present and valid. User latency uses live call streams, including
+calls from unfinished or preempted conversations; transcript checks report
+which saved messages were inspectable. Three tests cover missing trials,
+record identity corruption, and latency from unfinished conversations. The
+full suite passes: 442 passed, 2 skipped. `/scratchpad/` is now ignored; this
+session's working files are in its temporary directory.
+
+Qwen3.5's avg@24 run is complete: **52.997% (1,450/2,736)**. It has 1,814
+`user_stop` outcomes and 922 empty-agent failures (811 short `stop` outputs,
+111 `length` outputs). There are no missing/corrupt records or infrastructure
+failures. An independent audit agrees with the standard summary rebuilt on CPU.
+The serving wrapper lingered after the records were complete, so its own app
+was stopped with `modal app stop --yes` before rebuilding that summary.
+
+For Qwen3.5, warm user latency after the first ten minutes is median **2.07s**,
+p90 **5.03s**, over 12,903 requests. All 11,405 inspectable user messages have
+content and no reasoning fields/markers. The four agent-error task-5 episodes
+have no saved transcript. Among the other 20, task 5 succeeds in 18 and has two
+clear second-confirmation violations (trials 9 and 17): the user re-approves
+the lamp instead of withdrawing the exchange and returning the bottle. No
+first formal exchange confirmation in those 20 approves both exchanges.
+The smoke's exact error therefore is not inevitable; conditional instructions
+still fail in some contexts.
+
+Thinking-2507 is complete at **57.4196% (1,571/2,736)**, versus 52.4854% under
+the existing 235B user: **+4.9342 points [0.3655, 9.3567]**, task bootstrap.
+Task 5 falls from 19/24 to 8/24. Across all tasks there are 61 rises, 24 ties,
+and 29 decreases; this is a simulator-condition change, not a training gain.
+
+Evidence is in `outputs/tau_deepseek_baselines_20261012/`: the complete audit,
+standard summary, task-5 review, pinned task instructions, exact native response
+IDs/decoded examples, and existing 235B comparator records. These are ignored
+experiment artifacts; source/documentation changes remain uncommitted.
+
+Full step-2 report and all 114 task comparisons: [results_8.md](../results/agent_eff/results_8.md).
+The final audit confirms both standard summaries complete, zero missing/corrupt
+records and no infrastructure failures. For 2507, warm user latency is median
+**1.14s**, p90 **2.81s** over 15,546 requests. Across both models, all 27,812
+inspectable user messages have content and no reasoning fields/markers.
+Both agents used four H100 80GB GPUs; each user used four H200s. No serving
+process restarted. The full 235B task-5 reference also contains an approval of
+both exchanges in zero-based trial 17, beyond what a 17-conversation sample can
+establish. Step 3 has not started and no changes were committed.
+
+### Qwen3.5 mentor profile (2026-10-12)
+
+Use `TAU_PROFILE=userdeepseek-qwen35-mentor` for the mentor's current-step
+reasoning and sampling. It has its own run `tau-3e970a3828cb-full`; the old
+Qwen3.5, 2507 and user235b profiles keep their hashes and behavior. The native
+Qwen3.5 template remains unchanged: assistant reasoning is restored on the
+agent wire as `reasoning`, vLLM aliases it to `reasoning_content`, and the
+last-real-user boundary discards earlier reasoning at rendering time.
+
+Thinking is on; temperature 1.0, top_p .95, top_k 20, min_p 0,
+presence_penalty 1.5, repetition_penalty 1.0, context 65,536 and output 32,768.
+Presence penalty is explicit on every request because vLLM does not derive it
+from generation-config defaults. The pinned-stack HTTP check and vLLM sampling
+construction match these values; benchmark prompt IDs and request settings
+are audited separately. Collection uses the same adapter and agent arguments
+when this profile is selected; no collection has been launched.
+
+The initial verification completed all 114 tasks × 4 trials: **78.0702%
+(356/456)**, with **one empty-agent failure (0.22%)** and **zero token-limit
+failures**. Thirty-one decoded actual generation prompts match independent
+tokenization and confirm the current-step gate; all recorded sampling matches.
+The standard summary and independent audit agree. This matches the mentor's
+reported ~78 and satisfies the condition for the authorized avg@24 extension,
+which was launched then stopped at the user's request during user startup,
+before additional conversations began. We stop at avg@4; all our apps are
+stopped. Report: [results_9.md](../results/agent_eff/results_9.md).
+
 ### Collecting training states (`collect`)
 
 ```bash

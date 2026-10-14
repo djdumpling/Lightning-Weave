@@ -1,0 +1,53 @@
+{
+ "domains": [
+  "tau2_airline",
+  "tau2_retail"
+ ],
+ "groups": {
+  "2507 base": [
+   "thinking2507"
+  ],
+  "agentforge": [
+   "ae.fresh2507.agentforge",
+   "ae.fresh2507.agentforge.s5678"
+  ],
+  "own shift": [
+   "ae.fresh2507.acc-legacy",
+   "ae.fresh2507.acc-legacy.s5678"
+  ],
+  "agentforge+outcome": [
+   "ae.fresh2507.agentforge+outcome",
+   "ae.fresh2507.agentforge+outcome.s5678"
+  ],
+  "agentforge+outcome-matched": [
+   "ae.fresh2507.agentforge+outcome-matched",
+   "ae.fresh2507.agentforge+outcome-matched.s5678"
+  ]
+ },
+ "contrasts": {
+  "PRIMARY agentforge - 2507 base": {
+   "agentforge": 1,
+   "2507 base": -1
+  },
+  "own shift - 2507 base": {
+   "own shift": 1,
+   "2507 base": -1
+  },
+  "agentforge+outcome - 2507 base": {
+   "agentforge+outcome": 1,
+   "2507 base": -1
+  },
+  "outcome term (agentforge+outcome - agentforge)": {
+   "agentforge+outcome": 1,
+   "agentforge": -1
+  },
+  "agentforge+outcome-matched - 2507 base": {
+   "agentforge+outcome-matched": 1,
+   "2507 base": -1
+  },
+  "matched outcome term (agentforge+outcome-matched - agentforge)": {
+   "agentforge+outcome-matched": 1,
+   "agentforge": -1
+  }
+ }
+}

@@ -140,3 +140,128 @@ def test_four_run_contrast_is_a_difference_of_changes():
     }
     out = bfcl_pooled.contrast(values, ["fd", "fa", "cd", "ca"])
     assert out[0] == pytest.approx(100 * ((0.0 - 0.1) - (0.0 - 0.3)))
+
+
+def test_decision_states_are_writes_transfers_and_the_first_failed_call():
+    def request(ids, calls, messages):
+        return {
+            "messages": messages,
+            "response": {"tool_calls": [{"name": name} for name in calls], "finish_reason": "tool_calls" if calls else "stop"},
+            "prompt_tokens": len(ids),
+            "server_render": {"count": len(ids), "tokens": harness.pack_tokens(ids)},
+        }
+
+    user = [{"role": "system"}, {"role": "user"}]
+    tool = lambda text: {"role": "tool", "content": text}  # noqa: E731
+    requests = [
+        request([3, 7], ["get_user_details"], user),
+        request([3, 3, 7], ["get_reservation_details"], user + [{"role": "assistant"}, tool("{}")]),
+        request([3, 3, 3, 7], ["cancel_reservation"], user + [{"role": "assistant"}, tool("Error: not found")]),
+        request([3, 3, 3, 3, 7], ["get_reservation_details"], user + [{"role": "assistant"}, tool("ok")]),
+        request([3] * 5 + [7], [], user + [{"role": "assistant"}, tool("Error: again")]),
+        request([3] * 6 + [7], ["transfer_to_human_agents"], user + [{"role": "assistant"}, {"role": "user"}]),
+    ]
+    assert fresh_states.error_steps(requests) == [1, 3]
+    states = fresh_states.episode_states({"requests": requests}, Tokenizer(), 100, collections.Counter())
+    assert [state["decision_state"] for state in states] == [False, True, True, False, False, True]
+    assert [state["action_kind"] for state in states] == ["read", "read", "write", "read", "text", "transfer"]
+
+
+def test_a_thinking_template_generation_prompt_is_required_when_given():
+    class ThinkingTokenizer(Tokenizer):
+        PROMPT = "<|im_start|>assistant\n<think>\n"
+
+    def request(ids):
+        return {
+            "messages": [{"role": "system"}, {"role": "user"}],
+            "response": {"tool_calls": [], "finish_reason": "stop"},
+            "prompt_tokens": len(ids),
+            "server_render": {"count": len(ids), "tokens": harness.pack_tokens(ids)},
+        }
+
+    record = {"requests": [request([3, 3, 7])]}
+    counts = collections.Counter()
+    assert fresh_states.episode_states(record, ThinkingTokenizer(), 10, counts) == []  # default prompt: refused
+    assert counts["not_a_generation_prompt"] == 1
+    (state,) = fresh_states.episode_states(record, ThinkingTokenizer(), 10, counts, ThinkingTokenizer.PROMPT)
+    assert state["request_index"] == 0 and not state["decision_state"]
+
+
+def budget_request(ids, completion, calls=()):
+    return {
+        "messages": [{"role": "system"}, {"role": "user"}],
+        "response": {"tool_calls": [{"name": name} for name in calls], "finish_reason": "tool_calls" if calls else "stop"},
+        "prompt_tokens": len(ids),
+        "completion_tokens": completion,
+        "server_render": {"count": len(ids), "tokens": harness.pack_tokens(ids)},
+    }
+
+
+def test_an_episode_budget_keeps_states_reached_with_budget_left():
+    # generated before each request: 0, 900, 1,700, 2,047, 2,048 (the last two straddle the 2,048 budget)
+    record = {"requests": [
+        budget_request([3, 7], 900, ["get_user_details"]),
+        budget_request([3, 3, 7], 800, ["get_order_details"]),
+        budget_request([3, 3, 3, 7], 347, ["get_product_details"]),
+        budget_request([3, 3, 3, 3, 7], 1, ["cancel_pending_order"]),
+        budget_request([3] * 5 + [7], 400, ["return_delivered_order_items"]),
+    ]}
+    counts = collections.Counter()
+    states = fresh_states.episode_states(record, Tokenizer(), 100, counts, episode_token_budget=2_048)
+    assert [s["request_index"] for s in states] == [0, 1, 2, 3]
+    assert [s["generated_before"] for s in states] == [0, 900, 1_700, 2_047]
+    assert [s["response_budget"] for s in states] == [2_048, 1_148, 348, 1]
+    assert counts["over_episode_budget"] == 1
+    uncapped = fresh_states.episode_states(record, Tokenizer(), 100, collections.Counter())
+    assert len(uncapped) == 5 and "response_budget" not in uncapped[0] and uncapped[4]["generated_before"] == 2_048
+    # an ineligible earlier request still spends budget
+    record["requests"][0]["server_render"] = {}
+    states = fresh_states.episode_states(record, Tokenizer(), 100, collections.Counter(), episode_token_budget=2_048)
+    assert [s["request_index"] for s in states] == [1, 2, 3] and states[0]["response_budget"] == 1_148
+    record["requests"][1]["completion_tokens"] = None
+    with pytest.raises(ValueError, match="completion token count"):
+        fresh_states.episode_states(record, Tokenizer(), 100, collections.Counter(), episode_token_budget=2_048)
+
+
+def test_repeated_copies_fill_the_quota_with_new_prompt_ids():
+    pool = [{"collector": "c", "task_id": str(i), "request_index": 0} for i in range(3)]
+    filled = fresh_states.fill_quota(pool, 7)
+    assert [s["task_id"] for s in filled] == ["0", "1", "2", "0", "1", "2", "0"]
+    assert [s["copy_index"] for s in filled] == [0, 0, 0, 1, 1, 1, 2]
+    assert [s["copy_index"] for s in fresh_states.fill_quota(pool, 2)] == [0, 0]
+    ids = [fresh_states.prompt_id(s) for s in filled]
+    assert len(set(ids)) == 7
+    # the first copy keeps the id an uncapped pool gives the same state
+    assert ids[0] == fresh_states.rank("tau2-fresh", "c", "0", 0)[:24]
+    with pytest.raises(RuntimeError):
+        fresh_states.fill_quota([], 1)
+
+
+def test_rollout_requests_take_each_prompts_budget_and_a_spaced_seed():
+    spec = importlib.util.spec_from_file_location("collect", ROOT / "data_curation" / "collect_direct_opd_rollouts.py")
+    collect = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(collect)
+    plain = SimpleNamespace(max_response_length=8_192, seed=42, max_tokens_key=None, seed_offset_key=None)
+    assert collect.request_options({}, plain) == (8_192, 42)
+    budgeted = SimpleNamespace(max_response_length=8_192, seed=42, max_tokens_key="response_budget", seed_offset_key="copy_index")
+    assert collect.request_options({"response_budget": 348, "copy_index": 0}, budgeted) == (348, 42)
+    assert collect.request_options({"response_budget": 9_000, "copy_index": 1}, budgeted) == (8_192, 42 + collect.SEED_OFFSET_STRIDE)
+    # a copy's n consecutive sample seeds never overlap the first copy's
+    assert collect.SEED_OFFSET_STRIDE > 64
+    with pytest.raises(ValueError):
+        collect.request_options({"response_budget": 0, "copy_index": 0}, budgeted)
+
+
+def test_generation_prompt_ids_must_agree_with_independent_rendering():
+    request = {
+        "messages": [{"role": "user"}],
+        "response": {"tool_calls": [], "finish_reason": "stop"},
+        "prompt_tokens": 2,
+        "server_render": {"count": 2, "tokens": harness.pack_tokens([3, 7])},
+        "actual_prompt_token_ids": harness.pack_tokens([3, 7]),
+    }
+    record = {"task_id": "retail_smoke", "requests": [request]}
+    assert len(fresh_states.episode_states(record, Tokenizer(), 5, collections.Counter())) == 1
+    request["actual_prompt_token_ids"] = harness.pack_tokens([7, 3])
+    with pytest.raises(ValueError, match="served/rendered prompt mismatch"):
+        fresh_states.episode_states(record, Tokenizer(), 5, collections.Counter())

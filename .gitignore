@@ -20,6 +20,8 @@ venv/
 /results/*
 !/results/*.md
 !/results/agent_eff/
+results_*.md
+/docs/mentor_notes.md
 /logs/
 /wandb/
 *.log
@@ -38,3 +40,6 @@ venv/
 # Local editor/tooling files
 *.code-workspace
 uv.lock
+
+# Local experiment scratch files
+/scratchpad/

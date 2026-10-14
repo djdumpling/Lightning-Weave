@@ -43,12 +43,39 @@ def parse_args():
     parser.add_argument("--max-num-seqs", type=int, default=1024)
     parser.add_argument("--language-model-only", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--gdn-prefill-backend")
+    parser.add_argument("--neutral-sampling", action="store_true", help="ignore model generation defaults; top_k=-1, min_p=0, presence=0, repetition=1")
     parser.add_argument("--shard-size", type=int, default=1024)
     parser.add_argument("--rank", type=int, default=int(os.environ.get("RANK", 0)))
     parser.add_argument("--world-size", type=int, default=int(os.environ.get("WORLD_SIZE", 1)))
     parser.add_argument("--enable-thinking", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--overwrite", action="store_true")
+    # Per-prompt sampling (data_curation/fresh_states.py under an episode budget): a column capping each prompt's
+    # response below --max-response-length, and a column of seed offsets so repeated copies of a prompt draw new samples.
+    parser.add_argument("--max-tokens-key")
+    parser.add_argument("--seed-offset-key")
     return parser.parse_args()
+
+
+# Seeds of a prompt's n samples may be consecutive, so copies are spaced far apart.
+SEED_OFFSET_STRIDE = 100_003
+
+
+def per_prompt_sampling(args) -> bool:
+    return getattr(args, "max_tokens_key", None) is not None or getattr(args, "seed_offset_key", None) is not None
+
+
+def request_options(row: dict, args) -> tuple[int, int]:
+    """(max_tokens, seed) of one prompt's request."""
+    max_tokens = args.max_response_length
+    key = getattr(args, "max_tokens_key", None)
+    if key is not None:
+        budget = int(row[key])
+        if budget <= 0:
+            raise ValueError(f"nonpositive {key} {budget}")
+        max_tokens = min(budget, max_tokens)
+    offset_key = getattr(args, "seed_offset_key", None)
+    offset = int(row[offset_key]) if offset_key is not None else 0
+    return max_tokens, args.seed + SEED_OFFSET_STRIDE * offset
 
 
 def prepare_prompts(tokenizer, args):
@@ -73,7 +100,8 @@ def prepare_prompts(tokenizer, args):
             if isinstance(label, dict):
                 label = label["ground_truth"]
             prompt_id = row[args.prompt_id_key] if args.prompt_id_key is not None else index
-            prepared.append((prompt_id, prompt, tokens, str(label)))
+            options = request_options(row, args) if per_prompt_sampling(args) else ()
+            prepared.append((prompt_id, prompt, tokens, str(label), *options))
         if len(prepared) == args.max_prompts:
             break
     return prepared
@@ -159,7 +187,11 @@ def main():
             "gdn_prefill_backend",
         )
     }
+    if args.neutral_sampling:
+        config.update(sampling_top_k=-1, min_p=0.0, presence_penalty=0.0, repetition_penalty=1.0, generation_config="vllm")
     config.update(parallel_world_size=args.world_size, vllm_version=vllm.__version__)
+    # Recorded only when used, so the caches sealed before these options keep their configuration hashes.
+    config.update({name: getattr(args, name) for name in ("max_tokens_key", "seed_offset_key") if getattr(args, name) is not None})
     common = {
         "is_offline_direct_opd": False,
         "offline_direct_opd_stage": "rollout_collected",
@@ -195,7 +227,10 @@ def main():
         engine_options["language_model_only"] = True
     if args.gdn_prefill_backend is not None:
         engine_options["gdn_prefill_backend"] = args.gdn_prefill_backend
+    if args.neutral_sampling:
+        engine_options["generation_config"] = "vllm"
     llm = LLM(**engine_options)
+    neutral_options = dict(top_k=-1, min_p=0.0, presence_penalty=0.0, repetition_penalty=1.0) if args.neutral_sampling else {}
     sampling = SamplingParams(
         n=args.responses_per_prompt,
         temperature=args.temperature,
@@ -203,7 +238,25 @@ def main():
         max_tokens=args.max_response_length,
         logprobs=args.top_k,
         seed=args.seed,
+        **neutral_options,
     )
+    per_prompt = per_prompt_sampling(args)
+
+    def batch_sampling(batch):
+        if not per_prompt:
+            return sampling
+        return [
+            SamplingParams(
+                n=args.responses_per_prompt,
+                temperature=args.temperature,
+                top_p=args.top_p,
+                max_tokens=max_tokens,
+                logprobs=args.top_k,
+                seed=seed,
+                **neutral_options,
+            )
+            for *_, max_tokens, seed in batch
+        ]
     buffer = []
     shard_index = 0
 
@@ -217,8 +270,8 @@ def main():
 
     for start in range(0, len(prepared), args.batch_size):
         batch = prepared[start : start + args.batch_size]
-        outputs = llm.generate([{"prompt_token_ids": row[2]} for row in batch], sampling, use_tqdm=False)
-        for output, (prompt_id, prompt, tokens, label) in zip(outputs, batch):
+        outputs = llm.generate([{"prompt_token_ids": row[2]} for row in batch], batch_sampling(batch), use_tqdm=False)
+        for output, (prompt_id, prompt, tokens, label, *_) in zip(outputs, batch):
             for response_id, completion in enumerate(output.outputs):
                 buffer.append(
                     {

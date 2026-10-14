@@ -182,3 +182,38 @@ def test_rollout_main_keeps_prompt_groups_and_rank_order(tmp_path, monkeypatch):
     assert [row["prompt"] for row in rows] == ["3", "3", "4", "4", "5", "5"]
     assert [row["metadata"]["response_id"] for row in rows] == [0, 1, 0, 1, 0, 1]
     assert len(generated) == 3
+
+
+def test_rollout_main_samples_each_prompt_with_its_budget_and_copy_seed(tmp_path, monkeypatch):
+    rows = [{"prompt": "a", "budget": 5, "copy": 0}, {"prompt": "b", "budget": 900, "copy": 1}, {"prompt": "c", "budget": 1, "copy": 0}]
+    source = prompt_args(tmp_path, rows).input
+    asset_path = tmp_path / "assets.json"
+    asset_path.write_text(json.dumps({"tokenizer_hash": "hash"}))
+    seen = []
+
+    class LLM:
+        def __init__(self, **kwargs):
+            pass
+
+        def generate(self, prompts, sampling, **kwargs):
+            assert isinstance(sampling, list) and len(sampling) == len(prompts)
+            seen.extend((params.max_tokens, params.seed, params.n) for params in sampling)
+            return [SimpleNamespace(outputs=[completion() for _ in range(params.n)]) for params in sampling]
+
+    monkeypatch.setitem(sys.modules, "vllm", SimpleNamespace(__version__="test", LLM=LLM, SamplingParams=SimpleNamespace))
+    monkeypatch.setitem(sys.modules, "vllm.config", SimpleNamespace(CompilationConfig=SimpleNamespace(mode=None)))
+    monkeypatch.setitem(
+        sys.modules, "transformers", SimpleNamespace(AutoTokenizer=SimpleNamespace(from_pretrained=lambda *a, **kw: Tokenizer()))
+    )
+    output_dir = tmp_path / "output"
+    monkeypatch.setattr(sys, "argv", [
+        "collect", "--model", "student", "--asset-lock", str(asset_path), "--input", str(source),
+        "--output-dir", str(output_dir), "--max-prompts", "3", "--responses-per-prompt", "2", "--top-k", "2",
+        "--max-response-length", "64", "--seed", "7", "--max-tokens-key", "budget", "--seed-offset-key", "copy",
+    ])
+    collect.main()
+    stride = collect.SEED_OFFSET_STRIDE
+    assert seen == [(5, 7, 2), (64, 7 + stride, 2), (1, 7, 2)]
+    (shard,) = sorted(output_dir.glob("*.parquet"))
+    config = pq.read_table(shard).to_pylist()[0]["metadata"]["generation_config"]
+    assert config["max_tokens_key"] == "budget" and config["seed_offset_key"] == "copy"

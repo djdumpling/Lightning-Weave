@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import json
 import os
 import sys
@@ -20,8 +20,7 @@ EXPECTED_CANONICAL_ROWS = 23_000
 
 # The behavior policy and trainable student are the released post-trained
 # Qwen3-4B. The anchor is the change from the base checkpoint to Thinking-2507.
-STUDENT_MODEL = "Qwen/Qwen3-4B"
-STUDENT_REVISION = "1cfa9a7208912126459214e8b04321603b3df60c"
+QWEN3_4B = ("Qwen/Qwen3-4B", "1cfa9a7208912126459214e8b04321603b3df60c")
 PRE_TEACHER_MODEL = "Qwen/Qwen3-4B-Base"
 PRE_TEACHER_REVISION = "906bfd4b4dc7f14ee4320094d8b41684abff8539"
 POST_TEACHER_MODEL = "Qwen/Qwen3-4B-Thinking-2507"
@@ -42,11 +41,18 @@ REMOTE_REPO = "/workspace/Lightning-Weave"
 @dataclass(frozen=True)
 class StatePool:
     """A cached state pool: where it lives, its prompt cap, and (if its prompts come from collected tau2
-    episodes rather than LoopTool) that collection. The frozen student still generates and anchors every pool."""
+    episodes rather than LoopTool) that collection. The frozen student generates, anchors and is trained on
+    every pool: Qwen3-4B unless the pool names another (with its Megatron model type, its chat template's
+    generation prompt, a response cap that fits its turns, and its own converted-checkpoint root)."""
 
     root: str
     max_prompt_tokens: int
     collection: dict | None = None
+    student: tuple[str, str] = QWEN3_4B
+    model_type: str = "qwen3-4B"
+    generation_prompt: str = "<|im_start|>assistant\n"
+    max_response_tokens: int = 2_048
+    checkpoint_root: str = "/checkpoints/looptool-offline-dopd-qwen3-4b-v1"
 
 
 STATE_POOLS = {
@@ -66,7 +72,71 @@ STATE_POOLS = {
             "states_per_episode": 4,
         },
     ),
+    # The same collection and recipe with Qwen3-4B-Thinking-2507 as the collector, sampler and student
+    # (profile user235b: its 65,536-token window and deepseek_r1 parser), on the pilot's 1,163 AReaL tasks.
+    # Episodes are uncapped and every step is eligible; each episode's write, transfer and first-error steps
+    # are drawn first (the mentor's focused turns), then the rest. Responses get 8,192 tokens: 2507's turns
+    # reach p99.9 = 5,961 tokens on tau2 at evaluation decoding, so 2,048 would cut its reasoning short.
+    "tau2-fresh-2507": StatePool(
+        "/opd/tau2-fresh-qwen3-4b-thinking-2507-v1",
+        16_384,
+        {
+            "results_volume": "lightning-weave-tau-eval",
+            "run_id": "collect-0870ad4ec984-v1",
+            "collectors": ["thinking2507"],
+            "domains": ["tau2_airline", "tau2_retail"],
+            "tasks": {"repo": AREAL_REPO, "revision": AREAL_REVISION},
+            "states_per_episode": 4,
+            "prioritize_decisions": True,
+        },
+        student=(POST_TEACHER_MODEL, POST_TEACHER_REVISION),
+        model_type="qwen3-4B-Thinking-2507",
+        generation_prompt="<|im_start|>assistant\n<think>\n",
+        max_response_tokens=8_192,
+        checkpoint_root="/checkpoints/opd-qwen3-4b-thinking-2507-v1",
+    ),
+    # Retail is the main setting (mentor, 2026-10-09). The same 2507 collection's 563 retail episodes, retail states
+    # only: up to 8 per episode (decision states first), 3,200 in one cell. Same student, recipe and initial checkpoint.
+    "tau2-retail-2507": StatePool(
+        "/opd/tau2-retail-qwen3-4b-thinking-2507-v1",
+        16_384,
+        {
+            "results_volume": "lightning-weave-tau-eval",
+            "run_id": "collect-0870ad4ec984-v1",
+            "collectors": ["thinking2507"],
+            "domains": ["tau2_retail"],
+            "tasks": {"repo": AREAL_REPO, "revision": AREAL_REVISION},
+            "states_per_episode": 8,
+            "prioritize_decisions": True,
+        },
+        student=(POST_TEACHER_MODEL, POST_TEACHER_REVISION),
+        model_type="qwen3-4B-Thinking-2507",
+        generation_prompt="<|im_start|>assistant\n<think>\n",
+        max_response_tokens=8_192,
+        checkpoint_root="/checkpoints/opd-qwen3-4b-thinking-2507-v1",
+    ),
 }
+# Why the mentor's 2507 runs did not transfer (results_7.md): the same 563 retail episodes, varying only which states
+# are trained. "cap2048" applies his collection's cumulative 2,048-generated-token episode budget: states reached with
+# budget left (about 5 per episode, almost never a write), each response capped at the remainder, the quota filled
+# with further independently sampled copies. "uniform" is his pipeline without the cap: every turn eligible, up to 8
+# per episode by hash, no decision priority.
+STATE_POOLS["tau2-retail-2507-cap2048"] = replace(
+    STATE_POOLS["tau2-retail-2507"],
+    root="/opd/tau2-retail-cap2048-qwen3-4b-thinking-2507-v1",
+    collection={
+        **STATE_POOLS["tau2-retail-2507"].collection,
+        "states_per_episode": 64,
+        "prioritize_decisions": False,
+        "episode_token_budget": 2_048,
+        "repeat_to_quota": True,
+    },
+)
+STATE_POOLS["tau2-retail-2507-uniform"] = replace(
+    STATE_POOLS["tau2-retail-2507"],
+    root="/opd/tau2-retail-uniform-qwen3-4b-thinking-2507-v1",
+    collection={**STATE_POOLS["tau2-retail-2507"].collection, "prioritize_decisions": False},
+)
 # The launcher's OPD_DATA selects the pool. A non-default pool runs as its own Modal app with OPD_DATA baked into
 # its images (PROFILE_ENV), so every remote import resolves the same pool.
 DATA_PROFILE = os.environ.get("OPD_DATA", "looptool")
@@ -75,6 +145,8 @@ if DATA_PROFILE not in STATE_POOLS:
 POOL = STATE_POOLS[DATA_PROFILE]
 PROFILE_ENV = {} if DATA_PROFILE == "looptool" else {"OPD_DATA": DATA_PROFILE}
 REMOTE_DATA_ROOT = POOL.root
+STUDENT_MODEL, STUDENT_REVISION = POOL.student
+MODEL_TYPE = POOL.model_type
 
 
 def app_name(base: str) -> str:
@@ -82,7 +154,7 @@ def app_name(base: str) -> str:
 
 
 REMOTE_MODEL_ROOT = "/models"
-REMOTE_CHECKPOINT_ROOT = "/checkpoints/looptool-offline-dopd-qwen3-4b-v1"
+REMOTE_CHECKPOINT_ROOT = POOL.checkpoint_root
 
 
 @dataclass(frozen=True)
@@ -159,7 +231,9 @@ class Recipe:
         dataset = {"repo": DATASET_REPO, "revision": DATASET_REVISION}
         if POOL.collection is not None:
             dataset = {"profile": DATA_PROFILE, "collection": POOL.collection}
-        return {
+        # Pools of the default student keep the exact lock their caches were sealed with.
+        student = {} if MODEL_TYPE == "qwen3-4B" else {"student_model_type": MODEL_TYPE}
+        return student | {
             "algorithm": "single-anchor Offline Direct-OPD (tilted target)",
             "dataset": dataset,
             "student_behavior_and_trainable_policy": {
@@ -209,8 +283,11 @@ class Recipe:
         }
 
 
-RECIPE = Recipe(max_prompt_tokens=POOL.max_prompt_tokens)
+RECIPE = Recipe(max_prompt_tokens=POOL.max_prompt_tokens, max_response_tokens=POOL.max_response_tokens)
 RECIPE.validate()
+# Megatron's full-vocabulary logits outgrow an 80 GB H100 above the pilot's 18,432-token sequences (2507's 24,576-token
+# pool ran out of memory there on 2026-10-09); longer pools train on H200s with the same computation.
+TRAINING_GPU = "H100:8" if RECIPE.sequence_tokens <= 18_432 else "H200:8"
 
 
 def main() -> None:

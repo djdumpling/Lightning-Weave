@@ -208,6 +208,8 @@ def main() -> None:
     address = args.ray_address or f"http://127.0.0.1:{args.dashboard_port}"
     commands = []
     if not args.ray_address:
+        # A reused container can still host the previous job's Ray head, which this start would collide with.
+        commands.append(["ray", "stop", "--force"])
         commands.append(["ray", "start", "--head", "--node-ip-address", "127.0.0.1",
                          "--num-gpus", str(args.num_gpus), "--disable-usage-stats",
                          "--dashboard-host", "127.0.0.1", "--dashboard-port", str(args.dashboard_port)])
@@ -216,7 +218,7 @@ def main() -> None:
     for command in commands:
         print(shlex.join(command), flush=True)
         if not args.dry_run:
-            subprocess.run(command, check=True, cwd=REPO_ROOT, env=environment)
+            subprocess.run(command, check=command[:2] != ["ray", "stop"], cwd=REPO_ROOT, env=environment)
 
 
 if __name__ == "__main__":

@@ -237,9 +237,10 @@ def test_history_reasoning_moves_into_the_message_text_without_mutating_the_requ
     assert kept == {"role": "assistant", "content": inline["content"]}
 
 
-def test_inlined_reasoning_renders_exactly_as_the_reasoning_field_in_the_qwen3_template():
+@pytest.mark.parametrize("fixture", ["qwen3_4b_chat_template.jinja", "qwen3_4b_thinking_2507_chat_template.jinja"])
+def test_inlined_reasoning_renders_exactly_as_the_reasoning_field_in_the_qwen3_template(fixture):
     jinja2 = pytest.importorskip("jinja2")
-    source = (Path(__file__).parent / "fixtures" / "qwen3_4b_chat_template.jinja").read_text(encoding="utf-8")
+    source = (Path(__file__).parent / "fixtures" / fixture).read_text(encoding="utf-8")
     template = jinja2.Environment().from_string(source)
     tools = [{"type": "function", "function": {"name": "cd", "parameters": {"type": "object", "properties": {}}}}]
     parsed_call = {**TOOL_CALL, "function": {"name": "cd", "arguments": {"folder": "a"}}}
@@ -288,3 +289,8 @@ def test_token_only_loading_skips_the_usage_join(tmp_path):
     (entry,) = efficiency.load_run(tmp_path, include_usage=False)["multi_turn_base"]
     assert entry["gen_tokens"] == MULTI_TURN_ROW["num_generated_tokens"]
     assert entry["is_correct"] == MULTI_TURN_ROW["is_correct"]
+
+
+def test_unparsed_calls_recorded_as_none_name_no_call():
+    assert efficiency._calls([None, {"cd": '{"folder": "a"}'}]) == [("cd", efficiency._canonical_arguments('{"folder": "a"}'))]
+    assert efficiency._calls([None]) == [] and efficiency._calls("text") == []

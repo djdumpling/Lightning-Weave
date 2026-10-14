@@ -95,12 +95,14 @@ def test_every_variant_spec_builds_a_composer(name):
     weights = {
         term["gate"]["prompt_weights"]: {} for term in spec["terms"] if "prompt_weights" in term.get("gate", {})
     }
-    composer = SyntheticComposer(spec, labeler=tiny_labeler(), prompt_weights=weights)
+    advantages = {name: {} for name in config.variant_advantages(spec)}
+    composer = SyntheticComposer(spec, labeler=tiny_labeler(), prompt_weights=weights, advantages=advantages)
     # every arm uses the LoopTool recipe's alpha, which is also Lightning Weave's
     assert composer.alpha == config.RECIPE.alpha == 2.0
     assert composer.sources <= {"agent_acc", *config.DONORS}
+    # raw shifts are the anchors' own targets: the LoopTool pair, the mentor's AgentForge pair, or its targeted variant
     legacy = [term for term in composer.terms if term.transform == "raw"]
-    assert all(term.direction.sources == ("agent_acc",) for term in legacy)
+    assert all(term.direction.sources in {("agent_acc",), ("agentforge",), ("agentforge-parent",)} for term in legacy)
 
 
 @pytest.mark.parametrize("variant", sorted(config.variant_specs()))
@@ -241,3 +243,51 @@ def test_next_comparisons_pair_runs_at_the_same_seeds():
             assert arm_decoding == reference_decoding or name.startswith("null, decoding seed"), (name, pair)
             assert arm_training == reference_training or name.startswith("null, training seed"), (name, pair)
     assert {*config.paper_specs(), *config.turn_start_specs()} <= used
+
+
+def test_strong_student_arm_is_the_mentors_agentforge_target_alone():
+    pair = config.DONORS["agentforge"]
+    assert (pair.pre.repo, pair.post.repo) == ("Qwen/Qwen3-8B-Base", "Kwai-Klear/Klear-AgentForge-8B")
+    assert pair.pre == config.DONORS["klear"].pre and not pair.aliases and not pair.core
+    agentforge = {"transform": "raw", "coef": 1.0, "direction": {"terms": [{"source": "agentforge", "coef": 1.0}]}}
+    outcome = {"transform": "outcome", "coef": 1.0, "advantages": "branch"}
+    matched = outcome | {"kl_budget": config.AGENTFORGE_KL_TO_BEHAVIOR, "max_multiplier": 50.0}
+    assert config.strong_student_specs() == {
+        "agentforge": {"alpha": 2.0, "terms": [agentforge]},
+        "agentforge+outcome": {"alpha": 2.0, "terms": [agentforge, outcome]},  # only the outcome term added
+        "agentforge+outcome-matched": {"alpha": 2.0, "terms": [agentforge, matched]},  # at the anchor's strength
+    }
+    assert config.variant_advantages(config.variant_specs()["agentforge+outcome"]) == ["branch"]
+    assert config.training_plan("agentforge")["passes"] == config.training_plan("agentforge+outcome")["passes"] == 1
+    assert len(set(config.branch_runs())) == config.BRANCH_SHARDS and config.BRANCH_RUN.startswith("branch-")
+
+
+def test_thinking_2507_arms_agree_across_training_and_both_evaluations():
+    from configs.tau_bench_eval import config as tau
+
+    assert config.THINKING_2507_ARMS == bfcl.THINKING_2507_ARMS == tau.THINKING_2507_ARMS == {
+        "fresh2507", "retail2507", "retailcap2507", "retailuni2507"
+    }
+    assert config.ARMS == {
+        "looptool": "joint", "tau2-fresh": "fresh", "tau2-fresh-2507": "fresh2507", "tau2-retail-2507": "retail2507",
+        "tau2-retail-2507-cap2048": "retailcap2507", "tau2-retail-2507-uniform": "retailuni2507",
+    }
+    assert set(config.ARMS) == set(config.looptool.STATE_POOLS)
+
+
+def test_retail_arms_fix_the_post_model_and_match_the_mentors_strength(monkeypatch):
+    assert config.retail_specs() == {} or config.RETAIL_AGENTFORGE_KL is not None
+    monkeypatch.setattr(config, "RETAIL_AGENTFORGE_KL", 0.07)
+    specs = config.retail_specs()
+    (parent,) = specs["agentforge-parent-matched"]["terms"]
+    (distill,) = specs["agentforge-distill-matched"]["terms"]
+    assert parent["transform"] == "raw" and parent["direction"]["terms"] == [{"source": "agentforge-parent", "coef": 1.0}]
+    assert distill["transform"] == "teacher" and distill["direction"]["terms"] == [{"source": "agentforge", "coef": 1.0}]
+    assert parent["kl_budget"] == distill["kl_budget"] == 0.07 and distill["max_multiplier"] == 1.0
+    (double,) = specs["agentforge-x2"]["terms"]
+    assert double["transform"] == "raw" and double["coef"] == 2.0 and "kl_budget" not in double
+    assert double["direction"] == config.strong_student_specs()["agentforge"]["terms"][0]["direction"]
+    assert config.DONORS["agentforge-parent"].post == config.DONORS["agentforge"].post  # one post model, two references
+    assert config.DONORS["agentforge-parent"].pre.repo == "Qwen/Qwen3-8B"
+    for name, item in specs.items():
+        SyntheticComposer(item, labeler=tiny_labeler())

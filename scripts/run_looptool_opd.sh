@@ -12,7 +12,7 @@ case "${ACTION}" in
     plan)
         exec python3 "${PROJECT_ROOT}/configs/looptool_opd/config.py"
         ;;
-    prepare|cache|convert|train|export|all)
+    prepare|cache|convert|train|export|all|teacher-rollouts)
         export MODAL_ENVIRONMENT=${MODAL_ENVIRONMENT:-alex-dev-2}
         exec uv run --no-project --python 3.12 --with modal==1.5.5 \
             modal run "${PROJECT_ROOT}/configs/looptool_opd/modal_pipeline.py" \

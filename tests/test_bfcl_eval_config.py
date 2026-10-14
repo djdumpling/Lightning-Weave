@@ -156,3 +156,12 @@ def test_agent_eff_students_take_the_concise_prompt_as_a_last_tag_part():
     assert seeded.path == f"{root}/joint/acc-legacy/seed5678/hf" and seeded.system_prompt == CONFIG.CONCISE_SYSTEM_PROMPT
     assert CONFIG.resolve_model("ae.joint.acc-legacy.s5678").system_prompt is None
     assert CONFIG.resolve_model("ae.joint.concise").path.endswith("/joint/concise/seed1234/hf")  # a variant name, not a suffix
+
+
+def test_students_trained_from_2507_are_served_like_it():
+    native = CONFIG.resolve_model("thinking2507")
+    for tag in ("ae.fresh2507.agentforge", "ae.fresh2507.acc-legacy.s5678", "ae.fresh2507.agentforge.concise"):
+        spec = CONFIG.resolve_model(tag)
+        assert (spec.yarn, spec.reasoning_parser) == (native.yarn, native.reasoning_parser) == (False, "deepseek_r1")
+    legacy = CONFIG.resolve_model("ae.fresh.acc-legacy")
+    assert (legacy.yarn, legacy.reasoning_parser) == (True, None)

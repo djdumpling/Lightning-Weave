@@ -65,6 +65,9 @@ app = modal.App(agent_eff.looptool.app_name(MODAL_APP_NAME))
 data_volume = modal.Volume.from_name(MODAL_DATA_VOLUME, create_if_missing=True)
 model_volume = modal.Volume.from_name(MODAL_MODEL_VOLUME, create_if_missing=True)
 checkpoint_volume = modal.Volume.from_name(MODAL_CHECKPOINT_VOLUME, create_if_missing=True)
+# The tau results volume: a fresh-state pool's collection episodes and its executed branches.
+TAU_ROOT = "/tau"
+tau_volume = modal.Volume.from_name(agent_eff.TAU_RESULTS_VOLUME, create_if_missing=True)
 
 cpu_image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -291,6 +294,16 @@ def prompt_weight_path(name: str) -> Path:
     raise KeyError(f"no source for prompt weights {name!r}")
 
 
+def advantage_path(name: str) -> Path:
+    return Path(agent_eff.ADVANTAGE_ROOT) / f"{name}.json"
+
+
+def advantage_arguments(names) -> list[str]:
+    paths = {name: advantage_path(name) for name in sorted(set(names))}
+    require_paths(paths.values())
+    return [argument for name, path in paths.items() for argument in ("--advantages", f"{name}={path}")]
+
+
 def prompt_weight_arguments(names) -> list[str]:
     """``--prompt-weights NAME=PATH`` for each weight rule a spec uses (files made current first)."""
     paths = {name: prompt_weight_path(name) for name in sorted(set(names))}
@@ -306,6 +319,7 @@ def compose(variant: str) -> dict:
     spec = variant_specs()[variant]
     output = Path(SYNTHETIC_ROOT) / variant
     weights = [item["gate"]["prompt_weights"] for item in spec["terms"] if "prompt_weights" in (item.get("gate") or {})]
+    advantages = agent_eff.variant_advantages(spec)
     if (output / "manifest.json").exists():
         composed = json.loads((output / "manifest.json").read_text(encoding="utf-8"))["post_teacher_model"]
         if composed["spec"] != spec:
@@ -317,6 +331,12 @@ def compose(variant: str) -> dict:
             current = {name: file_sha256(prompt_weight_path(name)) for name in weights}
             if recorded != current:
                 raise RuntimeError(f"{output} was composed from other prompt weights; remove it to recompose")
+        if advantages:
+            from data_curation.common import file_sha256
+
+            recorded = {name: item["sha256"] for name, item in composed.get("advantages", {}).items()}
+            if recorded != {name: file_sha256(advantage_path(name)) for name in advantages}:
+                raise RuntimeError(f"{output} was composed from other advantages; remove it to recompose")
         return {"path": str(output), "calibration": composed["calibration"]}
     donors = verified_donors(variant_sources(spec))
     spec_path = Path(SYNTHETIC_ROOT) / f"{variant}.spec.json"
@@ -329,6 +349,7 @@ def compose(variant: str) -> dict:
             "--untrained", merged_untrained([AGENT_ACC.name, *donors]),
             "--output-dir", str(output), *donor_arguments(donors),
             *(prompt_weight_arguments(weights) if weights else []),
+            *(advantage_arguments(advantages) if advantages else []),
         ]
     )
     data_volume.commit()
@@ -337,8 +358,55 @@ def compose(variant: str) -> dict:
 
 
 @app.function(
+    image=cpu_image, cpu=8, memory=65_536, timeout=14_400, volumes={**DATA_AND_MODELS, TAU_ROOT: tau_volume}
+)
+def branch_plan() -> dict:
+    """The executed-branch plan of this pool's cached responses (data_curation/branch_outcomes.py plan)."""
+    collection = agent_eff.looptool.POOL.collection
+    if collection is None:
+        raise ValueError("branches need a collected state pool")
+    data_volume.reload()
+    tau_volume.reload()
+    plan = Path(TAU_ROOT) / agent_eff.BRANCH_PLAN
+    summary = plan.with_suffix(".summary.json")
+    if not summary.exists():
+        require_paths([PROMPT_DATA, ROLLOUT_DIR, Path(TAU_ROOT) / collection["run_id"]])
+        run(
+            [
+                "python", "data_curation/branch_outcomes.py", "plan", "--prompts", PROMPT_DATA,
+                "--rollouts", ROLLOUT_DIR, "--collection", str(Path(TAU_ROOT) / collection["run_id"]),
+                "--output", str(plan),
+            ]
+        )
+        tau_volume.commit()
+    return json.loads(summary.read_text(encoding="utf-8"))
+
+
+@app.function(
+    image=cpu_image, cpu=8, memory=65_536, timeout=14_400, volumes={**DATA_AND_MODELS, TAU_ROOT: tau_volume}
+)
+def branch_advantages(name: str = "branch") -> dict:
+    """Per-response advantages from every finished branch shard (data_curation/branch_outcomes.py advantages)."""
+    data_volume.reload()
+    tau_volume.reload()
+    shards = [Path(TAU_ROOT) / run_id / agent_eff.BRANCH_TAG for run_id in agent_eff.branch_runs()]
+    require_paths([ROLLOUT_DIR, *shards])
+    output = advantage_path(name)
+    if output.exists():
+        raise FileExistsError(f"{output} exists; targets composed from it record its hash")
+    run(
+        [
+            "python", "data_curation/branch_outcomes.py", "advantages", "--rollouts", ROLLOUT_DIR,
+            "--branches", *map(str, shards), "--output", str(output),
+        ]
+    )
+    data_volume.commit()
+    return json.loads(output.with_suffix(".summary.json").read_text(encoding="utf-8"))
+
+
+@app.function(
     image=runtime_image,
-    gpu="H100:8",
+    gpu=agent_eff.TRAINING_GPU,
     cpu=32,
     memory=131_072,
     timeout=86_400,
@@ -395,7 +463,7 @@ def train(variant: str, seed: int = RECIPE.training_seed) -> str:
     run(
         [
             "python", "configs/lightning_weave/train.py",
-            "--model-type", "qwen3-4B", "--student", student,
+            "--model-type", agent_eff.MODEL_TYPE, "--student", student,
             "--data", str(data), "--manifest", str(data / "manifest.json"),
             "--load", INITIAL_MEGATRON, "--save", str(save),
             "--num-gpus", str(RECIPE.training_gpus), "--alpha", str(plan["alpha"]), "--lr", str(RECIPE.learning_rate),
@@ -453,7 +521,7 @@ def export(variant: str, seed: int = RECIPE.training_seed) -> str:
             "STUDENT_MODEL": agent_eff.Model(STUDENT_MODEL, STUDENT_REVISION).path,
             "INPUT_DIR": str(root / "train" / f"iter_{provenance['final_iteration']:07d}"),
             "OUTPUT_DIR": str(output),
-            "MODEL_TYPE": "qwen3-4B",
+            "MODEL_TYPE": agent_eff.MODEL_TYPE,
             "MEGATRON_PATH": "/root/Megatron-LM",
         }
     )
@@ -581,6 +649,10 @@ def main(
         variants = [name for name in variant.split(",") if name]
         for result in export.starmap([(name, seed) for name in variants], order_outputs=False):
             print(result, flush=True)
+    elif action == "branch-plan":
+        print(json.dumps(branch_plan.remote(), indent=2, sort_keys=True))
+    elif action == "branch-advantages":
+        print(json.dumps(branch_advantages.remote(), indent=2, sort_keys=True))
     elif action == "build":
         variants = [name for name in variant.split(",") if name]
         unknown = sorted(set(variants) - set(variant_specs()))

@@ -1,0 +1,86 @@
+{
+ "agentforge - 2507 base (decoding seed 0)": {
+  "pairs": [
+   [
+    "bfcl-v3-22b3e917da76-full/ae.retail2507.agentforge",
+    "bfcl-v3-22b3e917da76-full/thinking2507"
+   ],
+   [
+    "bfcl-v3-22b3e917da76-full/ae.retail2507.agentforge.s5678",
+    "bfcl-v3-22b3e917da76-full/thinking2507"
+   ],
+   [
+    "bfcl-v3-22b3e917da76-full/ae.retail2507.agentforge.s9012",
+    "bfcl-v3-22b3e917da76-full/thinking2507"
+   ]
+  ],
+  "rules": [
+   [
+    "recovery",
+    "accuracy",
+    1.0
+   ],
+   [
+    "recovery",
+    "multi_turn_accuracy",
+    1.0
+   ]
+  ]
+ },
+ "agentforge-parent-matched - 2507 base (decoding seed 0)": {
+  "pairs": [
+   [
+    "bfcl-v3-22b3e917da76-full/ae.retail2507.agentforge-parent-matched",
+    "bfcl-v3-22b3e917da76-full/thinking2507"
+   ],
+   [
+    "bfcl-v3-22b3e917da76-full/ae.retail2507.agentforge-parent-matched.s5678",
+    "bfcl-v3-22b3e917da76-full/thinking2507"
+   ],
+   [
+    "bfcl-v3-22b3e917da76-full/ae.retail2507.agentforge-parent-matched.s9012",
+    "bfcl-v3-22b3e917da76-full/thinking2507"
+   ]
+  ],
+  "rules": [
+   [
+    "recovery",
+    "accuracy",
+    1.0
+   ],
+   [
+    "recovery",
+    "multi_turn_accuracy",
+    1.0
+   ]
+  ]
+ },
+ "agentforge-distill-matched - 2507 base (decoding seed 0)": {
+  "pairs": [
+   [
+    "bfcl-v3-22b3e917da76-full/ae.retail2507.agentforge-distill-matched",
+    "bfcl-v3-22b3e917da76-full/thinking2507"
+   ],
+   [
+    "bfcl-v3-22b3e917da76-full/ae.retail2507.agentforge-distill-matched.s5678",
+    "bfcl-v3-22b3e917da76-full/thinking2507"
+   ],
+   [
+    "bfcl-v3-22b3e917da76-full/ae.retail2507.agentforge-distill-matched.s9012",
+    "bfcl-v3-22b3e917da76-full/thinking2507"
+   ]
+  ],
+  "rules": [
+   [
+    "recovery",
+    "accuracy",
+    1.0
+   ],
+   [
+    "recovery",
+    "multi_turn_accuracy",
+    1.0
+   ]
+  ]
+ }
+}
